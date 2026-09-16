@@ -44,12 +44,6 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
 
-          if [[ "$VERSION" == *-* ]]; then
-            echo "prerelease=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "prerelease=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Check whether this version already exists
         id: existing
         shell: bash
@@ -117,18 +111,16 @@ jobs:
 
           TAG="${{ steps.manifest.outputs.tag }}"
           VERSION="${{ steps.manifest.outputs.version }}"
-          PRERELEASE_FLAG=""
 
-          if [[ "${{ steps.manifest.outputs.prerelease }}" == "true" ]]; then
-            PRERELEASE_FLAG="--prerelease"
-          fi
-
+          # A release is intentionally published as a normal GitHub release even
+          # when the semantic version contains an alpha/beta suffix. GitHub's
+          # /releases/latest/ endpoint ignores prereleases, and Foundry relies on
+          # that stable URL for installation and update checks.
           gh release create "$TAG" \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "Fora do Abismo — Jarvis Tools $VERSION" \
-            --generate-notes \
-            $PRERELEASE_FLAG
+            --generate-notes
 
       - name: Upload Foundry assets
         if: steps.existing.outputs.exists != 'true'
