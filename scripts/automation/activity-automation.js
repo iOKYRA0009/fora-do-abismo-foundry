@@ -1,58 +1,20 @@
-const MODULE_ID = "fora-do-abismo-foundry";
+import {
+  applyEmbeddedEffect,
+  removeAppliedEmbeddedEffect
+} from "./embedded-effect-engine.js";
 
+const MODULE_ID = "fora-do-abismo-foundry";
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 
 function getAutomation(activity) {
   return activity?.flags?.[MODULE_ID]?.automation ?? null;
 }
 
-function clone(value) {
-  return foundry.utils.deepClone(value);
-}
-
-function normalizeEffectChange(change = {}) {
-  return {
-    _id: change._id ?? foundry.utils.randomID(),
-    key: String(change.key ?? ""),
-    value: change.value ?? "",
-    type: change.type ?? "add",
-    phase: change.phase ?? "initial",
-    priority: change.priority ?? null,
-    conditions: change.conditions ?? "{}",
-    replacement: change.replacement ?? ""
-  };
-}
-
-function normalizeActorEffectData(effectData = {}, { key = null } = {}) {
-  const data = clone(effectData ?? {});
-
-  // Active Effects applied by Jarvis are actor-side buffs/debuffs, not item
-  // transfer effects. Foundry V14 uses typed ActiveEffect system data. When
-  // creating effects programmatically with an explicit `system` object, the
-  // discriminator must be present in the payload on our D&D5e 6.x runtime.
-  delete data._id;
-  data.type ??= "base";
-  data.disabled = false;
-  data.transfer = false;
-  data.statuses = Array.from(data.statuses ?? []);
-
-  data.system ??= {};
-  data.system.type ??= data.type ?? "base";
-  data.system.changes = Array.from(data.system.changes ?? []).map(normalizeEffectChange);
-  data.system.magical ??= true;
-
-  data.duration ??= {
-    value: null,
-    units: "seconds",
-    expiry: null,
-    expired: false
-  };
-
-  data.flags ??= {};
-  data.flags[MODULE_ID] ??= {};
-  if (key) data.flags[MODULE_ID].automationKey = String(key);
-
-  return data;
+function getEffectConfigs(automation) {
+  if (!automation) return [];
+  const input = automation.effects ?? automation.effect ?? [];
+  if (Array.isArray(input)) return input.filter(Boolean);
+  return input ? [input] : [];
 }
 
 function buildScope(activity, usageConfig, results = null) {
@@ -124,20 +86,17 @@ function buildScope(activity, usageConfig, results = null) {
         if (!ids.length) return [];
         return actor.deleteEmbeddedDocuments("ActiveEffect", ids);
       },
-      async applyActorEffect(effectData = {}, { key = null, replace = true } = {}) {
-        if (!actor) throw new Error("Automação Jarvis sem Actor associado.");
-
-        const normalizedKey = key ? String(key) : null;
-        if (replace && normalizedKey) {
-          const oldIds = actor.effects.filter(effect =>
-            String(effect.getFlag?.(MODULE_ID, "automationKey") ?? "") === normalizedKey
-          ).map(effect => effect.id);
-          if (oldIds.length) await actor.deleteEmbeddedDocuments("ActiveEffect", oldIds);
-        }
-
-        const source = normalizeActorEffectData(effectData, { key: normalizedKey });
-        const [created] = await actor.createEmbeddedDocuments("ActiveEffect", [source]);
-        return created ?? null;
+      async applyEmbeddedEffect(options = {}) {
+        return applyEmbeddedEffect(activity, options);
+      },
+      async removeEmbeddedEffect(keyOrEffectName) {
+        return removeAppliedEmbeddedEffect(activity, keyOrEffectName);
+      },
+      async applyActorEffect() {
+        throw new Error(
+          "applyActorEffect(raw) foi desativado no D&D5e 6.x. " +
+          "Use um Active Effect embutido no Item e jarvis.applyEmbeddedEffect()."
+        );
       }
     }
   };
@@ -192,15 +151,30 @@ function runPre(activity, usageConfig) {
 
 async function runPost(activity, usageConfig, results) {
   const automation = getAutomation(activity);
+  if (!automation) return undefined;
+
+  const label = `${activity?.item?.name ?? "Item"} / ${activity?.name ?? "Activity"}`;
+  const scope = buildScope(activity, usageConfig, results);
+
+  try {
+    for (const config of getEffectConfigs(automation)) {
+      const options = typeof config === "string" ? { effectName: config } : config;
+      await applyEmbeddedEffect(activity, options ?? {});
+    }
+  } catch (error) {
+    console.error(`${MODULE_ID} | Falha no Jarvis Effect Engine ${label}`, error);
+    ui.notifications?.error(`Jarvis Effect Engine: ${label} falhou. Veja o console.`);
+    return undefined;
+  }
+
   const script = automation?.post;
   if (!script) return undefined;
 
-  const label = `${activity?.item?.name ?? "Item"} / ${activity?.name ?? "Activity"} / post`;
   try {
-    return await executePostScript(script, buildScope(activity, usageConfig, results), label);
+    return await executePostScript(script, scope, `${label} / post`);
   } catch (error) {
-    console.error(`${MODULE_ID} | Falha na automação ${label}`, error);
-    ui.notifications?.error(`Jarvis Automation: ${label} falhou. Veja o console.`);
+    console.error(`${MODULE_ID} | Falha na automação ${label} / post`, error);
+    ui.notifications?.error(`Jarvis Automation: ${label} / post falhou. Veja o console.`);
     return undefined;
   }
 }
