@@ -3,6 +3,7 @@ import {
   buildGenerationDescriptor,
   resolveDocumentImage
 } from "../images/image-strategy.js";
+import { Dnd5eV6Adapter } from "../adapters/dnd5e-adapter.js";
 
 export class JarvisImporterV9 {
   async importActor(payload, { renderSheet = true } = {}) {
@@ -12,12 +13,10 @@ export class JarvisImporterV9 {
       throw new Error("Jarvis Importer V9 exige permissão de Mestre para criar Actors.");
     }
 
-    if (game.system?.id !== "dnd5e") {
-      throw new Error(`Sistema incompatível: ${game.system?.id ?? "desconhecido"}. Esperado: dnd5e.`);
-    }
+    Dnd5eV6Adapter.assertRuntime();
 
-    const actorData = foundry.utils.deepClone(payload.actor);
-    const itemData = foundry.utils.deepClone(payload.items ?? []);
+    const actorData = Dnd5eV6Adapter.adaptActor(payload.actor);
+    const itemData = Dnd5eV6Adapter.adaptItems(payload.items ?? []);
     const effectData = foundry.utils.deepClone(payload.effects ?? []);
 
     this.#applyActorImage(actorData);
