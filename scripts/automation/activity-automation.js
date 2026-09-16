@@ -50,7 +50,23 @@ function buildScope(activity, usageConfig, results = null) {
   };
 }
 
-async function executeScript(script, scope, label) {
+function executePreScript(script, scope, label) {
+  if (!script || typeof script !== "string") return undefined;
+
+  let fn;
+  try {
+    fn = new Function(
+      "scope",
+      `"use strict";\nconst { actor, item, activity, usageConfig, results, game, ui, canvas, foundry, Roll, ChatMessage, fromUuid, jarvis } = scope;\n${script}`
+    );
+  } catch (error) {
+    throw new Error(`${label}: código inválido — ${error.message}`);
+  }
+
+  return fn(scope);
+}
+
+async function executePostScript(script, scope, label) {
   if (!script || typeof script !== "string") return undefined;
 
   let fn;
@@ -66,32 +82,45 @@ async function executeScript(script, scope, label) {
   return fn(scope);
 }
 
-async function runPhase(phase, activity, usageConfig, results = null) {
+function runPre(activity, usageConfig) {
   const automation = getAutomation(activity);
-  const script = automation?.[phase];
+  const script = automation?.pre;
   if (!script) return undefined;
 
-  const label = `${activity?.item?.name ?? "Item"} / ${activity?.name ?? "Activity"} / ${phase}`;
+  const label = `${activity?.item?.name ?? "Item"} / ${activity?.name ?? "Activity"} / pre`;
   try {
-    return await executeScript(script, buildScope(activity, usageConfig, results), label);
+    return executePreScript(script, buildScope(activity, usageConfig, null), label);
   } catch (error) {
     console.error(`${MODULE_ID} | Falha na automação ${label}`, error);
     ui.notifications?.error(`Jarvis Automation: ${label} falhou. Veja o console.`);
-    if (phase === "pre") return false;
+    return false;
+  }
+}
+
+async function runPost(activity, usageConfig, results) {
+  const automation = getAutomation(activity);
+  const script = automation?.post;
+  if (!script) return undefined;
+
+  const label = `${activity?.item?.name ?? "Item"} / ${activity?.name ?? "Activity"} / post`;
+  try {
+    return await executePostScript(script, buildScope(activity, usageConfig, results), label);
+  } catch (error) {
+    console.error(`${MODULE_ID} | Falha na automação ${label}`, error);
+    ui.notifications?.error(`Jarvis Automation: ${label} falhou. Veja o console.`);
     return undefined;
   }
 }
 
 export function registerActivityAutomation() {
-  Hooks.on("dnd5e.preUseActivity", async (activity, usageConfig) => {
-    const result = await runPhase("pre", activity, usageConfig, null);
+  Hooks.on("dnd5e.preUseActivity", (activity, usageConfig) => {
+    const result = runPre(activity, usageConfig);
     if (result === false) return false;
     return undefined;
   });
 
-  Hooks.on("dnd5e.postUseActivity", async (activity, usageConfig, results) => {
-    const result = await runPhase("post", activity, usageConfig, results);
-    if (result === false) return false;
+  Hooks.on("dnd5e.postUseActivity", (activity, usageConfig, results) => {
+    void runPost(activity, usageConfig, results);
     return undefined;
   });
 }
