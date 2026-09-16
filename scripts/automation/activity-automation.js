@@ -6,6 +6,41 @@ function getAutomation(activity) {
   return activity?.flags?.[MODULE_ID]?.automation ?? null;
 }
 
+function clone(value) {
+  return foundry.utils.deepClone(value);
+}
+
+function normalizeActorEffectData(effectData = {}, { key = null } = {}) {
+  const data = clone(effectData ?? {});
+
+  // Active Effects applied by Jarvis are actor-side buffs/debuffs, not item
+  // transfer effects. We deliberately use the D&D5e v6 native base type and
+  // keep the system payload limited to fields supported by that model.
+  delete data._id;
+  data.type ??= "base";
+  data.disabled = false;
+  data.transfer = false;
+  data.statuses = Array.from(data.statuses ?? []);
+
+  data.system ??= {};
+  delete data.system.type;
+  data.system.changes ??= [];
+  data.system.magical ??= true;
+
+  data.duration ??= {
+    value: null,
+    units: "seconds",
+    expiry: null,
+    expired: false
+  };
+
+  data.flags ??= {};
+  data.flags[MODULE_ID] ??= {};
+  if (key) data.flags[MODULE_ID].automationKey = String(key);
+
+  return data;
+}
+
 function buildScope(activity, usageConfig, results = null) {
   const item = activity?.item ?? null;
   const actor = item?.actor ?? activity?.actor ?? null;
@@ -45,6 +80,50 @@ function buildScope(activity, usageConfig, results = null) {
           const name = String(candidate.name ?? "").toLowerCase();
           return identifier === key || name === key;
         }) ?? null;
+      },
+      getActorEffect(keyOrName) {
+        if (!actor) return null;
+        const key = String(keyOrName ?? "").trim().toLowerCase();
+        return actor.effects.find(effect => {
+          const automationKey = String(effect.getFlag?.(MODULE_ID, "automationKey") ?? "").toLowerCase();
+          const name = String(effect.name ?? "").toLowerCase();
+          return automationKey === key || name === key;
+        }) ?? null;
+      },
+      hasActorEffect(keyOrName) {
+        if (!actor) return false;
+        const key = String(keyOrName ?? "").trim().toLowerCase();
+        return actor.effects.some(effect => {
+          const automationKey = String(effect.getFlag?.(MODULE_ID, "automationKey") ?? "").toLowerCase();
+          const name = String(effect.name ?? "").toLowerCase();
+          return automationKey === key || name === key;
+        });
+      },
+      async removeActorEffect(keyOrName) {
+        if (!actor) throw new Error("Automação Jarvis sem Actor associado.");
+        const key = String(keyOrName ?? "").trim().toLowerCase();
+        const ids = actor.effects.filter(effect => {
+          const automationKey = String(effect.getFlag?.(MODULE_ID, "automationKey") ?? "").toLowerCase();
+          const name = String(effect.name ?? "").toLowerCase();
+          return automationKey === key || name === key;
+        }).map(effect => effect.id);
+        if (!ids.length) return [];
+        return actor.deleteEmbeddedDocuments("ActiveEffect", ids);
+      },
+      async applyActorEffect(effectData = {}, { key = null, replace = true } = {}) {
+        if (!actor) throw new Error("Automação Jarvis sem Actor associado.");
+
+        const normalizedKey = key ? String(key) : null;
+        if (replace && normalizedKey) {
+          const oldIds = actor.effects.filter(effect =>
+            String(effect.getFlag?.(MODULE_ID, "automationKey") ?? "") === normalizedKey
+          ).map(effect => effect.id);
+          if (oldIds.length) await actor.deleteEmbeddedDocuments("ActiveEffect", oldIds);
+        }
+
+        const source = normalizeActorEffectData(effectData, { key: normalizedKey });
+        const [created] = await actor.createEmbeddedDocuments("ActiveEffect", [source]);
+        return created ?? null;
       }
     }
   };
