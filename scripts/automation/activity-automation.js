@@ -10,12 +10,26 @@ function clone(value) {
   return foundry.utils.deepClone(value);
 }
 
+function normalizeEffectChange(change = {}) {
+  return {
+    _id: change._id ?? foundry.utils.randomID(),
+    key: String(change.key ?? ""),
+    value: change.value ?? "",
+    type: change.type ?? "add",
+    phase: change.phase ?? "initial",
+    priority: change.priority ?? null,
+    conditions: change.conditions ?? "{}",
+    replacement: change.replacement ?? ""
+  };
+}
+
 function normalizeActorEffectData(effectData = {}, { key = null } = {}) {
   const data = clone(effectData ?? {});
 
   // Active Effects applied by Jarvis are actor-side buffs/debuffs, not item
-  // transfer effects. We deliberately use the D&D5e v6 native base type and
-  // keep the system payload limited to fields supported by that model.
+  // transfer effects. Foundry V14 uses typed ActiveEffect system data. When
+  // creating effects programmatically with an explicit `system` object, the
+  // discriminator must be present in the payload on our D&D5e 6.x runtime.
   delete data._id;
   data.type ??= "base";
   data.disabled = false;
@@ -23,8 +37,8 @@ function normalizeActorEffectData(effectData = {}, { key = null } = {}) {
   data.statuses = Array.from(data.statuses ?? []);
 
   data.system ??= {};
-  delete data.system.type;
-  data.system.changes ??= [];
+  data.system.type ??= data.type ?? "base";
+  data.system.changes = Array.from(data.system.changes ?? []).map(normalizeEffectChange);
   data.system.magical ??= true;
 
   data.duration ??= {
