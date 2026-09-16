@@ -42,39 +42,36 @@ Se a versão já existir, a workflow não sobrescreve silenciosamente aquela rel
 
 ## Estado atual
 
-**Milestone 1 — Jarvis Importer V9 Bootstrap**
+**Milestone 1 — Jarvis Importer V9**
 
 - [x] Manifesto inicial do módulo
 - [x] Instalação/atualização via Manifest URL
 - [x] Pipeline automático de GitHub Release
 - [x] API básica do módulo
-- [x] Validação inicial do payload de Actor
+- [x] Validação inicial do payload
 - [x] Importação genérica de Actor + Embedded Items
-- [x] Esquema JSON inicial
 - [x] Sistema inicial de imagens e `imgStrategy`
-- [x] Adaptador D&D5e — primeira camada
-- [x] Compatibilidade básica verificada com D&D5e 5.3.3 e 6.0.x para Activities centrais
 - [x] Activities básicas: attack, save e utility
-- [x] Usos e recuperação básica por descanso
-- [x] Consumo básico de Item Uses
-- [ ] Actor semântico: atributos, perícias, HP, AC e movimento
+- [x] Usos, consumo e recuperação por descanso
+- [x] Actor semântico: atributos, salvaguardas, perícias, PV, CA e movimento
+- [x] Recursos nativos de Actor: primary, secondary e tertiary
+- [x] Classe semântica básica: níveis, dado de vida, atributo primário e spellcasting
+- [ ] Subclasse e Advancement completos
 - [ ] Active Effects aplicados por Activity
-- [ ] Magias completas e spellcasting
-- [ ] Recursos externos/atributos e consumo avançado
-- [ ] Testes em personagem real
+- [ ] Magias completas e preparação
+- [ ] Recursos customizados além dos 3 slots nativos
+- [ ] Teste com personagem real
 - [ ] Testes automatizados
 - [ ] Interface de importação dentro do Foundry
 
 ## Compatibilidade-alvo
 
 - Foundry VTT: **V14**
-- Sistema: **D&D 5e 5.3.3 até 6.0.x** para a camada atualmente implementada
-- D&D5e mínimo no manifesto: **5.3.3**
-- D&D5e mais recente verificado no manifesto: **6.0.2**
+- Sistema principal: **D&D5e 6.0.x**
+- D&D5e mínimo no manifesto: **6.0.0**
+- D&D5e verificado: **6.0.2**
 
-A compatibilidade 5.3.3 foi conferida diretamente contra os modelos de Activity do sistema oficial para `attack`, `save`, `utility`, `uses`, `consumption` e `target`. Recursos ainda não implementados no V9 continuam sujeitos a validação durante os testes com personagens reais.
-
-O adaptador detecta a versão real do sistema em runtime. A camada `jarvis` serve como API estável para evitar que cada atualização do D&D5e obrigue a reescrever todas as fichas.
+O D&D5e 6.0.2 é a base de desenvolvimento e teste do Jarvis V9. A camada `jarvis` serve como API estável para evitar que cada atualização do sistema obrigue a reescrever todas as fichas.
 
 ## Estrutura
 
@@ -87,6 +84,7 @@ O adaptador detecta a versão real do sistema em runtime. A camada `jarvis` serv
 │   └── importer/
 │       ├── adapters/
 │       ├── images/
+│       ├── resources/
 │       ├── v9/
 │       └── validators/
 ├── schemas/
