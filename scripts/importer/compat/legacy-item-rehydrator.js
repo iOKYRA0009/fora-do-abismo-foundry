@@ -53,9 +53,7 @@ function overlayCharacterState(current, source) {
     "system.identified",
     "system.container",
     "system.uses.spent",
-    "system.prepared",
-    "system.method",
-    "system.properties"
+    "system.prepared"
   ];
   for (const path of statePaths) copyPath(out, source, path);
 
@@ -100,6 +98,16 @@ export async function rehydrateLegacyOfficialItems(items = [], { notify = false 
   const resolved = [];
 
   for (const source of items) {
+    const sourceVersion = String(source?._stats?.systemVersion ?? "");
+    const currentVersion = String(game.system?.version ?? "");
+
+    // Fresh documents built from the current system (including class/subclass
+    // templates customized by a Jarvis macro) must not be replaced again.
+    if (!sourceVersion || sourceVersion === currentVersion) {
+      resolved.push(clone(source));
+      continue;
+    }
+
     const uuid = asSourceUuid(source);
     if (!uuid) {
       resolved.push(clone(source));
