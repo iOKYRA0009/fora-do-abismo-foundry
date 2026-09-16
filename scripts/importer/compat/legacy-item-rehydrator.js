@@ -158,6 +158,7 @@ export async function rehydrateLegacyOfficialItems(items = [], { notify = false 
 export function isolateJarvisManagedEffects(itemData, semanticActivities = []) {
   if (!itemData?.system?.activities || !Array.isArray(semanticActivities)) return itemData;
 
+  let isolatedAny = false;
   for (const semantic of semanticActivities) {
     const automation = semantic?.automation;
     const managesEffect = Boolean(automation?.effect || automation?.effects);
@@ -169,6 +170,7 @@ export function isolateJarvisManagedEffects(itemData, semanticActivities = []) {
     activity.flags ??= {};
     activity.flags[MODULE_ID] ??= {};
     activity.flags[MODULE_ID].managedSelfEffect = true;
+    isolatedAny = true;
 
     activity.range ??= {};
     activity.range.value = "";
@@ -190,6 +192,15 @@ export function isolateJarvisManagedEffects(itemData, semanticActivities = []) {
     activity.target.template.contiguous = false;
     activity.target.template.stationary = false;
     activity.target.template.units ??= "ft";
+  }
+
+  // Some Item types also carry an item-level target/range which Nik checks as
+  // a fallback. Neutralise only intrinsic self metadata when at least one
+  // Jarvis-managed effect Activity exists.
+  if (isolatedAny) {
+    if (itemData.system?.range?.units === "self") itemData.system.range.units = "any";
+    if (itemData.system?.target?.affects?.type === "self") itemData.system.target.affects.type = "";
+    if (itemData.system?.target?.template?.type === "self") itemData.system.target.template.type = "";
   }
 
   return itemData;
