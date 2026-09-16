@@ -19,7 +19,12 @@ const entries = [
     ],
     identifiers: ["undead", "the-undead", "patrono-undead", "patrono-morto-vivo"],
     sourceBooks: ["Van Richten's Guide to Ravenloft"],
-    rules: ["2014"],
+    sourceRules: ["2014"],
+    rules: ["2014", "2024"],
+    profileModes: {
+      "2014": "native",
+      "2024": "legacy-adapted"
+    },
     features: [
       { level: 1, name: "Expanded Spell List", aliases: ["expanded spell list", "lista de magias expandida"] },
       { level: 1, name: "Form of Dread", aliases: ["form of dread", "forma de pavor", "forma do pavor"] },
@@ -42,7 +47,12 @@ const entries = [
       "feiticaria-da-tempestade", "feiticeiro-da-tormenta"
     ],
     sourceBooks: ["Xanathar's Guide to Everything", "Sword Coast Adventurer's Guide"],
-    rules: ["2014"],
+    sourceRules: ["2014"],
+    rules: ["2014", "2024"],
+    profileModes: {
+      "2014": "native",
+      "2024": "legacy-adapted"
+    },
     features: [
       { level: 1, name: "Wind Speaker", aliases: ["wind speaker", "orador do vento"] },
       { level: 1, name: "Tempestuous Magic", aliases: ["tempestuous magic", "magia tempestuosa"] },
@@ -60,7 +70,12 @@ const entries = [
     aliases: ["eldritch knight", "cavaleiro arcano", "cavaleiro mistico"],
     identifiers: ["eldritch-knight", "cavaleiro-arcano", "cavaleiro-mistico"],
     sourceBooks: ["Player's Handbook"],
+    sourceRules: ["2014", "2024"],
     rules: ["2014", "2024"],
+    profileModes: {
+      "2014": "native",
+      "2024": "native-updated"
+    },
     features: [
       { level: 3, name: "Spellcasting", aliases: ["spellcasting", "conjuracao", "conjuracao cavaleiro arcano"] },
       { level: 3, name: "Weapon Bond / War Bond", aliases: ["weapon bond", "war bond", "vinculo com arma", "vinculo de arma", "vinculo de guerra"] },
