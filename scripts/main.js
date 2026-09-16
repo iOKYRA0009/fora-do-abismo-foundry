@@ -11,13 +11,15 @@ Hooks.once("ready", () => {
     ui.notifications?.warn("Fora do Abismo — Jarvis Tools foi projetado para o sistema D&D 5e.");
   }
 
+  const module = game.modules.get(MODULE_ID);
   const api = {
     importer: new JarvisImporterV9(),
-    version: "0.1.0-alpha.1"
+    version: module?.version ?? "desconhecida"
   };
 
-  const module = game.modules.get(MODULE_ID);
   if (module) module.api = api;
 
-  console.log(`${MODULE_ID} | Jarvis Importer V9 disponível em game.modules.get(\"${MODULE_ID}\").api.importer`);
+  console.log(
+    `${MODULE_ID} | Jarvis Importer V9 ${api.version} disponível em game.modules.get(\"${MODULE_ID}\").api.importer`
+  );
 });
