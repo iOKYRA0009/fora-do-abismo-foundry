@@ -1,2 +1,57 @@
-/* Fora do Abismo — Jarvis Tools
-   Bootstrap visual. A interface do importer entra em milestone posterior. */
+/* Fora do Abismo — Jarvis Tools */
+
+/* Hybrid feature layout --------------------------------------------------- */
+.dnd5e2.sheet.actor.character .items-section[data-jarvis-hybrid="true"] > .items-header,
+.dnd5e2.application.actor.character .items-section[data-jarvis-hybrid="true"] > .items-header {
+  position: relative;
+  padding-right: 34px;
+}
+
+.jarvis-section-toggle {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0.85;
+}
+
+.jarvis-section-toggle:hover {
+  opacity: 1;
+}
+
+.items-section[data-jarvis-hybrid="true"].jarvis-section-collapsed > .item-list {
+  display: none;
+}
+
+.items-section[data-jarvis-hybrid="true"].jarvis-section-collapsed > .items-header {
+  border-radius: 4px;
+}
+
+/* Macro file drop --------------------------------------------------------- */
+.jarvis-macro-drop-zone {
+  position: relative;
+  transition: outline-color 120ms ease, background-color 120ms ease;
+}
+
+.jarvis-macro-drop-zone.jarvis-drag-active {
+  outline: 2px dashed currentColor;
+  outline-offset: 4px;
+}
+
+.jarvis-macro-drop-hint {
+  margin-top: 6px;
+  font-size: 0.8em;
+  opacity: 0.7;
+  text-align: right;
+  pointer-events: none;
+}
+
+.jarvis-macro-drop-zone.jarvis-drag-active .jarvis-macro-drop-hint {
+  opacity: 1;
+}

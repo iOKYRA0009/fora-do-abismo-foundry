@@ -1,9 +1,13 @@
 import { JarvisImporterV9 } from "./importer/v9/jarvis-importer-v9.js";
+import { registerHybridFeatureLayout } from "./ui/hybrid-features.js";
+import { registerMacroFileDrop } from "./ui/macro-file-drop.js";
 
 const MODULE_ID = "fora-do-abismo-foundry";
 
 Hooks.once("init", () => {
   console.log(`${MODULE_ID} | Inicializando Jarvis Tools`);
+  registerHybridFeatureLayout();
+  registerMacroFileDrop();
 });
 
 Hooks.once("ready", () => {

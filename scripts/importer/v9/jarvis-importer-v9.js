@@ -6,6 +6,8 @@ import {
 import { resolveCrossItemConsumption } from "../resources/cross-item-linker.js";
 import { Dnd5eV6Adapter } from "../adapters/dnd5e-adapter.js";
 
+const MODULE_ID = "fora-do-abismo-foundry";
+
 export class JarvisImporterV9 {
   async importActor(payload, { renderSheet = true } = {}) {
     validateJarvisActorPayload(payload);
@@ -20,6 +22,7 @@ export class JarvisImporterV9 {
     const itemData = Dnd5eV6Adapter.adaptItems(payload.items ?? []);
     const effectData = foundry.utils.deepClone(payload.effects ?? []);
 
+    this.#applyLayoutMetadata(actorData, itemData, payload);
     this.#applyActorImage(actorData);
     this.#applyItemImages(itemData);
 
@@ -71,6 +74,28 @@ export class JarvisImporterV9 {
     return this.importActor(payload, options);
   }
 
+  #applyLayoutMetadata(actorData, items, payload) {
+    const actorSemantic = payload.actor?.jarvis ?? {};
+    const sourceItems = payload.items ?? [];
+    const hasOrganization = sourceItems.some(item => item?.jarvis?.organization);
+    const layout = actorSemantic.featuresLayout ?? (hasOrganization ? "hybrid" : null);
+
+    if (layout) {
+      actorData.flags ??= {};
+      actorData.flags[MODULE_ID] ??= {};
+      actorData.flags[MODULE_ID].featuresLayout = String(layout);
+    }
+
+    items.forEach((item, index) => {
+      const organization = sourceItems[index]?.jarvis?.organization;
+      if (!organization) return;
+
+      item.flags ??= {};
+      item.flags[MODULE_ID] ??= {};
+      item.flags[MODULE_ID].organization = foundry.utils.deepClone(organization);
+    });
+  }
+
   #applyActorImage(actorData) {
     const strategy = actorData.imgStrategy;
 
@@ -101,7 +126,7 @@ export class JarvisImporterV9 {
 
   #storeGenerationDescriptor(documentData, descriptor) {
     documentData.flags ??= {};
-    documentData.flags["fora-do-abismo-foundry"] ??= {};
-    documentData.flags["fora-do-abismo-foundry"].imageGeneration = descriptor;
+    documentData.flags[MODULE_ID] ??= {};
+    documentData.flags[MODULE_ID].imageGeneration = descriptor;
   }
 }
