@@ -1,0 +1,21 @@
+{
+  "id": "fora-do-abismo-foundry",
+  "title": "Fora do Abismo — Jarvis Tools",
+  "description": "Ferramentas da campanha Fora do Abismo para Foundry VTT, incluindo o Jarvis Importer V9.",
+  "version": "0.1.0-alpha.1",
+  "authors": [
+    {
+      "name": "iOKYRA0009"
+    }
+  ],
+  "compatibility": {
+    "minimum": "14",
+    "verified": "14"
+  },
+  "esmodules": [
+    "scripts/main.js"
+  ],
+  "styles": [
+    "styles/fora-do-abismo.css"
+  ]
+}
