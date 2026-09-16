@@ -4,10 +4,17 @@ import { registerMacroFileDrop } from "./ui/macro-file-drop.js";
 import { registerActivityAutomation } from "./automation/activity-automation.js";
 import {
   applyEmbeddedEffect,
+  applyEmbeddedEffectToActor,
   prepareEmbeddedEffectForActor,
   removeAppliedEmbeddedEffect,
+  removeAppliedEmbeddedEffectFromActor,
   resolveEmbeddedEffect
 } from "./automation/embedded-effect-engine.js";
+import {
+  getJackSoulStatus,
+  registerJackEngine,
+  syncJackSoulTiers
+} from "./automation/jack-engine.js";
 import { registerProgressionEngine } from "./progression/progression-engine.js";
 import {
   analyzeActorProvenance,
@@ -28,6 +35,7 @@ Hooks.once("init", () => {
   registerHybridFeatureLayout();
   registerMacroFileDrop();
   registerActivityAutomation();
+  registerJackEngine();
   registerProgressionEngine();
 });
 
@@ -41,9 +49,15 @@ Hooks.once("ready", () => {
     importer: new JarvisImporterV9(),
     effects: {
       applyEmbedded: applyEmbeddedEffect,
+      applyEmbeddedToActor: applyEmbeddedEffectToActor,
       prepareEmbedded: prepareEmbeddedEffectForActor,
       removeApplied: removeAppliedEmbeddedEffect,
+      removeAppliedFromActor: removeAppliedEmbeddedEffectFromActor,
       resolveEmbedded: resolveEmbeddedEffect
+    },
+    jack: {
+      syncActor: syncJackSoulTiers,
+      getSoulStatus: getJackSoulStatus
     },
     provenance: {
       analyzeActor: analyzeActorProvenance,
