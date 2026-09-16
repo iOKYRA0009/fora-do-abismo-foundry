@@ -7,6 +7,9 @@ export class PayloadValidationError extends Error {
 }
 
 const IMAGE_SOURCES = new Set(["foundry", "generate", "custom"]);
+const ACTIVITY_TYPES = new Set([
+  "attack", "save", "utility", "heal", "check", "damage", "summon", "enchant", "cast", "forward"
+]);
 
 function validateImgStrategy(strategy, path, errors) {
   if (strategy === undefined) return;
@@ -31,6 +34,44 @@ function validateImgStrategy(strategy, path, errors) {
   if (strategy.tags !== undefined && !Array.isArray(strategy.tags)) {
     errors.push(`${path}.tags deve ser uma lista.`);
   }
+}
+
+function validateJarvisSemantic(jarvis, path, errors) {
+  if (jarvis === undefined) return;
+
+  if (!jarvis || typeof jarvis !== "object" || Array.isArray(jarvis)) {
+    errors.push(`${path} deve ser um objeto.`);
+    return;
+  }
+
+  if (jarvis.description !== undefined && typeof jarvis.description !== "string") {
+    errors.push(`${path}.description deve ser texto.`);
+  }
+
+  if (jarvis.uses !== undefined && (!jarvis.uses || typeof jarvis.uses !== "object" || Array.isArray(jarvis.uses))) {
+    errors.push(`${path}.uses deve ser um objeto.`);
+  }
+
+  if (jarvis.activities !== undefined && !Array.isArray(jarvis.activities)) {
+    errors.push(`${path}.activities deve ser uma lista.`);
+    return;
+  }
+
+  jarvis.activities?.forEach((activity, index) => {
+    const activityPath = `${path}.activities[${index}]`;
+    if (!activity || typeof activity !== "object" || Array.isArray(activity)) {
+      errors.push(`${activityPath} deve ser um objeto.`);
+      return;
+    }
+
+    if (activity.type !== undefined && !ACTIVITY_TYPES.has(activity.type)) {
+      errors.push(`${activityPath}.type '${activity.type}' ainda não é suportado pelo V9.`);
+    }
+
+    if (activity.consumption?.targets !== undefined && !Array.isArray(activity.consumption.targets)) {
+      errors.push(`${activityPath}.consumption.targets deve ser uma lista.`);
+    }
+  });
 }
 
 export function validateJarvisActorPayload(payload) {
@@ -72,7 +113,17 @@ export function validateJarvisActorPayload(payload) {
         errors.push(`items[${index}] deve ser um objeto.`);
         return;
       }
+
+      if (!item.name || typeof item.name !== "string") {
+        errors.push(`items[${index}].name é obrigatório.`);
+      }
+
+      if (!item.type || typeof item.type !== "string") {
+        errors.push(`items[${index}].type é obrigatório.`);
+      }
+
       validateImgStrategy(item.imgStrategy, `items[${index}].imgStrategy`, errors);
+      validateJarvisSemantic(item.jarvis, `items[${index}].jarvis`, errors);
     });
   }
 
