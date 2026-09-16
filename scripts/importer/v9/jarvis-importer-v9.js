@@ -3,6 +3,7 @@ import {
   buildGenerationDescriptor,
   resolveDocumentImage
 } from "../images/image-strategy.js";
+import { resolveCrossItemConsumption } from "../resources/cross-item-linker.js";
 import { Dnd5eV6Adapter } from "../adapters/dnd5e-adapter.js";
 
 export class JarvisImporterV9 {
@@ -26,13 +27,17 @@ export class JarvisImporterV9 {
     if (!actor) throw new Error("O Foundry não retornou um Actor após a criação.");
 
     try {
+      let createdItems = [];
+
       if (itemData.length) {
-        const createdItems = await actor.createEmbeddedDocuments("Item", itemData);
+        createdItems = await actor.createEmbeddedDocuments("Item", itemData);
         if (!Array.isArray(createdItems) || createdItems.length !== itemData.length) {
           throw new Error(
             `Criação incompleta de Items: esperado ${itemData.length}, criado ${createdItems?.length ?? 0}.`
           );
         }
+
+        await resolveCrossItemConsumption(actor, createdItems);
       }
 
       if (effectData.length) {
