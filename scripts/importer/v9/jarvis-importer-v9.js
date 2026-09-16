@@ -5,6 +5,10 @@ import {
 } from "../images/image-strategy.js";
 import { resolveCrossItemConsumption } from "../resources/cross-item-linker.js";
 import { Dnd5eV6Adapter } from "../adapters/dnd5e-adapter.js";
+import {
+  isolateJarvisManagedEffects,
+  rehydrateLegacyOfficialItems
+} from "../compat/legacy-item-rehydrator.js";
 import { applyActorProgressions } from "../../progression/progression-engine.js";
 import { stampActorProvenance } from "../../provenance/content-provenance.js";
 import {
@@ -25,11 +29,16 @@ export class JarvisImporterV9 {
     Dnd5eV6Adapter.assertRuntime();
 
     const actorData = Dnd5eV6Adapter.adaptActor(payload.actor);
-    const itemData = Dnd5eV6Adapter.adaptItems(payload.items ?? []);
+    const { items: resolvedItems, report: rehydrationReport } = await rehydrateLegacyOfficialItems(
+      payload.items ?? []
+    );
+    const itemData = Dnd5eV6Adapter.adaptItems(resolvedItems);
     const effectData = foundry.utils.deepClone(payload.effects ?? []);
+    const effectivePayload = { ...payload, items: resolvedItems };
 
-    this.#applyLayoutMetadata(actorData, itemData, payload);
-    this.#applyItemSemanticMetadata(itemData, payload.items ?? []);
+    this.#applyLayoutMetadata(actorData, itemData, effectivePayload);
+    this.#applyItemSemanticMetadata(itemData, resolvedItems);
+    this.#storeRehydrationSummary(actorData, rehydrationReport);
     this.#applyActorImage(actorData);
     this.#applyItemImages(itemData);
 
@@ -62,6 +71,15 @@ export class JarvisImporterV9 {
       throw error;
     }
 
+    const hydrated = rehydrationReport.filter(entry => entry.status === "rehydrated").length;
+    const unresolved = rehydrationReport.filter(entry => entry.status === "unresolved");
+    if (hydrated) {
+      console.log(`${MODULE_ID} | ${actor.name}: ${hydrated} Item(s) oficial(is) reidratado(s) para D&D5e ${game.system?.version}.`);
+    }
+    if (unresolved.length) {
+      console.warn(`${MODULE_ID} | ${actor.name}: fontes oficiais não resolvidas foram preservadas.`, unresolved);
+    }
+
     ui.notifications?.info(`Jarvis Importer V9: ${actor.name} importado com sucesso.`);
 
     if (renderSheet) actor.sheet?.render(true);
@@ -79,12 +97,18 @@ export class JarvisImporterV9 {
 
     Dnd5eV6Adapter.assertRuntime();
 
-    const itemData = Dnd5eV6Adapter.adaptItems(sourceItems);
-    this.#applyItemSemanticMetadata(itemData, sourceItems);
+    const { items: resolvedItems, report } = await rehydrateLegacyOfficialItems(sourceItems);
+    const itemData = Dnd5eV6Adapter.adaptItems(resolvedItems);
+    this.#applyItemSemanticMetadata(itemData, resolvedItems);
     this.#applyItemImages(itemData);
 
     const created = await this.#createItems(actor, itemData);
     await stampActorProvenance(actor);
+
+    const hydrated = report.filter(entry => entry.status === "rehydrated").length;
+    if (hydrated) {
+      console.log(`${MODULE_ID} | ${sourceLabel}: ${hydrated} Item(s) oficial(is) reidratado(s).`);
+    }
     console.log(`${MODULE_ID} | ${sourceLabel}: ${created.length} Item(s) criado(s) em ${actor.name}.`);
     return created;
   }
@@ -168,7 +192,26 @@ export class JarvisImporterV9 {
         built.flags[MODULE_ID] ??= {};
         built.flags[MODULE_ID].automation = foundry.utils.deepClone(activity.automation);
       }
+
+      // Jarvis effect Activities are self-buffs handled by our D&D5e 6.x
+      // Effect Engine. Keep third-party self-effect helpers from applying the
+      // same Item effects a second time.
+      isolateJarvisManagedEffects(item, semanticActivities);
     });
+  }
+
+  #storeRehydrationSummary(actorData, report = []) {
+    const hydrated = report.filter(entry => entry.status === "rehydrated");
+    const unresolved = report.filter(entry => entry.status === "unresolved");
+    if (!hydrated.length && !unresolved.length) return;
+
+    actorData.flags ??= {};
+    actorData.flags[MODULE_ID] ??= {};
+    actorData.flags[MODULE_ID].rehydration = {
+      systemVersion: game.system?.version ?? null,
+      hydrated: hydrated.map(entry => ({ name: entry.name, uuid: entry.uuid })),
+      unresolved: unresolved.map(entry => ({ name: entry.name, uuid: entry.uuid }))
+    };
   }
 
   #applyActorImage(actorData) {
