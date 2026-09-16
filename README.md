@@ -10,7 +10,7 @@ A lore completa não deve ser duplicada aqui. O Google Drive continua sendo a fo
 
 ## Instalação no Foundry
 
-Quando existir uma release publicada, instale o módulo por **Manifest URL**:
+Instale o módulo por **Manifest URL**:
 
 ```text
 https://github.com/iOKYRA0009/fora-do-abismo-foundry/releases/latest/download/module.json
@@ -52,7 +52,8 @@ Se a versão já existir, a workflow não sobrescreve silenciosamente aquela rel
 - [x] Importação genérica de Actor + Embedded Items
 - [x] Esquema JSON inicial
 - [x] Sistema inicial de imagens e `imgStrategy`
-- [x] Adaptador D&D5e 6.x — primeira camada
+- [x] Adaptador D&D5e — primeira camada
+- [x] Compatibilidade básica verificada com D&D5e 5.3.3 e 6.0.x para Activities centrais
 - [x] Activities básicas: attack, save e utility
 - [x] Usos e recuperação básica por descanso
 - [x] Consumo básico de Item Uses
@@ -67,8 +68,11 @@ Se a versão já existir, a workflow não sobrescreve silenciosamente aquela rel
 ## Compatibilidade-alvo
 
 - Foundry VTT: **V14**
-- Sistema: **D&D 5e 6.x**
-- D&D5e verificado no manifesto: **6.0.2**
+- Sistema: **D&D 5e 5.3.3 até 6.0.x** para a camada atualmente implementada
+- D&D5e mínimo no manifesto: **5.3.3**
+- D&D5e mais recente verificado no manifesto: **6.0.2**
+
+A compatibilidade 5.3.3 foi conferida diretamente contra os modelos de Activity do sistema oficial para `attack`, `save`, `utility`, `uses`, `consumption` e `target`. Recursos ainda não implementados no V9 continuam sujeitos a validação durante os testes com personagens reais.
 
 O adaptador detecta a versão real do sistema em runtime. A camada `jarvis` serve como API estável para evitar que cada atualização do D&D5e obrigue a reescrever todas as fichas.
 
