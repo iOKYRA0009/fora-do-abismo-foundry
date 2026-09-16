@@ -10,11 +10,16 @@ const IMAGE_SOURCES = new Set(["foundry", "generate", "custom"]);
 const ACTIVITY_TYPES = new Set([
   "attack", "save", "utility", "heal", "check", "damage", "summon", "enchant", "cast", "forward"
 ]);
+const RESOURCE_SLOTS = new Set(["primary", "secondary", "tertiary"]);
+
+function isObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
 
 function validateImgStrategy(strategy, path, errors) {
   if (strategy === undefined) return;
 
-  if (!strategy || typeof strategy !== "object" || Array.isArray(strategy)) {
+  if (!isObject(strategy)) {
     errors.push(`${path} deve ser um objeto.`);
     return;
   }
@@ -36,10 +41,49 @@ function validateImgStrategy(strategy, path, errors) {
   }
 }
 
-function validateJarvisSemantic(jarvis, path, errors) {
+function validateActorSemantic(jarvis, path, errors) {
+  if (jarvis === undefined) return;
+  if (!isObject(jarvis)) {
+    errors.push(`${path} deve ser um objeto.`);
+    return;
+  }
+
+  for (const key of ["abilities", "skills", "hp", "movement", "details"]) {
+    if (jarvis[key] !== undefined && !isObject(jarvis[key])) {
+      errors.push(`${path}.${key} deve ser um objeto.`);
+    }
+  }
+
+  if (jarvis.saves !== undefined && !Array.isArray(jarvis.saves)) {
+    errors.push(`${path}.saves deve ser uma lista.`);
+  }
+
+  if (jarvis.resources !== undefined) {
+    if (!Array.isArray(jarvis.resources)) {
+      errors.push(`${path}.resources deve ser uma lista.`);
+    } else {
+      if (jarvis.resources.length > 3) {
+        errors.push(`${path}.resources aceita no máximo 3 recursos nativos do Actor.`);
+      }
+
+      jarvis.resources.forEach((resource, index) => {
+        const resourcePath = `${path}.resources[${index}]`;
+        if (!isObject(resource)) {
+          errors.push(`${resourcePath} deve ser um objeto.`);
+          return;
+        }
+        if (resource.slot !== undefined && !RESOURCE_SLOTS.has(resource.slot)) {
+          errors.push(`${resourcePath}.slot deve ser primary, secondary ou tertiary.`);
+        }
+      });
+    }
+  }
+}
+
+function validateItemSemantic(jarvis, path, errors) {
   if (jarvis === undefined) return;
 
-  if (!jarvis || typeof jarvis !== "object" || Array.isArray(jarvis)) {
+  if (!isObject(jarvis)) {
     errors.push(`${path} deve ser um objeto.`);
     return;
   }
@@ -48,7 +92,7 @@ function validateJarvisSemantic(jarvis, path, errors) {
     errors.push(`${path}.description deve ser texto.`);
   }
 
-  if (jarvis.uses !== undefined && (!jarvis.uses || typeof jarvis.uses !== "object" || Array.isArray(jarvis.uses))) {
+  if (jarvis.uses !== undefined && !isObject(jarvis.uses)) {
     errors.push(`${path}.uses deve ser um objeto.`);
   }
 
@@ -57,9 +101,13 @@ function validateJarvisSemantic(jarvis, path, errors) {
     return;
   }
 
+  if (jarvis.spellcasting !== undefined && !isObject(jarvis.spellcasting)) {
+    errors.push(`${path}.spellcasting deve ser um objeto.`);
+  }
+
   jarvis.activities?.forEach((activity, index) => {
     const activityPath = `${path}.activities[${index}]`;
-    if (!activity || typeof activity !== "object" || Array.isArray(activity)) {
+    if (!isObject(activity)) {
       errors.push(`${activityPath} deve ser um objeto.`);
       return;
     }
@@ -101,6 +149,7 @@ export function validateJarvisActorPayload(payload) {
     }
 
     validateImgStrategy(payload.actor.imgStrategy, "actor.imgStrategy", errors);
+    validateActorSemantic(payload.actor.jarvis, "actor.jarvis", errors);
   }
 
   if (payload.items !== undefined && !Array.isArray(payload.items)) {
@@ -123,7 +172,7 @@ export function validateJarvisActorPayload(payload) {
       }
 
       validateImgStrategy(item.imgStrategy, `items[${index}].imgStrategy`, errors);
-      validateJarvisSemantic(item.jarvis, `items[${index}].jarvis`, errors);
+      validateItemSemantic(item.jarvis, `items[${index}].jarvis`, errors);
     });
   }
 
