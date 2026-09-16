@@ -57,6 +57,14 @@ function advancementParentId(item) {
   return origin.split(".")[0] || null;
 }
 
+function hasScriptAutomation(item) {
+  const activities = Object.values(item?.system?.activities ?? {});
+  return activities.some(activity => {
+    if (activity?.type === "sc-macro") return true;
+    return Boolean(activity?.flags?.[MODULE_ID]?.automation);
+  });
+}
+
 function explicitProvenance(item) {
   return item?.flags?.[MODULE_ID]?.provenanceOverride
     ?? item?.flags?.[MODULE_ID]?.provenanceInput
@@ -113,14 +121,16 @@ function subclassClassification(item, allItems) {
   }
 
   return {
-    kind: PROVENANCE_KIND.OFFICIAL_RECREATION,
+    kind: hasScriptAutomation(item) ? PROVENANCE_KIND.OFFICIAL_MODIFIED : PROVENANCE_KIND.OFFICIAL_RECREATION,
     confidence: 0.98,
     canonicalKey: entry.key,
     canonicalName: entry.canonicalName,
     sourceBooks: clone(entry.sourceBooks),
     rules: preferredRules,
     baseOfficial: true,
-    reason: "A subclasse corresponde ao registro canônico de conteúdo oficial, mas não veio diretamente de um compêndio dnd5e confiável.",
+    reason: hasScriptAutomation(item)
+      ? "A subclasse corresponde a conteúdo oficial conhecido, mas contém automação adicional não canônica."
+      : "A subclasse corresponde ao registro canônico de conteúdo oficial, mas não veio diretamente de um compêndio dnd5e confiável.",
     conflicts
   };
 }
@@ -130,14 +140,16 @@ function trustedClassification(item) {
   if (!isTrustedDnd5eSource(sourceId)) return null;
 
   return {
-    kind: PROVENANCE_KIND.OFFICIAL_SYSTEM,
+    kind: hasScriptAutomation(item) ? PROVENANCE_KIND.OFFICIAL_MODIFIED : PROVENANCE_KIND.OFFICIAL_SYSTEM,
     confidence: 1,
     canonicalKey: null,
     canonicalName: null,
     sourceBooks: sourceBookOf(item) ? [sourceBookOf(item)] : [],
     rules: rulesOf(item),
     baseOfficial: true,
-    reason: `Documento originado diretamente do compêndio oficial do sistema D&D5e (${sourceId}).`,
+    reason: hasScriptAutomation(item)
+      ? `Documento originado do compêndio oficial D&D5e (${sourceId}), mas recebeu automação adicional.`
+      : `Documento originado diretamente do compêndio oficial do sistema D&D5e (${sourceId}).`,
     conflicts: []
   };
 }
@@ -147,14 +159,16 @@ function srdClassification(item) {
   if (!/^SRD\s+5\.[12]/i.test(book)) return null;
 
   return {
-    kind: PROVENANCE_KIND.OFFICIAL_SYSTEM,
+    kind: hasScriptAutomation(item) ? PROVENANCE_KIND.OFFICIAL_MODIFIED : PROVENANCE_KIND.OFFICIAL_SYSTEM,
     confidence: 0.98,
     canonicalKey: null,
     canonicalName: null,
     sourceBooks: [book],
     rules: rulesOf(item),
     baseOfficial: true,
-    reason: `Documento declara fonte ${book}.`,
+    reason: hasScriptAutomation(item)
+      ? `Documento declara fonte ${book}, mas recebeu automação adicional.`
+      : `Documento declara fonte ${book}.`,
     conflicts: []
   };
 }
@@ -168,15 +182,18 @@ function childOfCanonicalSubclass(item, allItems, subclassById) {
 
   const feature = findOfficialFeature(parent.entry, item.name);
   if (feature) {
+    const modified = hasScriptAutomation(item);
     return {
-      kind: PROVENANCE_KIND.OFFICIAL_RECREATION,
+      kind: modified ? PROVENANCE_KIND.OFFICIAL_MODIFIED : PROVENANCE_KIND.OFFICIAL_RECREATION,
       confidence: 0.94,
       canonicalKey: `${parent.entry.key}:${normalizeOfficialKey(feature.name)}`,
       canonicalName: feature.name,
       sourceBooks: clone(parent.entry.sourceBooks),
       rules: parent.classification.rules,
       baseOfficial: true,
-      reason: `Característica reconhecida como parte oficial de ${parent.entry.canonicalName}.`,
+      reason: modified
+        ? `Característica reconhecida como parte oficial de ${parent.entry.canonicalName}, com automação/modificação adicional.`
+        : `Característica reconhecida como parte oficial de ${parent.entry.canonicalName}.`,
       conflicts: []
     };
   }
@@ -196,16 +213,19 @@ function childOfCanonicalSubclass(item, allItems, subclassById) {
 
 function fallbackClassification(item) {
   const semantic = Boolean(item?.flags?.[MODULE_ID]?.semanticSource);
-  if (semantic) {
+  const scripted = hasScriptAutomation(item);
+  if (semantic || scripted) {
     return {
       kind: PROVENANCE_KIND.HOMEBREW,
-      confidence: 0.86,
+      confidence: scripted ? 0.94 : 0.86,
       canonicalKey: null,
       canonicalName: null,
       sourceBooks: [],
       rules: rulesOf(item),
       baseOfficial: false,
-      reason: "Item criado semanticamente pelo Jarvis e sem correspondência oficial conhecida.",
+      reason: scripted
+        ? "Item manual com automação própria e sem correspondência oficial conhecida."
+        : "Item criado semanticamente pelo Jarvis e sem correspondência oficial conhecida.",
       conflicts: []
     };
   }
