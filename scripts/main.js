@@ -8,6 +8,12 @@ import {
   formatProvenanceReport,
   stampActorProvenance
 } from "./provenance/content-provenance.js";
+import {
+  analyzeActorRulesProfile,
+  DEFAULT_RULES_PROFILE,
+  formatRulesProfileReport,
+  setActorRulesProfile
+} from "./rules/rules-profile.js";
 
 const MODULE_ID = "fora-do-abismo-foundry";
 
@@ -31,6 +37,12 @@ Hooks.once("ready", () => {
       analyzeActor: analyzeActorProvenance,
       stampActor: stampActorProvenance,
       formatReport: formatProvenanceReport
+    },
+    rules: {
+      defaultProfile: DEFAULT_RULES_PROFILE,
+      analyzeActor: analyzeActorRulesProfile,
+      setActorProfile: setActorRulesProfile,
+      formatReport: formatRulesProfileReport
     },
     version: module?.version ?? "desconhecida"
   };

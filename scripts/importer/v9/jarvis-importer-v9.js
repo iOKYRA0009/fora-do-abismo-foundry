@@ -7,6 +7,10 @@ import { resolveCrossItemConsumption } from "../resources/cross-item-linker.js";
 import { Dnd5eV6Adapter } from "../adapters/dnd5e-adapter.js";
 import { applyActorProgressions } from "../../progression/progression-engine.js";
 import { stampActorProvenance } from "../../provenance/content-provenance.js";
+import {
+  DEFAULT_RULES_PROFILE,
+  setActorRulesProfile
+} from "../../rules/rules-profile.js";
 
 const MODULE_ID = "fora-do-abismo-foundry";
 
@@ -48,9 +52,13 @@ export class JarvisImporterV9 {
 
       await applyActorProgressions(actor, { notify: false });
       await stampActorProvenance(actor);
+      await setActorRulesProfile(
+        actor,
+        payload.actor?.jarvis?.rulesProfile ?? DEFAULT_RULES_PROFILE
+      );
     } catch (error) {
       console.error("fora-do-abismo-foundry | Falha durante criação de documentos embutidos", error);
-      ui.notifications?.error(`Actor ${actor.name} foi criado, mas itens/efeitos/progressão/proveniência falharam. Veja o console.`);
+      ui.notifications?.error(`Actor ${actor.name} foi criado, mas itens/efeitos/progressão/proveniência/perfil de regras falharam. Veja o console.`);
       throw error;
     }
 
