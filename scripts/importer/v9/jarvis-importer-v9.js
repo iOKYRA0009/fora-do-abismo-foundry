@@ -27,11 +27,21 @@ export class JarvisImporterV9 {
 
     try {
       if (itemData.length) {
-        await actor.createEmbeddedDocuments("Item", itemData);
+        const createdItems = await actor.createEmbeddedDocuments("Item", itemData);
+        if (!Array.isArray(createdItems) || createdItems.length !== itemData.length) {
+          throw new Error(
+            `Criação incompleta de Items: esperado ${itemData.length}, criado ${createdItems?.length ?? 0}.`
+          );
+        }
       }
 
       if (effectData.length) {
-        await actor.createEmbeddedDocuments("ActiveEffect", effectData);
+        const createdEffects = await actor.createEmbeddedDocuments("ActiveEffect", effectData);
+        if (!Array.isArray(createdEffects) || createdEffects.length !== effectData.length) {
+          throw new Error(
+            `Criação incompleta de Active Effects: esperado ${effectData.length}, criado ${createdEffects?.length ?? 0}.`
+          );
+        }
       }
     } catch (error) {
       console.error("fora-do-abismo-foundry | Falha durante criação de documentos embutidos", error);
