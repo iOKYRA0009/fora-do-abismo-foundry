@@ -42,7 +42,7 @@ function resolveTarget(target, itemIndex) {
 export async function resolveCrossItemConsumption(actor, createdItems = []) {
   if (!actor || !Array.isArray(createdItems) || !createdItems.length) return 0;
 
-  const itemIndex = buildItemIndex(createdItems);
+  const itemIndex = buildItemIndex(Array.from(actor.items));
   const updates = [];
   let resolvedCount = 0;
 

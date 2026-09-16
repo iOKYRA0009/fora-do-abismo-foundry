@@ -5,6 +5,7 @@ import {
 } from "../images/image-strategy.js";
 import { resolveCrossItemConsumption } from "../resources/cross-item-linker.js";
 import { Dnd5eV6Adapter } from "../adapters/dnd5e-adapter.js";
+import { applyActorProgressions } from "../../progression/progression-engine.js";
 
 const MODULE_ID = "fora-do-abismo-foundry";
 
@@ -23,6 +24,7 @@ export class JarvisImporterV9 {
     const effectData = foundry.utils.deepClone(payload.effects ?? []);
 
     this.#applyLayoutMetadata(actorData, itemData, payload);
+    this.#applyItemSemanticMetadata(itemData, payload.items ?? []);
     this.#applyActorImage(actorData);
     this.#applyItemImages(itemData);
 
@@ -30,30 +32,23 @@ export class JarvisImporterV9 {
     if (!actor) throw new Error("O Foundry não retornou um Actor após a criação.");
 
     try {
-      let createdItems = [];
-
       if (itemData.length) {
-        createdItems = await actor.createEmbeddedDocuments("Item", itemData);
-        if (!Array.isArray(createdItems) || createdItems.length !== itemData.length) {
-          throw new Error(
-            `Criação incompleta de Items: esperado ${itemData.length}, criado ${createdItems?.length ?? 0}.`
-          );
-        }
-
-        await resolveCrossItemConsumption(actor, createdItems);
+        await this.#createItems(actor, itemData);
       }
 
       if (effectData.length) {
-        const createdEffects = await actor.createEmbeddedDocuments("ActiveEffect", effectData);
+        const createdEffects = await actor.createEmbeddedDocuments("ActiveEffect", effectData, { keepId: true });
         if (!Array.isArray(createdEffects) || createdEffects.length !== effectData.length) {
           throw new Error(
             `Criação incompleta de Active Effects: esperado ${effectData.length}, criado ${createdEffects?.length ?? 0}.`
           );
         }
       }
+
+      await applyActorProgressions(actor, { notify: false });
     } catch (error) {
       console.error("fora-do-abismo-foundry | Falha durante criação de documentos embutidos", error);
-      ui.notifications?.error(`Actor ${actor.name} foi criado, mas itens/efeitos falharam. Veja o console.`);
+      ui.notifications?.error(`Actor ${actor.name} foi criado, mas itens/efeitos/progressão falharam. Veja o console.`);
       throw error;
     }
 
@@ -61,6 +56,26 @@ export class JarvisImporterV9 {
 
     if (renderSheet) actor.sheet?.render(true);
     return actor;
+  }
+
+  async importItems(actor, sourceItems = [], { sourceLabel = "Jarvis Progression" } = {}) {
+    if (!game.user?.isGM) {
+      throw new Error("Jarvis Importer V9 exige permissão de Mestre para criar Items.");
+    }
+    if (!actor || actor.documentName !== "Actor") {
+      throw new Error("importItems exige um Actor válido.");
+    }
+    if (!Array.isArray(sourceItems) || !sourceItems.length) return [];
+
+    Dnd5eV6Adapter.assertRuntime();
+
+    const itemData = Dnd5eV6Adapter.adaptItems(sourceItems);
+    this.#applyItemSemanticMetadata(itemData, sourceItems);
+    this.#applyItemImages(itemData);
+
+    const created = await this.#createItems(actor, itemData);
+    console.log(`${MODULE_ID} | ${sourceLabel}: ${created.length} Item(s) criado(s) em ${actor.name}.`);
+    return created;
   }
 
   async importFromJson(jsonText, options = {}) {
@@ -72,6 +87,18 @@ export class JarvisImporterV9 {
     }
 
     return this.importActor(payload, options);
+  }
+
+  async #createItems(actor, itemData) {
+    const createdItems = await actor.createEmbeddedDocuments("Item", itemData, { keepId: true });
+    if (!Array.isArray(createdItems) || createdItems.length !== itemData.length) {
+      throw new Error(
+        `Criação incompleta de Items: esperado ${itemData.length}, criado ${createdItems?.length ?? 0}.`
+      );
+    }
+
+    await resolveCrossItemConsumption(actor, createdItems);
+    return createdItems;
   }
 
   #applyLayoutMetadata(actorData, items, payload) {
@@ -93,6 +120,39 @@ export class JarvisImporterV9 {
       item.flags ??= {};
       item.flags[MODULE_ID] ??= {};
       item.flags[MODULE_ID].organization = foundry.utils.deepClone(organization);
+    });
+  }
+
+  #applyItemSemanticMetadata(items, sourceItems) {
+    items.forEach((item, index) => {
+      const semantic = sourceItems[index]?.jarvis ?? {};
+      item.flags ??= {};
+      item.flags[MODULE_ID] ??= {};
+
+      if (semantic.organization) {
+        item.flags[MODULE_ID].organization = foundry.utils.deepClone(semantic.organization);
+      }
+
+      if (Array.isArray(semantic.progression) && semantic.progression.length) {
+        item.flags[MODULE_ID].progression = foundry.utils.deepClone(semantic.progression);
+      }
+
+      const semanticActivities = Array.isArray(semantic.activities) ? semantic.activities : [];
+      for (const activity of semanticActivities) {
+        if (!activity?.automation) continue;
+        if (!activity._id) {
+          throw new Error(`Activity '${activity.name ?? "sem nome"}' em '${item.name}' usa automation e precisa de _id explícito.`);
+        }
+
+        const built = item.system?.activities?.[activity._id];
+        if (!built) {
+          throw new Error(`Activity '${activity._id}' de '${item.name}' não foi encontrada após adaptação.`);
+        }
+
+        built.flags ??= {};
+        built.flags[MODULE_ID] ??= {};
+        built.flags[MODULE_ID].automation = foundry.utils.deepClone(activity.automation);
+      }
     });
   }
 
