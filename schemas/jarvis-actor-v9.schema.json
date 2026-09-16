@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fora-do-abismo.local/schemas/jarvis-actor-v9.schema.json",
+  "title": "Jarvis Actor Payload V9",
+  "type": "object",
+  "required": ["schemaVersion", "actor"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": "9.0"
+    },
+    "actor": {
+      "type": "object",
+      "required": ["name", "type"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "type": { "type": "string", "minLength": 1 },
+        "img": { "type": "string" },
+        "system": { "type": "object" },
+        "prototypeToken": { "type": "object" },
+        "flags": { "type": "object" }
+      },
+      "additionalProperties": true
+    },
+    "items": {
+      "type": "array",
+      "items": { "type": "object" },
+      "default": []
+    },
+    "effects": {
+      "type": "array",
+      "items": { "type": "object" },
+      "default": []
+    },
+    "meta": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}
