@@ -2,6 +2,12 @@ import { JarvisImporterV9 } from "./importer/v9/jarvis-importer-v9.js";
 import { registerHybridFeatureLayout } from "./ui/hybrid-features.js";
 import { registerMacroFileDrop } from "./ui/macro-file-drop.js";
 import { registerActivityAutomation } from "./automation/activity-automation.js";
+import {
+  applyEmbeddedEffect,
+  prepareEmbeddedEffectForActor,
+  removeAppliedEmbeddedEffect,
+  resolveEmbeddedEffect
+} from "./automation/embedded-effect-engine.js";
 import { registerProgressionEngine } from "./progression/progression-engine.js";
 import {
   analyzeActorProvenance,
@@ -33,6 +39,12 @@ Hooks.once("ready", () => {
   const module = game.modules.get(MODULE_ID);
   const api = {
     importer: new JarvisImporterV9(),
+    effects: {
+      applyEmbedded: applyEmbeddedEffect,
+      prepareEmbedded: prepareEmbeddedEffectForActor,
+      removeApplied: removeAppliedEmbeddedEffect,
+      resolveEmbedded: resolveEmbeddedEffect
+    },
     provenance: {
       analyzeActor: analyzeActorProvenance,
       stampActor: stampActorProvenance,
