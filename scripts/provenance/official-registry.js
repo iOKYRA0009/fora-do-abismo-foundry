@@ -62,8 +62,8 @@ const entries = [
     sourceBooks: ["Player's Handbook"],
     rules: ["2014", "2024"],
     features: [
-      { level: 3, name: "Spellcasting", aliases: ["spellcasting", "conjuracao"] },
-      { level: 3, name: "Weapon Bond", aliases: ["weapon bond", "vinculo com arma", "vinculo de arma"] },
+      { level: 3, name: "Spellcasting", aliases: ["spellcasting", "conjuracao", "conjuracao cavaleiro arcano"] },
+      { level: 3, name: "Weapon Bond / War Bond", aliases: ["weapon bond", "war bond", "vinculo com arma", "vinculo de arma", "vinculo de guerra"] },
       { level: 7, name: "War Magic", aliases: ["war magic", "magia de guerra"] },
       { level: 10, name: "Eldritch Strike", aliases: ["eldritch strike", "golpe mistico", "golpe arcano"] },
       { level: 15, name: "Arcane Charge", aliases: ["arcane charge", "carga arcana"] },
