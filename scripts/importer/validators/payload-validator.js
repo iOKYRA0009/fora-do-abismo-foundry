@@ -80,7 +80,64 @@ function validateActorSemantic(jarvis, path, errors) {
   }
 }
 
-function validateItemSemantic(jarvis, path, errors) {
+function validateAutomation(automation, path, errors) {
+  if (automation === undefined) return;
+  if (!isObject(automation)) {
+    errors.push(`${path} deve ser um objeto.`);
+    return;
+  }
+
+  for (const phase of ["pre", "post"]) {
+    if (automation[phase] !== undefined && typeof automation[phase] !== "string") {
+      errors.push(`${path}.${phase} deve ser texto JavaScript.`);
+    }
+  }
+
+  if (!automation.pre && !automation.post) {
+    errors.push(`${path} precisa definir pelo menos 'pre' ou 'post'.`);
+  }
+}
+
+function validateProgression(progression, path, errors, depth) {
+  if (progression === undefined) return;
+  if (!Array.isArray(progression)) {
+    errors.push(`${path} deve ser uma lista.`);
+    return;
+  }
+
+  progression.forEach((entry, index) => {
+    const entryPath = `${path}[${index}]`;
+    if (!isObject(entry)) {
+      errors.push(`${entryPath} deve ser um objeto.`);
+      return;
+    }
+
+    const level = Number(entry.level);
+    if (!Number.isInteger(level) || level < 1 || level > 20) {
+      errors.push(`${entryPath}.level deve ser um inteiro entre 1 e 20.`);
+    }
+
+    if (!Array.isArray(entry.grants)) {
+      errors.push(`${entryPath}.grants deve ser uma lista.`);
+      return;
+    }
+
+    entry.grants.forEach((grant, grantIndex) => {
+      const grantPath = `${entryPath}.grants[${grantIndex}]`;
+      if (!isObject(grant)) {
+        errors.push(`${grantPath} deve ser um Item payload.`);
+        return;
+      }
+      if (!grant.name || typeof grant.name !== "string") errors.push(`${grantPath}.name é obrigatório.`);
+      if (!grant.type || typeof grant.type !== "string") errors.push(`${grantPath}.type é obrigatório.`);
+      validateImgStrategy(grant.imgStrategy, `${grantPath}.imgStrategy`, errors);
+      if (depth < 1) validateItemSemantic(grant.jarvis, `${grantPath}.jarvis`, errors, depth + 1);
+      else if (grant.jarvis?.progression !== undefined) errors.push(`${grantPath}.jarvis.progression aninhada não é suportada.`);
+    });
+  });
+}
+
+function validateItemSemantic(jarvis, path, errors, depth = 0) {
   if (jarvis === undefined) return;
 
   if (!isObject(jarvis)) {
@@ -105,6 +162,8 @@ function validateItemSemantic(jarvis, path, errors) {
     errors.push(`${path}.spellcasting deve ser um objeto.`);
   }
 
+  validateProgression(jarvis.progression, `${path}.progression`, errors, depth);
+
   jarvis.activities?.forEach((activity, index) => {
     const activityPath = `${path}.activities[${index}]`;
     if (!isObject(activity)) {
@@ -118,6 +177,11 @@ function validateItemSemantic(jarvis, path, errors) {
 
     if (activity.consumption?.targets !== undefined && !Array.isArray(activity.consumption.targets)) {
       errors.push(`${activityPath}.consumption.targets deve ser uma lista.`);
+    }
+
+    validateAutomation(activity.automation, `${activityPath}.automation`, errors);
+    if (activity.automation && !/^[A-Za-z0-9]{16}$/.test(String(activity._id ?? ""))) {
+      errors.push(`${activityPath} com automation precisa de _id com exatamente 16 caracteres alfanuméricos.`);
     }
   });
 }
