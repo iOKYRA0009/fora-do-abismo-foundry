@@ -2,6 +2,43 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://fora-do-abismo.local/schemas/jarvis-actor-v9.schema.json",
   "title": "Jarvis Actor Payload V9",
+  "$defs": {
+    "imgStrategy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "string",
+          "enum": ["foundry", "generate", "custom"],
+          "default": "foundry"
+        },
+        "iconKey": { "type": "string", "minLength": 1 },
+        "customPath": { "type": "string", "minLength": 1 },
+        "promptHints": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "default": []
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "default": []
+        },
+        "semanticRole": { "type": "string", "minLength": 1 },
+        "style": { "type": "string", "minLength": 1 },
+        "fallbackIcon": { "type": "string", "minLength": 1 }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "source": { "const": "custom" } },
+            "required": ["source"]
+          },
+          "then": { "required": ["customPath"] }
+        }
+      ]
+    }
+  },
   "type": "object",
   "required": ["schemaVersion", "actor"],
   "additionalProperties": false,
@@ -16,6 +53,7 @@
         "name": { "type": "string", "minLength": 1 },
         "type": { "type": "string", "minLength": 1 },
         "img": { "type": "string" },
+        "imgStrategy": { "$ref": "#/$defs/imgStrategy" },
         "system": { "type": "object" },
         "prototypeToken": { "type": "object" },
         "flags": { "type": "object" }
@@ -24,7 +62,14 @@
     },
     "items": {
       "type": "array",
-      "items": { "type": "object" },
+      "items": {
+        "type": "object",
+        "properties": {
+          "img": { "type": "string" },
+          "imgStrategy": { "$ref": "#/$defs/imgStrategy" }
+        },
+        "additionalProperties": true
+      },
       "default": []
     },
     "effects": {
