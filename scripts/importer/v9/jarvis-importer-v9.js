@@ -1,4 +1,8 @@
 import { validateJarvisActorPayload } from "../validators/payload-validator.js";
+import {
+  buildGenerationDescriptor,
+  resolveDocumentImage
+} from "../images/image-strategy.js";
 
 export class JarvisImporterV9 {
   async importActor(payload, { renderSheet = true } = {}) {
@@ -15,6 +19,9 @@ export class JarvisImporterV9 {
     const actorData = foundry.utils.deepClone(payload.actor);
     const itemData = foundry.utils.deepClone(payload.items ?? []);
     const effectData = foundry.utils.deepClone(payload.effects ?? []);
+
+    this.#applyActorImage(actorData);
+    this.#applyItemImages(itemData);
 
     const actor = await Actor.create(actorData, { renderSheet: false });
     if (!actor) throw new Error("O Foundry não retornou um Actor após a criação.");
@@ -48,5 +55,39 @@ export class JarvisImporterV9 {
     }
 
     return this.importActor(payload, options);
+  }
+
+  #applyActorImage(actorData) {
+    const strategy = actorData.imgStrategy;
+
+    if (!actorData.img || strategy?.source) {
+      actorData.img = resolveDocumentImage(actorData, strategy, { kind: "actor" });
+    }
+
+    const descriptor = buildGenerationDescriptor(actorData, strategy, { kind: "actor" });
+    if (descriptor) this.#storeGenerationDescriptor(actorData, descriptor);
+
+    delete actorData.imgStrategy;
+  }
+
+  #applyItemImages(items) {
+    for (const item of items) {
+      const strategy = item.imgStrategy;
+
+      if (!item.img || strategy?.source) {
+        item.img = resolveDocumentImage(item, strategy, { kind: "item" });
+      }
+
+      const descriptor = buildGenerationDescriptor(item, strategy, { kind: "item" });
+      if (descriptor) this.#storeGenerationDescriptor(item, descriptor);
+
+      delete item.imgStrategy;
+    }
+  }
+
+  #storeGenerationDescriptor(documentData, descriptor) {
+    documentData.flags ??= {};
+    documentData.flags["fora-do-abismo-foundry"] ??= {};
+    documentData.flags["fora-do-abismo-foundry"].imageGeneration = descriptor;
   }
 }
