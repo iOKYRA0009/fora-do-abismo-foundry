@@ -50,24 +50,26 @@ export async function resolveCrossItemConsumption(actor, createdItems = []) {
     const source = item.toObject();
     const activities = source.system?.activities ?? {};
     const update = { _id: item.id };
-    let changed = false;
+    let itemChanged = false;
 
     for (const [activityId, activity] of Object.entries(activities)) {
       const targets = activity?.consumption?.targets;
       if (!Array.isArray(targets) || !targets.length) continue;
 
+      let activityChanged = false;
       const resolvedTargets = targets.map(target => {
         const next = foundry.utils.deepClone(target);
         const resolved = resolveTarget(next.target, itemIndex);
         if (resolved !== next.target) {
           next.target = resolved;
           resolvedCount += 1;
-          changed = true;
+          activityChanged = true;
+          itemChanged = true;
         }
         return next;
       });
 
-      if (changed) {
+      if (activityChanged) {
         foundry.utils.setProperty(
           update,
           `system.activities.${activityId}.consumption.targets`,
@@ -76,7 +78,7 @@ export async function resolveCrossItemConsumption(actor, createdItems = []) {
       }
     }
 
-    if (changed) updates.push(update);
+    if (itemChanged) updates.push(update);
   }
 
   if (updates.length) {
