@@ -61,8 +61,6 @@ export async function prepareEmbeddedEffectForActor(effect, activity, actor, { k
   if (!activity) throw new Error("Jarvis Effect Engine: Activity ausente.");
   if (!actor) throw new Error("Jarvis Effect Engine: Actor ausente.");
 
-  // Espelha o pipeline oficial do D&D5e 6.x: parte de um ActiveEffect5e real,
-  // clona sua fonte já validada e só então prepara os changes para o alvo.
   const effectData = effect.toObject();
   effectData.disabled = false;
   effectData.transfer = false;
@@ -75,6 +73,7 @@ export async function prepareEmbeddedEffectForActor(effect, activity, actor, { k
   effectData.system.origin ??= {};
   effectData.system.origin.activity = activity.uuid;
   effectData.system.origin.item = activity.item?.uuid ?? null;
+  effectData.system.origin.actor = activity.item?.actor?.uuid ?? null;
 
   effectData.duration ??= {};
   effectData.duration.expired = false;
@@ -99,14 +98,13 @@ export async function prepareEmbeddedEffectForActor(effect, activity, actor, { k
   return effectData;
 }
 
-export async function applyEmbeddedEffect(activity, {
+export async function applyEmbeddedEffectToActor(activity, actor, {
   effectId = null,
   effectName = null,
   key = null,
   replace = true
 } = {}) {
-  const actor = getActor(activity);
-  if (!actor) throw new Error("Jarvis Effect Engine: Activity sem Actor associado.");
+  if (!actor) throw new Error("Jarvis Effect Engine: Actor alvo ausente.");
 
   const effect = resolveEmbeddedEffect(activity, { effectId, effectName });
   const normalizedKey = asKey(key) || `embedded:${effect.uuid}`;
@@ -119,15 +117,17 @@ export async function applyEmbeddedEffect(activity, {
   }
 
   const data = await prepareEmbeddedEffectForActor(effect, activity, actor, { key: normalizedKey });
-
-  // Usamos a mesma implementação de documento que o próprio D&D5e usa no
-  // Effect Application Tray, em vez de fabricar um Active Effect cru.
   return ActiveEffect.implementation.create(data, { parent: actor });
 }
 
-export async function removeAppliedEmbeddedEffect(activity, keyOrEffectName) {
+export async function applyEmbeddedEffect(activity, options = {}) {
   const actor = getActor(activity);
   if (!actor) throw new Error("Jarvis Effect Engine: Activity sem Actor associado.");
+  return applyEmbeddedEffectToActor(activity, actor, options);
+}
+
+export async function removeAppliedEmbeddedEffectFromActor(actor, keyOrEffectName) {
+  if (!actor) throw new Error("Jarvis Effect Engine: Actor alvo ausente.");
   const key = asKey(keyOrEffectName).toLowerCase();
   const ids = actor.effects.filter(effect => {
     const automationKey = asKey(effect.getFlag?.(MODULE_ID, "automationKey")).toLowerCase();
@@ -137,4 +137,10 @@ export async function removeAppliedEmbeddedEffect(activity, keyOrEffectName) {
 
   if (!ids.length) return [];
   return actor.deleteEmbeddedDocuments("ActiveEffect", ids);
+}
+
+export async function removeAppliedEmbeddedEffect(activity, keyOrEffectName) {
+  const actor = getActor(activity);
+  if (!actor) throw new Error("Jarvis Effect Engine: Activity sem Actor associado.");
+  return removeAppliedEmbeddedEffectFromActor(actor, keyOrEffectName);
 }
