@@ -75,7 +75,11 @@ function inferActivationGroup(item, organization = {}) {
 
 function getOrigin(item, organization = {}) {
   const origin = organization.origin ? slugify(organization.origin) : "other";
-  const originLabel = String(organization.originLabel ?? organization.label ?? (origin === "other" ? "OUTRAS" : origin.toUpperCase()));
+  const originLabel = String(
+    organization.originLabel
+      ?? organization.label
+      ?? (origin === "other" ? "OUTRAS" : origin.toUpperCase())
+  );
   const originOrder = Number.isFinite(Number(organization.originOrder))
     ? Number(organization.originOrder)
     : (DEFAULT_ORIGIN_ORDER[origin] ?? DEFAULT_ORIGIN_ORDER.other);
@@ -87,58 +91,58 @@ function makeSectionLabel(origin, originLabel, group) {
   return `${originLabel} — ${GROUP_LABELS[group] ?? GROUP_LABELS.other}`;
 }
 
-function prepareHybridSections(application, context) {
-  if (!isCharacterSheet(application)) return;
+function buildBuckets(actor, rows) {
+  const buckets = new Map();
 
-  const actor = getActor(application);
-  if (actor.getFlag(MODULE_ID, "featuresLayout") !== "hybrid") return;
-  if (!Array.isArray(context?.sections) || !context?.itemCategories?.features) return;
+  for (const row of rows) {
+    const item = actor.items.get(row.dataset.itemId);
+    if (!item || item.type !== "feat") continue;
 
-  const features = [...(context.itemCategories.features ?? [])];
-  if (!features.length) return;
-
-  const baseColumns = context.sections.find(section => Array.isArray(section.columns))?.columns ?? [];
-  const sections = new Map();
-
-  for (const item of features) {
     const organization = getOrganization(item);
     const group = inferActivationGroup(item, organization);
     const { origin, originLabel, originOrder } = getOrigin(item, organization);
     const key = `${origin}:${group}`;
 
-    if (!sections.has(key)) {
-      sections.set(key, {
-        id: `jarvis-${slugify(key)}`,
-        label: makeSectionLabel(origin, originLabel, group),
+    if (!buckets.has(key)) {
+      buckets.set(key, {
+        key,
+        group,
+        origin,
+        originLabel,
         order: (originOrder * 100) + (GROUP_ORDER[group] ?? GROUP_ORDER.other),
-        columns: baseColumns,
-        items: [],
-        dataset: {
-          jarvisHybrid: "true",
-          jarvisSection: slugify(key)
-        }
+        rows: []
       });
     }
 
-    sections.get(key).items.push(item);
+    buckets.get(key).rows.push({ row, item, organization });
   }
 
-  const result = [...sections.values()]
-    .filter(section => section.items.length)
-    .sort((a, b) => a.order - b.order || String(a.label).localeCompare(String(b.label), game.i18n?.lang ?? "pt-BR"));
-
-  for (const section of result) {
-    section.items.sort((a, b) => {
-      const aOrg = getOrganization(a);
-      const bOrg = getOrganization(b);
-      const aOrder = Number.isFinite(Number(aOrg.order)) ? Number(aOrg.order) : Number(a.sort ?? 0);
-      const bOrder = Number.isFinite(Number(bOrg.order)) ? Number(bOrg.order) : Number(b.sort ?? 0);
-      return aOrder - bOrder || a.name.localeCompare(b.name, game.i18n?.lang ?? "pt-BR");
+  for (const bucket of buckets.values()) {
+    bucket.rows.sort((a, b) => {
+      const aOrder = Number.isFinite(Number(a.organization.order)) ? Number(a.organization.order) : Number(a.item.sort ?? 0);
+      const bOrder = Number.isFinite(Number(b.organization.order)) ? Number(b.organization.order) : Number(b.item.sort ?? 0);
+      return aOrder - bOrder || a.item.name.localeCompare(b.item.name, game.i18n?.lang ?? "pt-BR");
     });
   }
 
-  context.sections = result;
-  if (context.listControls?.grouping) context.listControls.grouping = [];
+  return [...buckets.values()].sort((a, b) => a.order - b.order || a.key.localeCompare(b.key));
+}
+
+function createSection(headerTemplate, bucket) {
+  const section = document.createElement("div");
+  section.className = "items-section card";
+  section.dataset.jarvisHybrid = "true";
+  section.dataset.jarvisSection = slugify(bucket.key);
+
+  const header = headerTemplate.cloneNode(true);
+  header.querySelector("h3.item-name").textContent = makeSectionLabel(bucket.origin, bucket.originLabel, bucket.group);
+
+  const list = document.createElement("ol");
+  list.className = "item-list unlist";
+  for (const { row } of bucket.rows) list.append(row);
+
+  section.append(header, list);
+  return section;
 }
 
 function setCollapsed(section, collapsed) {
@@ -154,39 +158,63 @@ function setCollapsed(section, collapsed) {
   }
 }
 
+function addCollapseButton(actor, section) {
+  const header = section.querySelector(":scope > .items-header");
+  if (!header || header.querySelector(".jarvis-section-toggle")) return;
+
+  const sectionId = section.dataset.jarvisSection ?? "section";
+  const stateKey = `${actor.uuid}:${sectionId}`;
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "jarvis-section-toggle unbutton always-interactive";
+  button.setAttribute("aria-label", "Recolher ou expandir seção");
+  button.innerHTML = '<i class="fa-solid fa-chevron-down" inert></i>';
+
+  button.addEventListener("click", event => {
+    event.preventDefault();
+    event.stopPropagation();
+    const collapsed = !section.classList.contains("jarvis-section-collapsed");
+    if (collapsed) collapsedSections.add(stateKey);
+    else collapsedSections.delete(stateKey);
+    setCollapsed(section, collapsed);
+  });
+
+  header.append(button);
+  setCollapsed(section, collapsedSections.has(stateKey));
+}
+
 function activateHybridSections(application, element) {
   if (!isCharacterSheet(application)) return;
+
   const actor = getActor(application);
   if (actor.getFlag(MODULE_ID, "featuresLayout") !== "hybrid") return;
 
-  const sections = element.querySelectorAll('.items-section[data-jarvis-hybrid="true"]');
-  for (const section of sections) {
-    const header = section.querySelector(":scope > .items-header");
-    if (!header || header.querySelector(".jarvis-section-toggle")) continue;
+  const featureList = element.querySelector('.items-list[data-item-list="features"], .features-list');
+  if (!featureList) return;
 
-    const sectionId = section.dataset.jarvisSection ?? "section";
-    const stateKey = `${actor.uuid}:${sectionId}`;
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "jarvis-section-toggle unbutton always-interactive";
-    button.setAttribute("aria-label", "Recolher ou expandir seção");
-    button.innerHTML = '<i class="fa-solid fa-chevron-down" inert></i>';
+  const originalSections = Array.from(featureList.querySelectorAll(":scope > .items-section"));
+  if (!originalSections.length) return;
 
-    button.addEventListener("click", event => {
-      event.preventDefault();
-      event.stopPropagation();
-      const collapsed = !section.classList.contains("jarvis-section-collapsed");
-      if (collapsed) collapsedSections.add(stateKey);
-      else collapsedSections.delete(stateKey);
-      setCollapsed(section, collapsed);
-    });
+  const headerTemplate = originalSections.find(section => section.querySelector(":scope > .items-header"))
+    ?.querySelector(":scope > .items-header");
+  if (!headerTemplate) return;
 
-    header.append(button);
-    setCollapsed(section, collapsedSections.has(stateKey));
+  const rows = originalSections.flatMap(section => Array.from(section.querySelectorAll(":scope > .item-list > li.item[data-item-id]")));
+  if (!rows.length) return;
+
+  const buckets = buildBuckets(actor, rows);
+  if (!buckets.length) return;
+
+  featureList.replaceChildren(...buckets.map(bucket => createSection(headerTemplate, bucket)));
+
+  for (const section of featureList.querySelectorAll(':scope > .items-section[data-jarvis-hybrid="true"]')) {
+    addCollapseButton(actor, section);
   }
+
+  const controls = element.querySelector('item-list-controls[for="features"]');
+  controls?.querySelector('datalist[data-list="group"]')?.remove();
 }
 
 export function registerHybridFeatureLayout() {
-  Hooks.on("preRenderApplication", prepareHybridSections);
   Hooks.on("renderApplicationV2", activateHybridSections);
 }
