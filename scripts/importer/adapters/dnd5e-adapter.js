@@ -1,3 +1,5 @@
+import { applyActorResources } from "../resources/resource-engine.js";
+
 const SUPPORTED_ITEM_TYPES = new Set([
   "feat", "weapon", "spell", "consumable", "equipment", "tool", "loot",
   "container", "class", "subclass", "background", "race"
@@ -25,6 +27,11 @@ function slugify(value = "item") {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "")
     .slice(0, 64) || "item";
+}
+
+function asNumber(value, fallback = 0) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
 }
 
 function makeId() {
@@ -100,10 +107,14 @@ function normalizeConsumption(consumption = {}) {
 function normalizeActivation(activation = {}) {
   return {
     type: activation.type ?? "action",
-    ...(activation.value !== undefined ? { value: activation.value } : {}),
+    ...(activation.value !== undefined ? { value: activityValue(activation.value) } : {}),
     condition: activation.condition ?? "",
     override: Boolean(activation.override)
   };
+}
+
+function activityValue(value) {
+  return Number.isFinite(Number(value)) ? Number(value) : value;
 }
 
 function normalizeDuration(duration = {}) {
@@ -220,8 +231,9 @@ function buildSaveActivity(activity, id) {
       ? activity.damage.parts.map(normalizeDamagePart)
       : []
   };
+  const ability = activity.save?.ability ?? "";
   data.save = {
-    ability: activity.save?.ability ?? "",
+    ability: Array.isArray(ability) ? ability : (ability ? [ability] : []),
     dc: {
       calculation: activity.save?.dc?.calculation ?? "",
       formula: activity.save?.dc?.formula ?? ""
@@ -285,9 +297,188 @@ function getDocumentTypes() {
   return SUPPORTED_ITEM_TYPES;
 }
 
+function getAbilityKeys() {
+  return new Set(Object.keys(CONFIG.DND5E?.abilities ?? { str: {}, dex: {}, con: {}, int: {}, wis: {}, cha: {} }));
+}
+
+function applyActorAbilities(system, abilities = {}, saves = []) {
+  if (!abilities || typeof abilities !== "object" || Array.isArray(abilities)) {
+    throw new Error("actor.jarvis.abilities deve ser um objeto.");
+  }
+
+  const abilityKeys = getAbilityKeys();
+  system.abilities ??= {};
+
+  for (const [key, input] of Object.entries(abilities)) {
+    if (!abilityKeys.has(key)) throw new Error(`Atributo '${key}' não existe no D&D5e atual.`);
+
+    const value = typeof input === "object" && input !== null ? input.value : input;
+    const proficient = typeof input === "object" && input !== null ? input.proficient : undefined;
+
+    system.abilities[key] ??= {};
+    if (value !== undefined) system.abilities[key].value = Math.max(0, Math.trunc(asNumber(value, 10)));
+    if (proficient !== undefined) system.abilities[key].proficient = proficient ? 1 : 0;
+  }
+
+  if (Array.isArray(saves)) {
+    for (const key of saves) {
+      if (!abilityKeys.has(key)) throw new Error(`Salvaguarda '${key}' não existe no D&D5e atual.`);
+      system.abilities[key] ??= {};
+      system.abilities[key].proficient = 1;
+    }
+  }
+}
+
+function applyActorSkills(system, skills = {}) {
+  if (!skills || typeof skills !== "object" || Array.isArray(skills)) {
+    throw new Error("actor.jarvis.skills deve ser um objeto.");
+  }
+
+  const validSkills = new Set(Object.keys(CONFIG.DND5E?.skills ?? {}));
+  system.skills ??= {};
+
+  for (const [key, input] of Object.entries(skills)) {
+    if (validSkills.size && !validSkills.has(key)) throw new Error(`Perícia '${key}' não existe no D&D5e atual.`);
+
+    const data = typeof input === "object" && input !== null ? input : { value: input };
+    const value = asNumber(data.value, 0);
+    if (![0, 0.5, 1, 2].includes(value)) {
+      throw new Error(`Perícia '${key}' usa proficiência '${value}'. Use 0, 0.5, 1 ou 2.`);
+    }
+
+    system.skills[key] ??= {};
+    system.skills[key].value = value;
+    if (data.ability) system.skills[key].ability = String(data.ability);
+    if (data.bonus !== undefined) {
+      system.skills[key].roll ??= {};
+      system.skills[key].roll.bonus = String(data.bonus ?? "");
+    }
+  }
+}
+
+function applyActorHitPoints(system, hp = {}) {
+  if (!hp || typeof hp !== "object" || Array.isArray(hp)) {
+    throw new Error("actor.jarvis.hp deve ser um objeto.");
+  }
+
+  system.attributes ??= {};
+  system.attributes.hp ??= {};
+  for (const key of ["value", "max", "temp", "tempmax"]) {
+    if (hp[key] !== undefined) system.attributes.hp[key] = Math.max(0, Math.trunc(asNumber(hp[key], 0)));
+  }
+}
+
+function applyActorArmorClass(system, ac) {
+  if (ac === undefined) return;
+
+  system.attributes ??= {};
+  system.attributes.ac ??= {};
+
+  if (typeof ac === "number" || typeof ac === "string") {
+    system.attributes.ac.override = Math.max(0, Math.trunc(asNumber(ac, 10)));
+    return;
+  }
+
+  if (!ac || typeof ac !== "object" || Array.isArray(ac)) {
+    throw new Error("actor.jarvis.ac deve ser número ou objeto.");
+  }
+
+  if (ac.override !== undefined || ac.value !== undefined) {
+    const value = ac.override ?? ac.value;
+    system.attributes.ac.override = value === null ? null : Math.max(0, Math.trunc(asNumber(value, 10)));
+  }
+}
+
+function applyActorMovement(system, movement = {}) {
+  if (!movement || typeof movement !== "object" || Array.isArray(movement)) {
+    throw new Error("actor.jarvis.movement deve ser um objeto.");
+  }
+
+  system.attributes ??= {};
+  system.attributes.movement ??= {};
+  system.attributes.movement.speeds ??= {};
+
+  const speeds = movement.speeds && typeof movement.speeds === "object"
+    ? movement.speeds
+    : movement;
+
+  const known = new Set(Object.keys(CONFIG.DND5E?.movementTypes ?? {
+    walk: {}, burrow: {}, climb: {}, fly: {}, jump: {}, swim: {}
+  }));
+
+  for (const [key, value] of Object.entries(speeds)) {
+    if (["speeds", "units", "hover", "special"].includes(key)) continue;
+    if (known.size && !known.has(key)) continue;
+    system.attributes.movement.speeds[key] = String(value ?? 0);
+  }
+
+  if (movement.units !== undefined) system.attributes.movement.units = movement.units;
+  if (movement.hover !== undefined) system.attributes.movement.hover = Boolean(movement.hover);
+  if (movement.special !== undefined) system.attributes.movement.special = String(movement.special ?? "");
+}
+
+function applyActorDetails(system, details = {}) {
+  if (!details || typeof details !== "object" || Array.isArray(details)) {
+    throw new Error("actor.jarvis.details deve ser um objeto.");
+  }
+
+  system.details ??= {};
+  const simpleFields = ["alignment", "faith", "age", "gender", "eyes", "hair", "skin", "height", "weight", "appearance"];
+  for (const key of simpleFields) {
+    if (details[key] !== undefined) system.details[key] = String(details[key] ?? "");
+  }
+
+  if (details.biography !== undefined) {
+    system.details.biography ??= {};
+    system.details.biography.value = String(details.biography ?? "");
+  }
+}
+
+function applyClassSemantic(data, semantic) {
+  if (data.type !== "class") return;
+
+  if (semantic.levels !== undefined) {
+    data.system.levels = Math.max(0, Math.trunc(asNumber(semantic.levels, 1)));
+  }
+
+  if (semantic.hitDie !== undefined || semantic.hitDiceSpent !== undefined) {
+    data.system.hd ??= {};
+    if (semantic.hitDie !== undefined) {
+      const die = String(semantic.hitDie).startsWith("d") ? String(semantic.hitDie) : `d${semantic.hitDie}`;
+      if (!/^d\d+$/.test(die)) throw new Error(`Classe '${data.name}' possui dado de vida inválido '${semantic.hitDie}'.`);
+      data.system.hd.denomination = die;
+    }
+    if (semantic.hitDiceSpent !== undefined) {
+      data.system.hd.spent = Math.max(0, Math.trunc(asNumber(semantic.hitDiceSpent, 0)));
+    }
+    data.system.hd.additional ??= "";
+  }
+
+  if (semantic.primaryAbility !== undefined) {
+    const abilities = Array.isArray(semantic.primaryAbility) ? semantic.primaryAbility : [semantic.primaryAbility];
+    data.system.primaryAbility = {
+      value: abilities.filter(Boolean).map(String),
+      all: false
+    };
+  }
+
+  if (semantic.spellcasting !== undefined) {
+    const spellcasting = semantic.spellcasting ?? {};
+    data.system.spellcasting = {
+      ...(data.system.spellcasting ?? {}),
+      progression: spellcasting.progression ?? "none",
+      ability: spellcasting.ability ?? "",
+      preparation: {
+        ...(data.system.spellcasting?.preparation ?? {}),
+        formula: spellcasting.preparation?.formula ?? ""
+      }
+    };
+  }
+}
+
 export class Dnd5eV6Adapter {
   static get id() {
-    return "dnd5e-5.3+";
+    return "dnd5e-6.0";
   }
 
   static getTargetInfo() {
@@ -306,15 +497,50 @@ export class Dnd5eV6Adapter {
     if (info.foundryGeneration && Number(info.foundryGeneration) < 14) {
       throw new Error(`Foundry V${info.foundryGeneration} não é suportado pelo Jarvis V9. Alvo: V14+.`);
     }
+
+    const [major, minor] = String(info.systemVersion ?? "0.0").split(".").map(Number);
+    if (major < 6) {
+      ui.notifications?.warn(`Jarvis V9 agora tem D&D5e 6.0.2 como alvo principal. Detectado ${info.systemVersion}.`);
+    } else if (major === 6 && minor === 0) {
+      // Faixa principal validada durante o desenvolvimento atual.
+    }
+
     return info;
   }
 
   static adaptActor(actorData = {}) {
     const data = clone(actorData);
+    const semantic = clone(data.jarvis ?? {});
+    delete data.jarvis;
+
+    data.system ??= {};
+
+    if (semantic.abilities) applyActorAbilities(data.system, semantic.abilities, semantic.saves ?? []);
+    else if (semantic.saves) applyActorAbilities(data.system, {}, semantic.saves);
+
+    if (semantic.skills) applyActorSkills(data.system, semantic.skills);
+    if (semantic.hp) applyActorHitPoints(data.system, semantic.hp);
+    if (semantic.ac !== undefined) applyActorArmorClass(data.system, semantic.ac);
+    if (semantic.movement) applyActorMovement(data.system, semantic.movement);
+    if (semantic.details) applyActorDetails(data.system, semantic.details);
+
+    if (semantic.spellcasting !== undefined) {
+      data.system.attributes ??= {};
+      data.system.attributes.spellcasting = String(semantic.spellcasting ?? "");
+    }
+
+    if (semantic.resources !== undefined) {
+      if (data.type !== "character") {
+        throw new Error("Recursos nativos primary/secondary/tertiary só são suportados pelo V9 em Actors do tipo character.");
+      }
+      applyActorResources(data.system, semantic.resources);
+    }
+
     data.flags ??= {};
     data.flags["fora-do-abismo-foundry"] ??= {};
     data.flags["fora-do-abismo-foundry"].adapter = this.id;
     data.flags["fora-do-abismo-foundry"].systemVersion = game.system?.version ?? null;
+    data.flags["fora-do-abismo-foundry"].semanticSource = Boolean(actorData.jarvis);
     return data;
   }
 
@@ -351,9 +577,11 @@ export class Dnd5eV6Adapter {
       data.system.activities = mergeActivities(data.system.activities, semantic.activities);
     }
 
+    applyClassSemantic(data, semantic);
+
     if (semantic.identifier && !data.system.identifier) {
       data.system.identifier = slugify(semantic.identifier);
-    } else if (!data.system.identifier && ["feat", "spell", "weapon"].includes(data.type)) {
+    } else if (!data.system.identifier && ["feat", "spell", "weapon", "class", "subclass"].includes(data.type)) {
       data.system.identifier = slugify(data.name);
     }
 
