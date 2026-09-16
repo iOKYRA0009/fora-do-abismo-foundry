@@ -1,0 +1,144 @@
+name: Publish Foundry Module
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      MODULE_ID: fora-do-abismo-foundry
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read and validate manifest
+        id: manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION="$(jq -r '.version' module.json)"
+          MODULE_ID_FROM_MANIFEST="$(jq -r '.id' module.json)"
+
+          if [[ "$MODULE_ID_FROM_MANIFEST" != "$MODULE_ID" ]]; then
+            echo "Manifest id '$MODULE_ID_FROM_MANIFEST' does not match '$MODULE_ID'."
+            exit 1
+          fi
+
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid semantic version in module.json: $VERSION"
+            exit 1
+          fi
+
+          jq -e '.id and .title and .version and .compatibility and .esmodules and .manifest and .download' module.json >/dev/null
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+
+          if [[ "$VERSION" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check whether this version already exists
+        id: existing
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.manifest.outputs.tag }}"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Release $TAG already exists. Bump module.json version to publish new code."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build Foundry release package
+        if: steps.existing.outputs.exists != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION="${{ steps.manifest.outputs.version }}"
+          TAG="${{ steps.manifest.outputs.tag }}"
+          RELEASE_DIR="release-tree"
+          DOWNLOAD_URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/$MODULE_ID.zip"
+
+          rm -rf "$RELEASE_DIR" "$MODULE_ID.zip"
+          mkdir -p "$RELEASE_DIR"
+
+          cp module.json "$RELEASE_DIR/module.json"
+          cp -r scripts "$RELEASE_DIR/"
+          cp -r styles "$RELEASE_DIR/"
+          cp -r schemas "$RELEASE_DIR/"
+          cp README.md "$RELEASE_DIR/README.md"
+
+          for optional_dir in assets lang templates packs; do
+            if [[ -d "$optional_dir" ]]; then
+              cp -r "$optional_dir" "$RELEASE_DIR/"
+            fi
+          done
+
+          jq \
+            --arg version "$VERSION" \
+            --arg download "$DOWNLOAD_URL" \
+            '.version = $version | .download = $download' \
+            "$RELEASE_DIR/module.json" > "$RELEASE_DIR/module.tmp.json"
+
+          mv "$RELEASE_DIR/module.tmp.json" "$RELEASE_DIR/module.json"
+
+          jq -e '.id == "fora-do-abismo-foundry"' "$RELEASE_DIR/module.json" >/dev/null
+          jq -e '.manifest | contains("/releases/latest/download/module.json")' "$RELEASE_DIR/module.json" >/dev/null
+          jq -e '.download | contains("/releases/download/v")' "$RELEASE_DIR/module.json" >/dev/null
+
+          (
+            cd "$RELEASE_DIR"
+            zip -r "../$MODULE_ID.zip" .
+          )
+
+          echo "Release package contents:"
+          unzip -l "$MODULE_ID.zip"
+
+      - name: Create GitHub Release
+        if: steps.existing.outputs.exists != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TAG="${{ steps.manifest.outputs.tag }}"
+          VERSION="${{ steps.manifest.outputs.version }}"
+          PRERELEASE_FLAG=""
+
+          if [[ "${{ steps.manifest.outputs.prerelease }}" == "true" ]]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Fora do Abismo — Jarvis Tools $VERSION" \
+            --generate-notes \
+            $PRERELEASE_FLAG
+
+      - name: Upload Foundry assets
+        if: steps.existing.outputs.exists != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TAG="${{ steps.manifest.outputs.tag }}"
+          gh release upload "$TAG" \
+            "release-tree/module.json" \
+            "$MODULE_ID.zip" \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber
