@@ -1,6 +1,8 @@
 import {
   applyEmbeddedEffect,
-  removeAppliedEmbeddedEffect
+  applyEmbeddedEffectToActor,
+  removeAppliedEmbeddedEffect,
+  removeAppliedEmbeddedEffectFromActor
 } from "./embedded-effect-engine.js";
 
 const MODULE_ID = "fora-do-abismo-foundry";
@@ -15,6 +17,12 @@ function getEffectConfigs(automation) {
   const input = automation.effects ?? automation.effect ?? [];
   if (Array.isArray(input)) return input.filter(Boolean);
   return input ? [input] : [];
+}
+
+function getSelectedTargetActors() {
+  return Array.from(game.user?.targets ?? [])
+    .map(token => token?.actor ?? token?.document?.actor ?? null)
+    .filter(Boolean);
 }
 
 function buildScope(activity, usageConfig, results = null) {
@@ -86,11 +94,34 @@ function buildScope(activity, usageConfig, results = null) {
         if (!ids.length) return [];
         return actor.deleteEmbeddedDocuments("ActiveEffect", ids);
       },
+      getTargetActors() {
+        return getSelectedTargetActors();
+      },
+      getSingleTargetActor({ required = true } = {}) {
+        const targets = getSelectedTargetActors();
+        if (targets.length === 1) return targets[0];
+        if (!required && !targets.length) return null;
+        throw new Error(`Selecione exatamente 1 alvo no canvas. Alvos atuais: ${targets.length}.`);
+      },
       async applyEmbeddedEffect(options = {}) {
         return applyEmbeddedEffect(activity, options);
       },
+      async applyEmbeddedEffectToTarget(options = {}) {
+        const targetActor = this.getSingleTargetActor();
+        return applyEmbeddedEffectToActor(activity, targetActor, options);
+      },
+      async applyEmbeddedEffectToActor(targetActor, options = {}) {
+        return applyEmbeddedEffectToActor(activity, targetActor, options);
+      },
       async removeEmbeddedEffect(keyOrEffectName) {
         return removeAppliedEmbeddedEffect(activity, keyOrEffectName);
+      },
+      async removeEmbeddedEffectFromTarget(keyOrEffectName) {
+        const targetActor = this.getSingleTargetActor();
+        return removeAppliedEmbeddedEffectFromActor(targetActor, keyOrEffectName);
+      },
+      async removeEmbeddedEffectFromActor(targetActor, keyOrEffectName) {
+        return removeAppliedEmbeddedEffectFromActor(targetActor, keyOrEffectName);
       },
       async applyActorEffect() {
         throw new Error(
@@ -149,6 +180,30 @@ function runPre(activity, usageConfig) {
   }
 }
 
+async function applyConfiguredEffect(activity, config) {
+  const options = typeof config === "string" ? { effectName: config } : { ...(config ?? {}) };
+  const targetMode = options.target ?? "self";
+  delete options.target;
+
+  if (targetMode === "self") return applyEmbeddedEffect(activity, options);
+  if (targetMode === "selected") {
+    const targets = getSelectedTargetActors();
+    if (targets.length !== 1) {
+      throw new Error(`Effect target='selected' exige exatamente 1 alvo. Alvos atuais: ${targets.length}.`);
+    }
+    return applyEmbeddedEffectToActor(activity, targets[0], options);
+  }
+  if (targetMode === "selected-all") {
+    const targets = getSelectedTargetActors();
+    if (!targets.length) throw new Error("Effect target='selected-all' exige ao menos 1 alvo.");
+    const created = [];
+    for (const target of targets) created.push(await applyEmbeddedEffectToActor(activity, target, options));
+    return created;
+  }
+
+  throw new Error(`Modo de alvo de Effect desconhecido '${targetMode}'. Use self, selected ou selected-all.`);
+}
+
 async function runPost(activity, usageConfig, results) {
   const automation = getAutomation(activity);
   if (!automation) return undefined;
@@ -158,8 +213,7 @@ async function runPost(activity, usageConfig, results) {
 
   try {
     for (const config of getEffectConfigs(automation)) {
-      const options = typeof config === "string" ? { effectName: config } : config;
-      await applyEmbeddedEffect(activity, options ?? {});
+      await applyConfiguredEffect(activity, config);
     }
   } catch (error) {
     console.error(`${MODULE_ID} | Falha no Jarvis Effect Engine ${label}`, error);
