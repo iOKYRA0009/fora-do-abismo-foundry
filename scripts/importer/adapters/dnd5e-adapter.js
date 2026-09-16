@@ -1,39 +1,16 @@
 const SUPPORTED_ITEM_TYPES = new Set([
-  "feat",
-  "weapon",
-  "spell",
-  "consumable",
-  "equipment",
-  "tool",
-  "loot",
-  "container",
-  "class",
-  "subclass",
-  "background",
-  "race"
+  "feat", "weapon", "spell", "consumable", "equipment", "tool", "loot",
+  "container", "class", "subclass", "background", "race"
 ]);
 
 const RECOVERY_PERIODS = Object.freeze({
-  shortRest: "sr",
-  sr: "sr",
-  longRest: "lr",
-  lr: "lr",
-  day: "day",
-  dawn: "day",
-  recharge: "recharge"
+  shortRest: "sr", sr: "sr", longRest: "lr", lr: "lr",
+  day: "day", dawn: "day", recharge: "recharge"
 });
 
 const ACTIVITY_TYPES = new Set([
-  "attack",
-  "save",
-  "utility",
-  "heal",
-  "check",
-  "damage",
-  "summon",
-  "enchant",
-  "cast",
-  "forward"
+  "attack", "save", "utility", "heal", "check", "damage", "summon",
+  "enchant", "cast", "forward"
 ]);
 
 function clone(value) {
@@ -50,9 +27,22 @@ function slugify(value = "item") {
     .slice(0, 64) || "item";
 }
 
-function makeId(prefix = "jarvis") {
-  const random = foundry.utils.randomID?.(12) ?? Math.random().toString(36).slice(2, 14);
-  return `${prefix}${random}`.replace(/[^A-Za-z0-9]/g, "").slice(0, 16);
+function makeId() {
+  if (typeof foundry.utils.randomID === "function") return foundry.utils.randomID(16);
+
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  let id = "";
+  for (let i = 0; i < 16; i += 1) id += chars[Math.floor(Math.random() * chars.length)];
+  return id;
+}
+
+function normalizeActivityId(value, index) {
+  if (value === undefined || value === null || value === "") return makeId();
+  const id = String(value);
+  if (!/^[A-Za-z0-9]{16}$/.test(id)) {
+    throw new Error(`Activity #${index + 1} possui _id inválido. O D&D5e exige exatamente 16 caracteres alfanuméricos.`);
+  }
+  return id;
 }
 
 function normalizeRecoveryEntry(entry) {
@@ -60,11 +50,9 @@ function normalizeRecoveryEntry(entry) {
     const period = RECOVERY_PERIODS[entry] ?? entry;
     return { period, type: "recoverAll" };
   }
-
   if (!entry || typeof entry !== "object") return null;
   const period = RECOVERY_PERIODS[entry.period] ?? entry.period;
   if (!period) return null;
-
   return {
     period,
     type: entry.type ?? "recoverAll",
@@ -92,23 +80,20 @@ function normalizeConsumptionTarget(target = {}) {
     value: String(target.value ?? "1"),
     target: target.target ?? ""
   };
-
   if (target.scaling !== undefined) normalized.scaling = target.scaling;
   return normalized;
 }
 
 function normalizeConsumption(consumption = {}) {
-  const targets = Array.isArray(consumption.targets)
-    ? consumption.targets.map(normalizeConsumptionTarget)
-    : [];
-
   return {
     scaling: {
       allowed: Boolean(consumption.scaling?.allowed),
       ...(consumption.scaling?.max !== undefined ? { max: String(consumption.scaling.max) } : {})
     },
     spellSlot: consumption.spellSlot !== false,
-    targets
+    targets: Array.isArray(consumption.targets)
+      ? consumption.targets.map(normalizeConsumptionTarget)
+      : []
   };
 }
 
@@ -173,7 +158,6 @@ function normalizeDamagePart(part) {
       custom: { enabled: true, formula: part }
     };
   }
-
   return clone(part ?? {});
 }
 
@@ -186,9 +170,7 @@ function buildBaseActivity(activity, id) {
     sort: Number(activity.sort ?? 0),
     activation: normalizeActivation(activity.activation),
     consumption: normalizeConsumption(activity.consumption),
-    description: {
-      chatFlavor: activity.description?.chatFlavor ?? activity.chatFlavor ?? ""
-    },
+    description: { chatFlavor: activity.description?.chatFlavor ?? activity.chatFlavor ?? "" },
     duration: normalizeDuration(activity.duration),
     effects: Array.isArray(activity.effects) ? clone(activity.effects) : [],
     flags: clone(activity.flags ?? {}),
@@ -213,9 +195,7 @@ function buildAttackActivity(activity, id) {
   data.attack = {
     ability: activity.attack?.ability ?? "",
     bonus: activity.attack?.bonus ?? "",
-    critical: {
-      threshold: activity.attack?.critical?.threshold ?? null
-    },
+    critical: { threshold: activity.attack?.critical?.threshold ?? null },
     flat: Boolean(activity.attack?.flat),
     type: {
       value: activity.attack?.type?.value ?? "melee",
@@ -265,8 +245,7 @@ function buildUtilityActivity(activity, id) {
 
 function buildGenericActivity(activity, id) {
   const data = buildBaseActivity(activity, id);
-  const passthrough = ["damage", "healing", "check", "save", "attack", "summon", "enchant", "roll"];
-  for (const key of passthrough) {
+  for (const key of ["damage", "healing", "check", "save", "attack", "summon", "enchant", "roll"]) {
     if (activity[key] !== undefined) data[key] = clone(activity[key]);
   }
   return data;
@@ -282,7 +261,7 @@ function buildActivity(activity, index) {
     throw new Error(`Activity type '${type}' ainda não é suportado pelo Jarvis V9.`);
   }
 
-  const id = activity._id ?? makeId("jv");
+  const id = normalizeActivityId(activity._id, index);
   const normalized = { ...activity, type };
 
   if (type === "attack") return buildAttackActivity(normalized, id);
@@ -308,7 +287,7 @@ function getDocumentTypes() {
 
 export class Dnd5eV6Adapter {
   static get id() {
-    return "dnd5e-v6";
+    return "dnd5e-5.3+";
   }
 
   static getTargetInfo() {
@@ -324,18 +303,9 @@ export class Dnd5eV6Adapter {
     if (info.systemId !== "dnd5e") {
       throw new Error(`Adaptador D&D5e recebeu sistema '${info.systemId ?? "desconhecido"}'.`);
     }
-
     if (info.foundryGeneration && Number(info.foundryGeneration) < 14) {
       throw new Error(`Foundry V${info.foundryGeneration} não é suportado pelo Jarvis V9. Alvo: V14+.`);
     }
-
-    const major = Number(String(info.systemVersion ?? "0").split(".")[0]);
-    if (major && major < 6) {
-      ui.notifications?.warn(
-        `Jarvis V9 foi desenhado para D&D5e 6.x. Detectado ${info.systemVersion}; a importação será tentada em modo de compatibilidade.`
-      );
-    }
-
     return info;
   }
 
@@ -361,7 +331,6 @@ export class Dnd5eV6Adapter {
     if (!data.name || !data.type) {
       throw new Error(`Item #${index + 1} precisa de name e type antes da adaptação D&D5e.`);
     }
-
     if (!supportedTypes.has(data.type)) {
       throw new Error(`Item '${data.name}' usa type '${data.type}', indisponível nesta instalação do D&D5e.`);
     }
@@ -375,10 +344,7 @@ export class Dnd5eV6Adapter {
     }
 
     if (semantic.uses) {
-      data.system.uses = {
-        ...(data.system.uses ?? {}),
-        ...normalizeUses(semantic.uses)
-      };
+      data.system.uses = { ...(data.system.uses ?? {}), ...normalizeUses(semantic.uses) };
     }
 
     if (Array.isArray(semantic.activities) && semantic.activities.length) {
