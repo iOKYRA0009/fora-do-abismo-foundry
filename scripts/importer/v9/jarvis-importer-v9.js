@@ -6,6 +6,7 @@ import {
 import { resolveCrossItemConsumption } from "../resources/cross-item-linker.js";
 import { Dnd5eV6Adapter } from "../adapters/dnd5e-adapter.js";
 import { applyActorProgressions } from "../../progression/progression-engine.js";
+import { stampActorProvenance } from "../../provenance/content-provenance.js";
 
 const MODULE_ID = "fora-do-abismo-foundry";
 
@@ -46,9 +47,10 @@ export class JarvisImporterV9 {
       }
 
       await applyActorProgressions(actor, { notify: false });
+      await stampActorProvenance(actor);
     } catch (error) {
       console.error("fora-do-abismo-foundry | Falha durante criação de documentos embutidos", error);
-      ui.notifications?.error(`Actor ${actor.name} foi criado, mas itens/efeitos/progressão falharam. Veja o console.`);
+      ui.notifications?.error(`Actor ${actor.name} foi criado, mas itens/efeitos/progressão/proveniência falharam. Veja o console.`);
       throw error;
     }
 
@@ -74,6 +76,7 @@ export class JarvisImporterV9 {
     this.#applyItemImages(itemData);
 
     const created = await this.#createItems(actor, itemData);
+    await stampActorProvenance(actor);
     console.log(`${MODULE_ID} | ${sourceLabel}: ${created.length} Item(s) criado(s) em ${actor.name}.`);
     return created;
   }
@@ -131,6 +134,10 @@ export class JarvisImporterV9 {
 
       if (semantic.organization) {
         item.flags[MODULE_ID].organization = foundry.utils.deepClone(semantic.organization);
+      }
+
+      if (semantic.provenance) {
+        item.flags[MODULE_ID].provenanceInput = foundry.utils.deepClone(semantic.provenance);
       }
 
       if (Array.isArray(semantic.progression) && semantic.progression.length) {

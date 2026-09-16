@@ -3,6 +3,11 @@ import { registerHybridFeatureLayout } from "./ui/hybrid-features.js";
 import { registerMacroFileDrop } from "./ui/macro-file-drop.js";
 import { registerActivityAutomation } from "./automation/activity-automation.js";
 import { registerProgressionEngine } from "./progression/progression-engine.js";
+import {
+  analyzeActorProvenance,
+  formatProvenanceReport,
+  stampActorProvenance
+} from "./provenance/content-provenance.js";
 
 const MODULE_ID = "fora-do-abismo-foundry";
 
@@ -22,6 +27,11 @@ Hooks.once("ready", () => {
   const module = game.modules.get(MODULE_ID);
   const api = {
     importer: new JarvisImporterV9(),
+    provenance: {
+      analyzeActor: analyzeActorProvenance,
+      stampActor: stampActorProvenance,
+      formatReport: formatProvenanceReport
+    },
     version: module?.version ?? "desconhecida"
   };
 
