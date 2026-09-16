@@ -5,6 +5,10 @@ function asInteger(value, fallback = 0) {
   return Number.isFinite(number) ? Math.trunc(number) : fallback;
 }
 
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
 function normalizeResource(resource = {}, index = 0) {
   if (!resource || typeof resource !== "object" || Array.isArray(resource)) {
     throw new Error(`Recurso #${index + 1} inválido.`);
@@ -16,7 +20,8 @@ function normalizeResource(resource = {}, index = 0) {
   }
 
   const max = Math.max(0, asInteger(resource.max, 0));
-  const value = Math.clamp(asInteger(resource.value, max), 0, max);
+  const value = clamp(asInteger(resource.value, max), 0, max);
+  const recovery = resource.recovery ?? null;
 
   return {
     slot,
@@ -24,8 +29,8 @@ function normalizeResource(resource = {}, index = 0) {
       label: String(resource.label ?? ""),
       value,
       max,
-      sr: Boolean(resource.sr ?? resource.recovery === "shortRest" ?? false),
-      lr: Boolean(resource.lr ?? resource.recovery === "longRest" ?? false)
+      sr: Boolean(resource.sr ?? (recovery === "shortRest") ?? false),
+      lr: Boolean(resource.lr ?? (recovery === "longRest") ?? false)
     }
   };
 }
