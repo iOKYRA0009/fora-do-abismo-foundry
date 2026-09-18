@@ -172,6 +172,7 @@ Hooks.once("ready", () => {
         preview: (payload, options = {}) => scenePackageBuilder.preview(payload, options),
         build: (payload, options = {}) => scenePackageBuilder.build(payload, options),
         inspect: sceneRef => scenePackageBuilder.inspect(sceneRef),
+        repairRegions: (sceneRef, options = {}) => scenePackageBuilder.repairRegions(sceneRef, options),
         handleRegionEvent: context => scenePackageBuilder.handleRegionEvent(context),
         runAction: (sceneRef, key) => scenePackageBuilder.runAction(sceneRef, key)
       },
