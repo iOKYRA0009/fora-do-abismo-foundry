@@ -44,6 +44,15 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
 
+      - name: Validate JavaScript syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check scripts/main.js
+          node --check scripts/scenes/scene-builder.js
+          node --check scripts/scenes/forjas-presets.js
+          node --check scripts/scenes/scene-blueprint-validator.js
+
       - name: Check whether this version already exists
         id: existing
         shell: bash
