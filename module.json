@@ -2,8 +2,8 @@
   "id": "fora-do-abismo-foundry",
   "type": "module",
   "title": "Fora do Abismo — Jarvis Tools",
-  "description": "Ferramentas da campanha Fora do Abismo para Foundry VTT, incluindo Jarvis Importer V9, automações, aparências, transformações e Scene Builder.",
-  "version": "0.2.0-beta.6",
+  "description": "Ferramentas da campanha Fora do Abismo para Foundry VTT, incluindo Jarvis Importer V9, automações, aparências, transformações e Scene Builder visual.",
+  "version": "0.2.0-beta.7",
   "authors": [
     {
       "name": "iOKYRA0009",
