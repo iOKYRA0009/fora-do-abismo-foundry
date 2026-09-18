@@ -154,7 +154,7 @@ await jarvis.scenes.package.build({
 }, { replaceExisting: true });
 ```
 
-A API principal é `jarvis.scenes.package`: `validate`, `preview`, `build`, `inspect` e `runAction`. O objetivo é manter o motor permanente e trocar apenas os dados e a arte de cada mapa.
+A API principal é `jarvis.scenes.package`: `validate`, `preview`, `build`, `inspect`, `repairRegions` e `runAction`. O objetivo é manter o motor permanente e trocar apenas os dados e a arte de cada mapa.
 
 ## Compatibilidade-alvo
 
@@ -204,3 +204,8 @@ Quando algo ainda não estiver implementado, o Jarvis deve falhar de forma clara
 - `docs/dnd5e-adapter.md` — camada semântica e adaptação para D&D5e
 - `docs/scene-builder.md` — formato e uso do Scene Builder V1
 - `docs/scene-framework-v2.md` — Framework V2, templates, skins e criação genérica
+
+
+### beta.13 — compatibilidade de RegionBehavior no Foundry V14
+
+A beta.13 detecta dinamicamente o tipo real de **Execute Script** registrado em `CONFIG.RegionBehavior.dataModels` e adiciona `repairRegions(scene)` para reparar uma Scene Package existente sem recriar imagem, paredes, luzes ou Tokens.
