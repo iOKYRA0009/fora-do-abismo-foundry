@@ -539,13 +539,19 @@ export class JarvisScenePackageBuilder {
     return true;
   }
 
-  async prepareActors(payload, { allowMissingActors = false } = {}) {
+  async prepareActors(payload, { allowMissingActors = false, includeOptionalActors = false } = {}) {
     const tokens = [];
     const requiredMissing = [];
     const optionalMissing = [];
+    const optionalSkipped = [];
     const resolved = [];
 
     for (const spec of payload.actors ?? []) {
+      if (spec.optional && !includeOptionalActors) {
+        optionalSkipped.push(spec.actor ?? spec.actorId ?? spec.actorUuid ?? "Actor opcional");
+        continue;
+      }
+
       const actor = await resolveActor(spec);
       if (!actor) {
         if (spec.optional) optionalMissing.push(spec.actor ?? spec.actorId ?? spec.actorUuid);
@@ -576,7 +582,7 @@ export class JarvisScenePackageBuilder {
       );
     }
 
-    return { tokens, requiredMissing, optionalMissing, resolved };
+    return { tokens, requiredMissing, optionalMissing, optionalSkipped, resolved };
   }
 
   toBlueprint(payload, backgroundSrc, tokens) {
@@ -637,6 +643,7 @@ export class JarvisScenePackageBuilder {
       resolvedActors: actors.resolved,
       requiredMissing: actors.requiredMissing,
       optionalMissing: actors.optionalMissing,
+      optionalSkipped: actors.optionalSkipped,
       regions: payload.regions?.length ?? 0,
       puzzles: payload.puzzles?.length ?? 0,
       rewards: payload.rewards?.length ?? 0,
@@ -648,6 +655,7 @@ export class JarvisScenePackageBuilder {
     replaceExisting = false,
     createFolder = true,
     allowMissingActors = false,
+    includeOptionalActors = false,
     activate = false,
     view = true,
     includeBlueprintOverlay = false,
@@ -657,7 +665,7 @@ export class JarvisScenePackageBuilder {
 
     this.validate(payload);
 
-    const actors = await this.prepareActors(payload, { allowMissingActors });
+    const actors = await this.prepareActors(payload, { allowMissingActors, includeOptionalActors });
     const backgroundSrc = await uploadVisualAsset(payload.visual ?? {});
     const blueprint = this.toBlueprint(payload, backgroundSrc, actors.tokens);
 
@@ -689,7 +697,8 @@ export class JarvisScenePackageBuilder {
       actorResolution: {
         resolved: actors.resolved,
         requiredMissing: actors.requiredMissing,
-        optionalMissing: actors.optionalMissing
+        optionalMissing: actors.optionalMissing,
+        optionalSkipped: actors.optionalSkipped
       },
       regionSummary
     });
