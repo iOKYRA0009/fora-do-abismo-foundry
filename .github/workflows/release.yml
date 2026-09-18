@@ -83,6 +83,30 @@ jobs:
             fi
           done
 
+          # Foundry V14 is more reliable with raster textures for full-canvas map art.
+          # Keep SVG sources in the repository, but ship WEBP siblings in the release.
+          if compgen -G "$RELEASE_DIR/assets/maps/forjas-*.svg" > /dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends librsvg2-bin webp
+
+            for svg in "$RELEASE_DIR"/assets/maps/forjas-*.svg; do
+              png="${svg%.svg}.png"
+              webp="${svg%.svg}.webp"
+              rsvg-convert "$svg" -o "$png"
+              cwebp -quiet -q 88 "$png" -o "$webp"
+              rm -f "$png"
+              test -s "$webp"
+              echo "Rasterized: $webp"
+            done
+          fi
+
+          for required_map in forjas-01.webp forjas-02.webp forjas-03.webp; do
+            test -s "$RELEASE_DIR/assets/maps/$required_map" || {
+              echo "Missing raster map: $required_map"
+              exit 1
+            }
+          done
+
           jq \
             --arg version "$VERSION" \
             --arg download "$DOWNLOAD_URL" \
