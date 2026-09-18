@@ -187,6 +187,8 @@ function buildBackgroundTileData(scene = {}, gridSize) {
     y: 0,
     width: Number(scene.columns) * gridSize,
     height: Number(scene.rows) * gridSize,
+    anchorX: 0,
+    anchorY: 0,
     alpha: 1,
     rotation: 0,
     hidden: false,
@@ -295,6 +297,11 @@ function buildSceneData(payload, folder, tokenData, { includeBlueprintOverlay = 
     navName: scene.navName ?? scene.name,
     tokenVision: scene.tokenVision !== false,
     backgroundColor: scene.backgroundColor ?? "#090807",
+    initial: {
+      x: Math.round((Number(scene.columns) * size) / 2),
+      y: Math.round((Number(scene.rows) * size) / 2),
+      scale: null
+    },
     grid: {
       type: CONST.GRID_TYPES.SQUARE,
       size,
