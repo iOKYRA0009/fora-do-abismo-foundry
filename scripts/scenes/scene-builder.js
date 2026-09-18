@@ -167,6 +167,45 @@ function buildDrawingData(drawings = [], gridSize) {
   });
 }
 
+function buildBackgroundTileData(scene = {}, gridSize) {
+  const preferred = String(scene.backgroundSrc ?? "").trim();
+  const fallback = String(scene.backgroundFallbackSrc ?? "").trim();
+  const sources = [];
+
+  if (fallback && fallback !== preferred) {
+    sources.push({ src: fallback, name: "Jarvis — Background Fallback", sort: -100001, fallback: true });
+  }
+  if (preferred) {
+    sources.push({ src: preferred, name: "Jarvis — Background Visual", sort: -100000, fallback: false });
+  } else if (fallback) {
+    sources.push({ src: fallback, name: "Jarvis — Background Visual", sort: -100000, fallback: true });
+  }
+
+  return sources.map(source => ({
+    name: source.name,
+    x: 0,
+    y: 0,
+    width: Number(scene.columns) * gridSize,
+    height: Number(scene.rows) * gridSize,
+    alpha: 1,
+    rotation: 0,
+    hidden: false,
+    locked: true,
+    sort: source.sort,
+    texture: {
+      src: source.src
+    },
+    flags: {
+      [MODULE_ID]: {
+        sceneBackground: true,
+        fallback: source.fallback,
+        rasterPreferred: preferred || null,
+        fallbackSrc: fallback || null
+      }
+    }
+  }));
+}
+
 function buildLightData(lights = [], gridSize) {
   return lights.map((light, index) => ({
     name: light.name ?? `Luz ${index + 1}`,
@@ -244,7 +283,6 @@ function buildSceneData(payload, folder, tokenData, { includeBlueprintOverlay = 
   const grid = scene.grid ?? {};
   const size = Number(grid.size ?? 100);
 
-  const useVisualBackground = Boolean(scene.backgroundSrc);
   const includeDrawings = includeBlueprintOverlay || !Boolean(scene.visualMode);
 
   return {
@@ -257,13 +295,6 @@ function buildSceneData(payload, folder, tokenData, { includeBlueprintOverlay = 
     navName: scene.navName ?? scene.name,
     tokenVision: scene.tokenVision !== false,
     backgroundColor: scene.backgroundColor ?? "#090807",
-    ...(useVisualBackground ? {
-      background: {
-        src: scene.backgroundSrc,
-        offsetX: Number(scene.backgroundOffsetX ?? 0),
-        offsetY: Number(scene.backgroundOffsetY ?? 0)
-      }
-    } : {}),
     grid: {
       type: CONST.GRID_TYPES.SQUARE,
       size,
@@ -273,6 +304,7 @@ function buildSceneData(payload, folder, tokenData, { includeBlueprintOverlay = 
       alpha: Number(grid.alpha ?? 0.2),
       thickness: Number(grid.thickness ?? 1)
     },
+    tiles: Boolean(scene.visualMode) ? buildBackgroundTileData(scene, size) : [],
     walls: buildWallData(payload.walls ?? [], size),
     drawings: includeDrawings ? buildDrawingData(payload.drawings ?? [], size) : [],
     lights: buildLightData(payload.lights ?? [], size),
@@ -352,11 +384,13 @@ export class JarvisSceneBuilder {
 
     const sceneData = buildSceneData(payload, folder, tokenData, { includeBlueprintOverlay });
     const embedded = {
+      tiles: sceneData.tiles ?? [],
       walls: sceneData.walls ?? [],
       drawings: sceneData.drawings ?? [],
       lights: sceneData.lights ?? [],
       tokens: sceneData.tokens ?? []
     };
+    delete sceneData.tiles;
     delete sceneData.walls;
     delete sceneData.drawings;
     delete sceneData.lights;
@@ -368,6 +402,7 @@ export class JarvisSceneBuilder {
       if (!created) throw new Error("Foundry não retornou o documento Scene base.");
 
       const batches = [
+        ["Tile", embedded.tiles],
         ["Wall", embedded.walls],
         ["Drawing", embedded.drawings],
         ["AmbientLight", embedded.lights],
@@ -409,7 +444,7 @@ export class JarvisSceneBuilder {
     const summary = formatSummary(payload, { missing });
     ui.notifications?.info(
       `Jarvis: Scene '${created.name}' criada — ${summary.walls} paredes, ${summary.doors} portas, ` +
-      `${tokenData.length} tokens, ${summary.lights} luzes.`
+      `${tokenData.length} tokens, ${summary.lights} luzes, ${embedded.tiles.length} background tile(s).`
     );
     if (missing.length) {
       ui.notifications?.warn(`Jarvis: ${missing.length} Actor(s) não foram posicionados. Veja o console.`);

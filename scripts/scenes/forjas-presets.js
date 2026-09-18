@@ -51,7 +51,8 @@ const forjas01 = {
     rows: 30,
     grid: BASE_GRID,
     backgroundColor: "#090705",
-    backgroundSrc: "modules/fora-do-abismo-foundry/assets/maps/forjas-01.svg",
+    backgroundSrc: "modules/fora-do-abismo-foundry/assets/maps/forjas-01.webp",
+    backgroundFallbackSrc: "modules/fora-do-abismo-foundry/assets/maps/forjas-01.svg",
     visualMode: true,
     tokenVision: true,
     navigation: false
@@ -112,7 +113,8 @@ const forjas02 = {
     rows: 28,
     grid: BASE_GRID,
     backgroundColor: "#08090b",
-    backgroundSrc: "modules/fora-do-abismo-foundry/assets/maps/forjas-02.svg",
+    backgroundSrc: "modules/fora-do-abismo-foundry/assets/maps/forjas-02.webp",
+    backgroundFallbackSrc: "modules/fora-do-abismo-foundry/assets/maps/forjas-02.svg",
     visualMode: true,
     tokenVision: true,
     navigation: false
@@ -172,7 +174,8 @@ const forjas03 = {
     rows: 32,
     grid: BASE_GRID,
     backgroundColor: "#070607",
-    backgroundSrc: "modules/fora-do-abismo-foundry/assets/maps/forjas-03.svg",
+    backgroundSrc: "modules/fora-do-abismo-foundry/assets/maps/forjas-03.webp",
+    backgroundFallbackSrc: "modules/fora-do-abismo-foundry/assets/maps/forjas-03.svg",
     visualMode: true,
     tokenVision: true,
     navigation: false

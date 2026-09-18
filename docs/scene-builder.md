@@ -1,6 +1,6 @@
 # Jarvis V9 — Scene Builder
 
-Versão visual: `0.2.0-beta.7`
+Versão visual: `0.2.0-beta.8`
 
 ## Objetivo
 
@@ -8,7 +8,7 @@ O Scene Builder transforma um blueprint semântico em uma Scene funcional do Fou
 
 Ele existe para resolver um problema diferente do Actor Importer: antes da arte final, o Mestre precisa de um mapa que faça sentido para jogar. O blueprint define o espaço em **quadrados de grid**, e o Jarvis converte isso para pixels, paredes, portas, luzes, desenhos de apoio e Tokens reais.
 
-A beta.7 adiciona uma segunda camada: **backgrounds visuais alinhados ao blueprint**. As paredes, portas, luzes e Tokens continuam sendo documentos nativos do Foundry, enquanto a arte de fundo é entregue pelo próprio módulo. O overlay técnico de Drawings fica desligado por padrão no modo visual.
+A beta.8 usa **WEBP rasterizado no pacote de release** e monta a arte como um **Tile travado cobrindo a Scene inteira**. Isso evita depender do campo de background da Scene e torna o carregamento mais previsível no Foundry V14. As paredes, portas, luzes e Tokens continuam sendo documentos nativos independentes.
 
 ## API
 
@@ -143,3 +143,20 @@ Recria as mesmas Scenes com os retângulos e rótulos técnicos. Use apenas quan
 - `assets/maps/forjas-03.svg` — Forja Regente, plataforma da Rainha, galerias laterais, canal de metal vivo e cicatriz geométrica ligada ao ponto de manifestação de Proxy.
 
 Os SVGs têm as mesmas dimensões lógicas dos presets (100 px por quadrado), então o background, grid e paredes permanecem alinhados.
+
+
+## Beta.8 — pipeline visual blindado
+
+Durante a publicação da release, o GitHub Actions converte automaticamente os SVGs-fonte das Forjas para WEBP usando librsvg + cwebp. A release falha se qualquer um dos três WEBPs não for criado.
+
+No mundo, o Scene Builder cria a arte visual como um `Tile` nativo:
+
+- origem `x: 0 / y: 0`;
+- largura e altura iguais ao canvas inteiro;
+- textura WEBP do próprio módulo;
+- travado;
+- não oculto;
+- ordenação baixa;
+- criado antes de paredes, luzes e Tokens.
+
+Os SVGs continuam no módulo como fonte/fallback técnico, mas o modo Visual prefere WEBP.
