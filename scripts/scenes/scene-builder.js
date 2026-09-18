@@ -168,11 +168,21 @@ function buildDrawingData(drawings = [], gridSize) {
 }
 
 function buildBackgroundTileData(scene = {}, gridSize) {
-  const src = String(scene.backgroundSrc ?? scene.backgroundFallbackSrc ?? "").trim();
-  if (!src) return [];
+  const preferred = String(scene.backgroundSrc ?? "").trim();
+  const fallback = String(scene.backgroundFallbackSrc ?? "").trim();
+  const sources = [];
 
-  return [{
-    name: "Jarvis — Background Visual",
+  if (fallback && fallback !== preferred) {
+    sources.push({ src: fallback, name: "Jarvis — Background Fallback", sort: -100001, fallback: true });
+  }
+  if (preferred) {
+    sources.push({ src: preferred, name: "Jarvis — Background Visual", sort: -100000, fallback: false });
+  } else if (fallback) {
+    sources.push({ src: fallback, name: "Jarvis — Background Visual", sort: -100000, fallback: true });
+  }
+
+  return sources.map(source => ({
+    name: source.name,
     x: 0,
     y: 0,
     width: Number(scene.columns) * gridSize,
@@ -181,18 +191,19 @@ function buildBackgroundTileData(scene = {}, gridSize) {
     rotation: 0,
     hidden: false,
     locked: true,
-    sort: -100000,
+    sort: source.sort,
     texture: {
-      src
+      src: source.src
     },
     flags: {
       [MODULE_ID]: {
         sceneBackground: true,
-        rasterPreferred: String(scene.backgroundSrc ?? "").trim() || null,
-        fallbackSrc: String(scene.backgroundFallbackSrc ?? "").trim() || null
+        fallback: source.fallback,
+        rasterPreferred: preferred || null,
+        fallbackSrc: fallback || null
       }
     }
-  }];
+  }));
 }
 
 function buildLightData(lights = [], gridSize) {
