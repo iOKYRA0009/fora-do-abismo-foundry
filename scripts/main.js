@@ -175,6 +175,7 @@ Hooks.once("ready", () => {
         applySkin: (sceneRef, skinKey, options = {}) =>
           sceneFramework.applySkin(sceneRef, skinKey, options),
         inspect: sceneRef => sceneFramework.inspect(sceneRef),
+        selfTest: (options = {}) => sceneFramework.selfTest(options),
         registerPreset: (key, definition) => sceneFramework.registerPreset(key, definition),
         unregisterPreset: key => sceneFramework.unregisterPreset(key)
       },
