@@ -1,6 +1,6 @@
 # Jarvis V9 — Appearance & Transformation Beta
 
-Versão-alvo: `0.2.0-beta.1`
+Versão-alvo: `0.2.0-beta.2`
 
 ## Objetivo
 
@@ -179,3 +179,109 @@ ficha/estatísticas/habilidades diferentes = Metamorph
 8. Só então conectar Avatar da Tempestade e Sarcófago às habilidades reais.
 
 A beta não altera automaticamente fichas já validadas. A integração é opcional e aditiva.
+
+
+---
+
+## Appearance Pack Installer — beta.2
+
+A partir da beta.2, o Jarvis pode criar **Local Visages diretamente no armário de qualquer Actor**, incluindo:
+
+- token/skin;
+- portrait opcional;
+- modo Identity ou Overlay;
+- escala e propriedades visuais opcionais;
+- efeitos visuais do Sequencer/JB2A;
+- áudio;
+- macros e TMFX quando descritos no pacote;
+- registro automático de uma chave lógica do Jarvis para aplicar/reverter depois.
+
+A imagem continua sendo criada fora do Foundry (por exemplo, pelo agente de arte) e deve existir em um caminho acessível pelo Foundry. Depois disso, o Jarvis instala o pacote inteiro no Visage sem precisar reconstruir a Local Layer manualmente.
+
+### API
+
+```js
+const jarvis = game.modules.get("fora-do-abismo-foundry").api;
+console.log(jarvis.appearance.packStatus());
+```
+
+### Criar um efeito JB2A
+
+```js
+const fx = jarvis.appearance.visualEffect("jb2a.static_electricity", {
+  label: "Avatar da Tempestade - Ativação",
+  scale: 1,
+  opacity: 1,
+  bindRotation: false,
+  bindToSprite: true,
+  zOrder: "above",
+  loop: false,
+  delay: 0
+});
+```
+
+### Instalar uma skin completa
+
+```js
+const thors = game.actors.getName("Thors Thormenta");
+
+const pack = jarvis.appearance.makePack({
+  actorName: "Thors Thormenta",
+  profiles: [
+    {
+      key: "avatar-tempestade",
+      label: "Avatar da Tempestade",
+      mode: "identity",
+      tokenPath: "Mapas/Thors%20Avatar%20da%20tempestade%20token.png",
+      scale: 1.25,
+      effects: [
+        jarvis.appearance.visualEffect("jb2a.static_electricity", {
+          label: "Avatar da Tempestade - Ativação",
+          bindToSprite: true,
+          bindRotation: false,
+          zOrder: "above",
+          loop: false
+        })
+      ]
+    }
+  ]
+});
+
+await jarvis.appearance.installPack(thors, pack);
+```
+
+Depois disso:
+
+```js
+const token = canvas.tokens.controlled[0];
+await jarvis.appearance.apply(token, "avatar-tempestade");
+```
+
+### Importar um export do próprio Visage
+
+O Jarvis também aceita diretamente o JSON exportado pelo Visage:
+
+```js
+await jarvis.appearance.importVisageExport(
+  game.actors.getName("Thors Thormenta"),
+  exportedVisageJson
+);
+```
+
+O instalador tenta preservar IDs quando fornecidos e, por padrão, substitui uma aparência existente com o mesmo label em vez de criar duplicatas.
+
+### Workflow recomendado para novos personagens
+
+1. O agente consulta ficha/lore e cria a arte conceitual.
+2. O agente cria o token Foundry 1:1, top-down, fundo transparente.
+3. O token é colocado na pasta de assets do Foundry.
+4. O agente produz um Appearance Pack com os efeitos adequados.
+5. O macro executa `jarvis.appearance.installPack(...)`.
+6. A skin aparece automaticamente no armário Local do Actor.
+7. Habilidades futuras podem chamar a chave lógica registrada pelo Jarvis.
+
+Esse fluxo permite reutilizar a mesma infraestrutura para Thors, Sonson, Jack, Nicolau, Drownald e NPCs sem codificar cada personagem diretamente no módulo.
+
+### Limite atual
+
+O Jarvis não chama um gerador de imagens de dentro do Foundry. A geração da arte/token acontece fora do Foundry; o módulo cuida da instalação, organização, VFX e aplicação da aparência.
