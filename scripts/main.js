@@ -2,6 +2,7 @@ import { JarvisImporterV9 } from "./importer/v9/jarvis-importer-v9.js";
 import { registerHybridFeatureLayout } from "./ui/hybrid-features.js";
 import { registerMacroFileDrop } from "./ui/macro-file-drop.js";
 import { registerActivityAutomation } from "./automation/activity-automation.js";
+import { registerAppearanceEffectAutomation } from "./automation/appearance-effect-automation.js";
 import {
   applyEmbeddedEffect,
   applyEmbeddedEffectToActor,
@@ -71,6 +72,7 @@ Hooks.once("init", () => {
   registerHybridFeatureLayout();
   registerMacroFileDrop();
   registerActivityAutomation();
+  registerAppearanceEffectAutomation();
   registerJackEngine();
   registerProgressionEngine();
 });
