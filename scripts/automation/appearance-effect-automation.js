@@ -30,12 +30,16 @@ function shouldHandleForThisClient(userId) {
   return userId === game.user?.id;
 }
 
+function isEffectActive(effect) {
+  return !effect?.disabled && effect?.duration?.expired !== true;
+}
+
 async function handleApply(effect, userId) {
   if (!shouldHandleForThisClient(userId)) return;
 
   const actor = getActor(effect);
   const config = getAppearanceConfig(effect);
-  if (!actor || !config) return;
+  if (!actor || !config || !isEffectActive(effect)) return;
 
   try {
     await applyAppearanceToActor(actor, config.key, {
@@ -81,9 +85,31 @@ async function handleRemove(effect, userId) {
   }
 }
 
+async function handleUpdate(effect, changes, userId) {
+  if (!shouldHandleForThisClient(userId)) return;
+  if (!getActor(effect) || !getAppearanceConfig(effect)) return;
+
+  const touchedState =
+    Object.prototype.hasOwnProperty.call(changes ?? {}, "disabled") ||
+    Object.prototype.hasOwnProperty.call(changes ?? {}, "duration") ||
+    Object.keys(changes ?? {}).some(key => key.startsWith("duration."));
+
+  if (!touchedState) return;
+
+  if (isEffectActive(effect)) {
+    await handleApply(effect, userId);
+  } else {
+    await handleRemove(effect, userId);
+  }
+}
+
 export function registerAppearanceEffectAutomation() {
   Hooks.on("createActiveEffect", (effect, options, userId) => {
     void handleApply(effect, userId);
+  });
+
+  Hooks.on("updateActiveEffect", (effect, changes, options, userId) => {
+    void handleUpdate(effect, changes, userId);
   });
 
   Hooks.on("deleteActiveEffect", (effect, options, userId) => {
