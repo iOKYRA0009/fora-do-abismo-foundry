@@ -30,6 +30,16 @@ import {
   setAppearanceProfile
 } from "./integrations/visage-bridge.js";
 import {
+  buildLocalAppearance,
+  createAudioEffect,
+  createVisualEffect,
+  getAppearancePackStatus,
+  importVisageExport,
+  installAppearancePack,
+  installLocalAppearance,
+  makeAppearancePack
+} from "./integrations/appearance-pack.js";
+import {
   getCurrentForm,
   getMainActor,
   getTransformationProfiles,
@@ -93,7 +103,15 @@ Hooks.once("ready", () => {
       revert: revertAppearance,
       revertActor: revertAppearanceForActor,
       getAvailable: getAvailableAppearances,
-      isActive: isAppearanceActive
+      isActive: isAppearanceActive,
+      packStatus: getAppearancePackStatus,
+      buildLocal: buildLocalAppearance,
+      makePack: makeAppearancePack,
+      visualEffect: createVisualEffect,
+      audioEffect: createAudioEffect,
+      installLocal: installLocalAppearance,
+      installPack: installAppearancePack,
+      importVisageExport
     },
     transformation: {
       status: getTransformationStatus,
