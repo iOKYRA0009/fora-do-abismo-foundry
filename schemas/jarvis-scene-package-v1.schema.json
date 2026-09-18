@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "jarvis-scene-package-v1.schema.json",
+  "title": "Jarvis Scene Package V1",
+  "type": "object",
+  "required": ["schemaVersion", "scene"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "id": { "type": "string" },
+    "purpose": { "type": "string" },
+    "scene": {
+      "type": "object",
+      "required": ["name", "columns", "rows"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "folder": { "type": "string" },
+        "columns": { "type": "integer", "minimum": 1 },
+        "rows": { "type": "integer", "minimum": 1 },
+        "grid": {
+          "type": "object",
+          "properties": {
+            "size": { "type": "integer", "minimum": 50 },
+            "distance": { "type": "number", "exclusiveMinimum": 0 },
+            "units": { "type": "string" }
+          }
+        }
+      }
+    },
+    "visual": {
+      "type": "object",
+      "properties": {
+        "backgroundSrc": { "type": "string" },
+        "backgroundBase64": { "type": "string" },
+        "fileName": { "type": "string" },
+        "mimeType": { "type": "string" },
+        "source": { "type": "string" },
+        "target": { "type": "string" }
+      }
+    },
+    "walls": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["a", "b"],
+        "properties": {
+          "id": { "type": "string" },
+          "a": {
+            "type": "array",
+            "prefixItems": [{ "type": "number" }, { "type": "number" }],
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "b": {
+            "type": "array",
+            "prefixItems": [{ "type": "number" }, { "type": "number" }],
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "type": {
+            "enum": ["wall", "door", "secret", "low_barrier"]
+          },
+          "state": {
+            "enum": ["closed", "open", "locked"]
+          }
+        }
+      }
+    },
+    "actors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["x", "y"],
+        "anyOf": [
+          { "required": ["actor"] },
+          { "required": ["actorId"] },
+          { "required": ["actorUuid"] }
+        ],
+        "properties": {
+          "actor": { "type": "string" },
+          "actorId": { "type": "string" },
+          "actorUuid": { "type": "string" },
+          "x": { "type": "number" },
+          "y": { "type": "number" },
+          "width": { "type": "number", "exclusiveMinimum": 0 },
+          "height": { "type": "number", "exclusiveMinimum": 0 },
+          "hidden": { "type": "boolean" },
+          "optional": { "type": "boolean" },
+          "disposition": {
+            "enum": ["friendly", "neutral", "hostile", "secret"]
+          },
+          "role": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "regions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "rect"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "name": { "type": "string" },
+          "kind": { "type": "string" },
+          "purpose": { "type": "string" },
+          "rect": {
+            "type": "array",
+            "prefixItems": [
+              { "type": "number" },
+              { "type": "number" },
+              { "type": "number", "exclusiveMinimum": 0 },
+              { "type": "number", "exclusiveMinimum": 0 }
+            ],
+            "minItems": 4,
+            "maxItems": 4
+          },
+          "automation": {
+            "type": "object",
+            "properties": {
+              "events": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "once": { "type": "boolean" },
+              "filter": { "type": "object" },
+              "actions": {
+                "type": "array",
+                "items": { "type": "object" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "manualActions": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": { "type": "object" }
+      }
+    },
+    "puzzles": { "type": "array" },
+    "rewards": { "type": "array" },
+    "metadata": { "type": "object" }
+  }
+}

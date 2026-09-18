@@ -56,8 +56,10 @@ jobs:
           node --check scripts/scenes/templates/core-templates.js
           node --check scripts/scenes/skins/core-skins.js
           node --check scripts/scenes/presets/core-presets.js
+          node --check scripts/scenes/package/scene-package-builder.js
           jq -e . schemas/jarvis-scene-v1.schema.json >/dev/null
           jq -e . schemas/jarvis-scene-v2.schema.json >/dev/null
+          jq -e . schemas/jarvis-scene-package-v1.schema.json >/dev/null
 
       - name: Check whether this version already exists
         id: existing

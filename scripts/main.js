@@ -67,6 +67,7 @@ import {
 import { JarvisSceneBuilder } from "./scenes/scene-builder.js";
 import { JarvisSceneFramework } from "./scenes/framework/scene-framework.js";
 import { getCoreScenePresetDefinitions } from "./scenes/presets/core-presets.js";
+import { JarvisScenePackageBuilder } from "./scenes/package/scene-package-builder.js";
 
 const MODULE_ID = "fora-do-abismo-foundry";
 
@@ -90,6 +91,10 @@ Hooks.once("ready", () => {
   const sceneFramework = new JarvisSceneFramework({
     builder: sceneBuilder,
     presets: getCoreScenePresetDefinitions()
+  });
+  const scenePackageBuilder = new JarvisScenePackageBuilder({
+    builder: sceneBuilder,
+    framework: sceneFramework
   });
   const forjasKeys = ["forjas-01", "forjas-02", "forjas-03"];
 
@@ -160,6 +165,17 @@ Hooks.once("ready", () => {
       build: (payload, options = {}) => sceneBuilder.build(payload, options),
       buildMany: (payloads, options = {}) => sceneBuilder.buildMany(payloads, options),
 
+      // Scene Package V1 — pacote completo de Scene, visual, geometria e conteúdo.
+      package: {
+        version: scenePackageBuilder.version,
+        validate: payload => scenePackageBuilder.validate(payload),
+        preview: (payload, options = {}) => scenePackageBuilder.preview(payload, options),
+        build: (payload, options = {}) => scenePackageBuilder.build(payload, options),
+        inspect: sceneRef => scenePackageBuilder.inspect(sceneRef),
+        handleRegionEvent: context => scenePackageBuilder.handleRegionEvent(context),
+        runAction: (sceneRef, key) => scenePackageBuilder.runAction(sceneRef, key)
+      },
+
       // Scene Framework V2 — genérico e reutilizável.
       framework: {
         status: () => sceneFramework.status(),
@@ -215,6 +231,6 @@ Hooks.once("ready", () => {
     `${MODULE_ID} | Jarvis Importer V9 ${api.version} disponível. ` +
     `Visage=${appearance.active ? appearance.version : "inativo"} | ` +
     `Metamorph=${transformation.active ? transformation.version : "inativo"} | ` +
-    `SceneFramework=${sceneFramework.version} | Presets=${sceneFramework.listPresets().length} | Templates=${sceneFramework.listTemplates().length} | Skins=${sceneFramework.listSkins().length}`
+    `SceneFramework=${sceneFramework.version} | ScenePackage=${scenePackageBuilder.version} | Presets=${sceneFramework.listPresets().length} | Templates=${sceneFramework.listTemplates().length} | Skins=${sceneFramework.listSkins().length}`
   );
 });
