@@ -324,6 +324,67 @@ export class JarvisSceneFramework {
     };
   }
 
+  async selfTest({ checkActors = false } = {}) {
+    const checks = [];
+    const failures = [];
+
+    for (const template of this.listTemplates()) {
+      try {
+        const blueprint = this.compose({
+          schemaVersion: FRAMEWORK_VERSION,
+          template: template.key,
+          scene: {
+            name: `Self Test — ${template.key}`,
+            columns: template.defaults?.columns,
+            rows: template.defaults?.rows
+          }
+        });
+        this.builder.validate(blueprint);
+        checks.push({ type: "template", key: template.key, ok: true });
+      } catch (error) {
+        failures.push({ type: "template", key: template.key, error: error.message });
+      }
+    }
+
+    for (const skin of this.listSkins()) {
+      try {
+        const blueprint = this.compose({
+          schemaVersion: FRAMEWORK_VERSION,
+          template: "blank",
+          skin: skin.key,
+          scene: { name: `Self Test Skin — ${skin.key}` }
+        });
+        this.builder.validate(blueprint);
+        checks.push({ type: "skin", key: skin.key, ok: true });
+      } catch (error) {
+        failures.push({ type: "skin", key: skin.key, error: error.message });
+      }
+    }
+
+    for (const preset of this.listPresets()) {
+      try {
+        const blueprint = this.getPreset(preset.key);
+        if (checkActors) await this.builder.preview(blueprint);
+        else this.builder.validate(blueprint);
+        checks.push({ type: "preset", key: preset.key, ok: true });
+      } catch (error) {
+        failures.push({ type: "preset", key: preset.key, error: error.message });
+      }
+    }
+
+    return {
+      ok: failures.length === 0,
+      version: FRAMEWORK_VERSION,
+      checks,
+      failures,
+      counts: {
+        templates: this.listTemplates().length,
+        skins: this.listSkins().length,
+        presets: this.listPresets().length
+      }
+    };
+  }
+
   status() {
     return {
       version: FRAMEWORK_VERSION,
