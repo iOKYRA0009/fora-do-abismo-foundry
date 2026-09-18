@@ -126,6 +126,12 @@ function drawingDefaults(kind) {
   };
 }
 
+function getRectangleDrawingType() {
+  return foundry.data?.ShapeData?.TYPES?.RECTANGLE
+    ?? CONFIG.Canvas?.drawingTypes?.RECTANGLE
+    ?? "r";
+}
+
 function buildDrawingData(drawings = [], gridSize) {
   return drawings.map((drawing, index) => {
     const defaults = drawingDefaults(drawing.kind ?? "floor");
@@ -134,7 +140,7 @@ function buildDrawingData(drawings = [], gridSize) {
       x: px(drawing.x, gridSize),
       y: px(drawing.y, gridSize),
       shape: {
-        type: "rectangle",
+        type: getRectangleDrawingType(),
         width: px(drawing.w, gridSize),
         height: px(drawing.h, gridSize)
       },
@@ -334,16 +340,57 @@ export class JarvisSceneBuilder {
     if (existing && replaceExisting) await existing.delete();
 
     const sceneData = buildSceneData(payload, folder, tokenData);
+    const embedded = {
+      walls: sceneData.walls ?? [],
+      drawings: sceneData.drawings ?? [],
+      lights: sceneData.lights ?? [],
+      tokens: sceneData.tokens ?? []
+    };
+    delete sceneData.walls;
+    delete sceneData.drawings;
+    delete sceneData.lights;
+    delete sceneData.tokens;
+
     let created;
     try {
       created = await Scene.implementation.create(sceneData, { renderSheet: false });
-    } catch (error) {
-      if (error instanceof SceneBlueprintValidationError) throw error;
-      console.error(`${MODULE_ID} | Scene Builder falhou`, error, sceneData);
-      throw new Error(`Jarvis Scene Builder: Foundry recusou a Scene '${payload.scene.name}'. Veja o console.`);
-    }
+      if (!created) throw new Error("Foundry não retornou o documento Scene base.");
 
-    if (!created) throw new Error(`Jarvis Scene Builder: Foundry não retornou a Scene '${payload.scene.name}'.`);
+      const batches = [
+        ["Wall", embedded.walls],
+        ["Drawing", embedded.drawings],
+        ["AmbientLight", embedded.lights],
+        ["Token", embedded.tokens]
+      ];
+
+      for (const [documentName, documents] of batches) {
+        if (!documents.length) continue;
+        try {
+          const result = await created.createEmbeddedDocuments(documentName, documents);
+          if (!Array.isArray(result) || result.length !== documents.length) {
+            throw new Error(
+              `criação incompleta de ${documentName}: esperado ${documents.length}, criado ${result?.length ?? 0}`
+            );
+          }
+        } catch (embeddedError) {
+          embeddedError.message = `Jarvis Scene Builder — ${documentName}: ${embeddedError.message}`;
+          throw embeddedError;
+        }
+      }
+    } catch (error) {
+      if (created) {
+        try {
+          await created.delete();
+        } catch (cleanupError) {
+          console.error(`${MODULE_ID} | Falha ao limpar Scene parcial`, cleanupError);
+        }
+      }
+      if (error instanceof SceneBlueprintValidationError) throw error;
+      console.error(`${MODULE_ID} | Scene Builder falhou`, error, sceneData, embedded);
+      throw new Error(
+        `Jarvis Scene Builder: Foundry recusou a Scene '${payload.scene.name}'. ${error.message ?? "Veja o console."}`
+      );
+    }
 
     if (activate) await created.activate({ pullUsers: false });
     else if (view) await created.view();

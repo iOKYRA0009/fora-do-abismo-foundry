@@ -65,7 +65,7 @@ Se a versão já existir, a workflow não sobrescreve silenciosamente aquela rel
 - [ ] Testes automatizados
 - [ ] Interface visual completa de importação dentro do Foundry
 
-## Scene Builder — beta.5
+## Scene Builder — beta.6
 
 O V9 agora pode construir Scenes funcionais usando um blueprint em quadrados de grid. Ele cria:
 
@@ -79,7 +79,7 @@ O V9 agora pode construir Scenes funcionais usando um blueprint em quadrados de 
 - pasta de Scenes;
 - preflight para impedir criação parcial quando Actors obrigatórios não existem.
 
-A beta.5 inclui três presets preparados para a quest das Forjas:
+A beta.6 inclui três presets preparados para a quest das Forjas:
 
 - `forjas-01` — Fundição e Controle;
 - `forjas-02` — Arquivo das Correntes;
@@ -99,7 +99,7 @@ Para recriar depois de alterações:
 await jarvis.scenes.buildForjas({ replaceExisting: true });
 ```
 
-O Scene Builder usa o Foundry nativo; não exige Dungeon Draw, Dungeon Alchemist ou outro módulo de mapa para criar o protótipo funcional.
+O Scene Builder usa o Foundry nativo; não exige Dungeon Draw, Dungeon Alchemist ou outro módulo de mapa para criar o protótipo funcional. A beta.6 corrige o tipo interno de Drawing retangular exigido pelo schema do Foundry V14.
 
 ## Compatibilidade-alvo
 
