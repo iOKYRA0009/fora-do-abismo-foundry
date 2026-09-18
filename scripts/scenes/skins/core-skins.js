@@ -167,6 +167,10 @@ export function applySceneSkinToBlueprint(blueprint, key, overrides = {}) {
     result.scene.backgroundFallbackSrc = overrides.backgroundFallbackSrc;
   }
 
+  result.lights = (result.lights ?? []).map(light =>
+    mergeObjects(skin.light ?? {}, light)
+  );
+
   result.metadata.sceneFramework.skinDescriptor = {
     label: skin.label,
     tags: [...(skin.tags ?? [])],
