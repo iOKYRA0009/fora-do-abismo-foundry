@@ -29,7 +29,7 @@ function merge(base = {}, override = {}) {
 }
 
 function sceneByRef(ref) {
-  if (!ref) return canvas?.scene ?? null;
+  if (!ref) return globalThis.canvas?.scene ?? null;
   if (typeof ref === "string") {
     return game.scenes.get(ref)
       ?? game.scenes.find(scene => scene.name === ref)
@@ -136,7 +136,8 @@ export class JarvisSceneFramework {
 
     const templateKey = normalizeKey(spec.template ?? "blank");
     const template = getCoreSceneTemplate(templateKey);
-    const generated = template.generate(spec.config ?? spec.scene ?? {});
+    const templateConfig = merge(spec.scene ?? {}, spec.config ?? {});
+    const generated = template.generate(templateConfig);
 
     const sceneOverrides = spec.scene ?? {};
     const replaceGeometry = Boolean(spec.replaceTemplateGeometry);
