@@ -1,6 +1,6 @@
 # Jarvis V9 — Scene Builder
 
-Versão visual: `0.2.0-beta.9`
+Versão visual: `0.2.0-beta.10`
 
 ## Objetivo
 
@@ -162,7 +162,7 @@ No mundo, o Scene Builder cria a arte visual como um `Tile` nativo:
 Os SVGs continuam no módulo como fonte/fallback técnico, mas o modo Visual prefere WEBP.
 
 
-## Beta.9 — correção de Tile anchor no Foundry V14
+## Beta.9 — correção parcial de Tile anchor no Foundry V14
 
 O Foundry V14 passou a posicionar o mesh de Tile diretamente no `(x, y)` do TileDocument e expõe `anchorX`/`anchorY` no TileData. O Scene Builder agora define explicitamente:
 
@@ -178,3 +178,27 @@ A beta.9 também:
 - centraliza a visão inicial da Scene;
 - deixa o grid mais discreto;
 - reduz raios e intensidade das luzes para evitar círculos coloridos dominando a arte.
+
+
+## Beta.10 — Tile central único validado em mesa
+
+O hotfix testado no mundo real mostrou que o comportamento estável do Foundry V14 é usar um único Tile full-canvas com pivô central:
+
+```js
+x: scene.width / 2,
+y: scene.height / 2,
+width: scene.width,
+height: scene.height,
+anchorX: 0.5,
+anchorY: 0.5
+```
+
+A beta.10 incorpora exatamente esse comportamento ao Scene Builder. O fallback duplicado deixou de ser criado como segundo Tile: o Builder usa WEBP quando disponível e SVG apenas quando não existe fonte raster preferencial.
+
+Isso evita:
+- duplicação de background;
+- deslocamento para fora do canvas;
+- validações falsas de desalinhamento;
+- arte ocupando apenas um quadrante da Scene.
+
+A visão inicial também usa escala 1 e centro do canvas.
