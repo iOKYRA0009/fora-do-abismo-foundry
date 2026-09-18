@@ -59,13 +59,14 @@ Se a versão já existir, a workflow não sobrescreve silenciosamente aquela rel
 - [x] Active Effects Jarvis aplicados por Activity
 - [x] Scene Builder semântico inicial para Foundry V14
 - [x] Presets jogáveis das três Forjas de Karak'Zul
+- [x] Backgrounds visuais alinhados e modo Visual/Blueprint para as Forjas
 - [ ] Subclasse e Advancement completos
 - [ ] Magias completas e preparação
 - [ ] Recursos customizados além dos 3 slots nativos
 - [ ] Testes automatizados
 - [ ] Interface visual completa de importação dentro do Foundry
 
-## Scene Builder — beta.6
+## Scene Builder — beta.7
 
 O V9 agora pode construir Scenes funcionais usando um blueprint em quadrados de grid. Ele cria:
 
@@ -79,7 +80,7 @@ O V9 agora pode construir Scenes funcionais usando um blueprint em quadrados de 
 - pasta de Scenes;
 - preflight para impedir criação parcial quando Actors obrigatórios não existem.
 
-A beta.6 inclui três presets preparados para a quest das Forjas:
+A beta.7 inclui três presets preparados para a quest das Forjas:
 
 - `forjas-01` — Fundição e Controle;
 - `forjas-02` — Arquivo das Correntes;
@@ -90,16 +91,16 @@ No console ou em uma Macro Script:
 ```js
 const jarvis = game.modules.get("fora-do-abismo-foundry").api;
 console.table(jarvis.scenes.presets());
-await jarvis.scenes.buildForjas();
+await jarvis.scenes.buildForjasVisual({ replaceExisting: true });
 ```
 
 Para recriar depois de alterações:
 
 ```js
-await jarvis.scenes.buildForjas({ replaceExisting: true });
+await jarvis.scenes.buildForjasVisual({ replaceExisting: true });
 ```
 
-O Scene Builder usa o Foundry nativo; não exige Dungeon Draw, Dungeon Alchemist ou outro módulo de mapa para criar o protótipo funcional. A beta.6 corrige o tipo interno de Drawing retangular exigido pelo schema do Foundry V14.
+O Scene Builder usa o Foundry nativo; não exige Dungeon Draw, Dungeon Alchemist ou outro módulo de mapa. A beta.7 adiciona backgrounds visuais próprios alinhados ao grid, reduz o overlay técnico no modo de mesa e mantém um modo Blueprint separado para diagnóstico.
 
 ## Compatibilidade-alvo
 
