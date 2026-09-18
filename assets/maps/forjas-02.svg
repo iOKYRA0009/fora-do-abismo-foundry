@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="3800" height="2800" viewBox="0 0 3800 2800">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#07090b"/><stop offset="1" stop-color="#101116"/></linearGradient>
+  <linearGradient id="violet" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#30244c"/><stop offset=".5" stop-color="#735aa9"/><stop offset="1" stop-color="#261c3b"/></linearGradient>
+  <pattern id="tiles" width="200" height="200" patternUnits="userSpaceOnUse"><rect width="200" height="200" fill="#15191d"/><path d="M0 0H200V200H0Z" fill="none" stroke="#2c3237" stroke-width="7"/><path d="M25 175L175 25" stroke="#1f2428" stroke-width="5" opacity=".6"/></pattern>
+  <filter id="glow"><feGaussianBlur stdDeviation="22" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <filter id="rough"><feTurbulence baseFrequency=".014" numOctaves="4" seed="7" result="n"/><feBlend in="SourceGraphic" in2="n" mode="multiply"/></filter>
+</defs>
+<rect width="3800" height="2800" fill="url(#bg)"/>
+<rect x="200" y="200" width="3400" height="2400" rx="18" fill="url(#tiles)" stroke="#4d4a4c" stroke-width="44"/>
+<path d="M200 200H3600V2600H200Z" fill="none" stroke="#000" stroke-width="86" opacity=".6"/>
+<rect x="1400" y="300" width="1600" height="300" fill="#1b1728" stroke="#52466f" stroke-width="26"/>
+<g stroke="#876bbb" stroke-width="16" fill="none" opacity=".78" filter="url(#glow)"><path d="M1500 380h90l45 70 45-70h95M1840 520l60-120 60 120 60-120 60 120M2170 390h140l-70 120zM2420 390c90 0 90 120 180 120s90-120 180-120"/></g>
+<g fill="#8d72c8" opacity=".7"><circle cx="1650" cy="450" r="16"/><circle cx="2100" cy="450" r="16"/><circle cx="2870" cy="450" r="16"/></g>
+<rect x="400" y="800" width="800" height="900" fill="#111315" stroke="#55565c" stroke-width="28"/>
+<g stroke="#5d5b60" stroke-width="22"><path d="M1170 830V1670"/><path d="M1050 830V1670"/><path d="M930 830V1670"/></g>
+<path d="M570 910v600M750 900v630" stroke="#342e33" stroke-width="34"/>
+<g fill="none" stroke="#7d6a5d" stroke-width="18"><path d="M570 1110c120 60 100 240 0 310"/><path d="M750 1030c-90 100-80 230 20 320"/></g>
+<rect x="1500" y="700" width="1400" height="1200" rx="16" fill="#1e1d1d" stroke="#46413e" stroke-width="24"/>
+<g fill="#2b2522" stroke="#6b5748" stroke-width="16"><rect x="1600" y="790" width="230" height="1020"/><rect x="1960" y="790" width="230" height="1020"/><rect x="2320" y="790" width="230" height="1020"/><rect x="2680" y="790" width="140" height="1020"/></g>
+<g stroke="#9a7659" stroke-width="12" opacity=".75"><path d="M1615 930H1815M1615 1110H1815M1615 1290H1815M1615 1470H1815M1615 1650H1815"/><path d="M1975 930H2175M1975 1110H2175M1975 1290H2175M1975 1470H2175M1975 1650H2175"/><path d="M2335 930H2535M2335 1110H2535M2335 1290H2535M2335 1470H2535M2335 1650H2535"/></g>
+<g filter="url(#glow)"><polygon points="1100,480 1150,350 1200,480 1150,620" fill="url(#violet)"/><polygon points="2500,650 2570,470 2640,650 2570,780" fill="url(#violet)"/></g>
+<g filter="url(#glow)"><circle cx="2200" cy="2050" r="130" fill="#2a1b16" stroke="#72513b" stroke-width="24"/><path d="M2140 2080c-40-90 50-120 60-210 90 70 70 130 20 210 70-50 110 10 90 80-80 60-220 20-170-80z" fill="#e36a2b"/></g>
+<rect x="2900" y="1800" width="600" height="600" fill="#0d1115" stroke="#474d54" stroke-width="26"/>
+<path d="M2980 1880H3420M2980 1980H3420M2980 2080H3420M2980 2180H3420M2980 2280H3420" stroke="#2d353b" stroke-width="18"/>
+<path d="M3100 2380h300" stroke="#7a6657" stroke-width="30"/>
+<g stroke="#65584f" stroke-width="22" fill="none" opacity=".75"><path d="M330 520c150 80 80 210 220 280s80 210 220 260"/><path d="M3230 650c-120 100-50 200-160 280s-60 190-170 260"/></g>
+<path d="M2380 520c180-160 390-160 570 0" stroke="#8c6bd1" stroke-width="16" fill="none" opacity=".38" filter="url(#glow)"/>
+<g opacity=".27" filter="url(#rough)"><ellipse cx="2100" cy="1500" rx="1050" ry="820" fill="#000"/></g>
+<g fill="#8b765e"><rect x="1600" y="2550" width="500" height="40"/><rect x="1600" y="210" width="500" height="40"/></g>
+</svg>
