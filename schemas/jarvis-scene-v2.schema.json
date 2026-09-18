@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fora-do-abismo.local/schemas/jarvis-scene-v2.schema.json",
+  "title": "Jarvis Scene Framework V2",
+  "type": "object",
+  "required": ["schemaVersion", "template"],
+  "additionalProperties": true,
+  "properties": {
+    "schemaVersion": { "const": "2.0" },
+    "id": { "type": "string" },
+    "name": { "type": "string" },
+    "template": {
+      "type": "string",
+      "enum": [
+        "blank",
+        "boss_arena",
+        "industrial_forge",
+        "investigation_site",
+        "social_hub",
+        "ritual_chamber",
+        "underdark_cavern"
+      ]
+    },
+    "skin": {
+      "type": "string",
+      "enum": [
+        "neutral_dark",
+        "underdark_stone",
+        "dark_forge",
+        "eldritch_archive",
+        "ancient_elf_ruin",
+        "warm_tavern",
+        "cosmic_corruption"
+      ]
+    },
+    "replaceTemplateGeometry": { "type": "boolean", "default": false },
+    "metadata": { "type": "object" },
+    "folder": { "type": "string" },
+    "config": {
+      "type": "object",
+      "properties": {
+        "columns": { "type": "integer", "minimum": 8 },
+        "rows": { "type": "integer", "minimum": 8 },
+        "tokenVision": { "type": "boolean" },
+        "navigation": { "type": "boolean" },
+        "enclosed": { "type": "boolean" },
+        "grid": {
+          "type": "object",
+          "properties": {
+            "size": { "type": "integer", "minimum": 50 },
+            "distance": { "type": "number", "exclusiveMinimum": 0 },
+            "units": { "type": "string" },
+            "color": { "type": "string" },
+            "alpha": { "type": "number", "minimum": 0, "maximum": 1 },
+            "thickness": { "type": "number", "minimum": 0 }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "scene": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "folder": { "type": "string" },
+        "columns": { "type": "integer", "minimum": 8 },
+        "rows": { "type": "integer", "minimum": 8 },
+        "tokenVision": { "type": "boolean" },
+        "navigation": { "type": "boolean" },
+        "backgroundColor": { "type": "string" },
+        "grid": { "type": "object" }
+      },
+      "additionalProperties": true
+    },
+    "visual": {
+      "type": "object",
+      "properties": {
+        "backgroundSrc": { "type": "string" },
+        "backgroundFallbackSrc": { "type": "string" },
+        "scene": { "type": "object" }
+      },
+      "additionalProperties": true
+    },
+    "walls": { "type": "array", "items": { "type": "object" }, "default": [] },
+    "drawings": { "type": "array", "items": { "type": "object" }, "default": [] },
+    "lights": { "type": "array", "items": { "type": "object" }, "default": [] },
+    "tokens": { "type": "array", "items": { "type": "object" }, "default": [] }
+  }
+}
