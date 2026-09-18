@@ -63,8 +63,8 @@ function outerRoom(columns, rows, margin = 2, entryWidth = 4) {
 }
 
 function sceneBase(config, defaults) {
-  const columns = i(config.columns, defaults.columns);
-  const rows = i(config.rows, defaults.rows);
+  const columns = Math.max(i(config.columns, defaults.columns), defaults.minColumns ?? 20);
+  const rows = Math.max(i(config.rows, defaults.rows), defaults.minRows ?? 18);
 
   return {
     columns,
@@ -83,7 +83,7 @@ function sceneBase(config, defaults) {
 }
 
 function blankTemplate(config = {}) {
-  const base = sceneBase(config, { columns: 30, rows: 22 });
+  const base = sceneBase(config, { columns: 30, rows: 22, minColumns: 20, minRows: 18 });
   return {
     scene: base.scene,
     walls: config.enclosed === false ? [] : outerRoom(base.columns, base.rows, 2, 4),
@@ -97,7 +97,7 @@ function blankTemplate(config = {}) {
 }
 
 function bossArenaTemplate(config = {}) {
-  const base = sceneBase(config, { columns: 38, rows: 30 });
+  const base = sceneBase(config, { columns: 38, rows: 30, minColumns: 28, minRows: 22 });
   const { columns: c, rows: r } = base;
   const cx = Math.round(c / 2);
   const cy = Math.round(r / 2);
@@ -125,7 +125,7 @@ function bossArenaTemplate(config = {}) {
 }
 
 function industrialForgeTemplate(config = {}) {
-  const base = sceneBase(config, { columns: 40, rows: 30 });
+  const base = sceneBase(config, { columns: 40, rows: 30, minColumns: 30, minRows: 22 });
   const { columns: c, rows: r } = base;
   const cx = Math.round(c / 2);
 
@@ -158,7 +158,7 @@ function industrialForgeTemplate(config = {}) {
 }
 
 function investigationSiteTemplate(config = {}) {
-  const base = sceneBase(config, { columns: 36, rows: 28 });
+  const base = sceneBase(config, { columns: 36, rows: 28, minColumns: 28, minRows: 22 });
   const { columns: c, rows: r } = base;
   const cx = Math.round(c / 2);
 
@@ -191,7 +191,7 @@ function investigationSiteTemplate(config = {}) {
 }
 
 function socialHubTemplate(config = {}) {
-  const base = sceneBase(config, { columns: 30, rows: 24 });
+  const base = sceneBase(config, { columns: 30, rows: 24, minColumns: 22, minRows: 18 });
   const { columns: c, rows: r } = base;
   const cx = Math.round(c / 2);
 
@@ -219,7 +219,7 @@ function socialHubTemplate(config = {}) {
 }
 
 function ritualChamberTemplate(config = {}) {
-  const base = sceneBase(config, { columns: 34, rows: 28 });
+  const base = sceneBase(config, { columns: 34, rows: 28, minColumns: 26, minRows: 22 });
   const { columns: c, rows: r } = base;
   const cx = Math.round(c / 2);
   const cy = Math.round(r / 2);
