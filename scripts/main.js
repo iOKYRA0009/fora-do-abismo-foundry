@@ -65,10 +65,8 @@ import {
   setActorRulesProfile
 } from "./rules/rules-profile.js";
 import { JarvisSceneBuilder } from "./scenes/scene-builder.js";
-import {
-  getForjasScenePreset,
-  listForjasScenePresets
-} from "./scenes/forjas-presets.js";
+import { JarvisSceneFramework } from "./scenes/framework/scene-framework.js";
+import { getCoreScenePresetDefinitions } from "./scenes/presets/core-presets.js";
 
 const MODULE_ID = "fora-do-abismo-foundry";
 
@@ -89,6 +87,10 @@ Hooks.once("ready", () => {
 
   const module = game.modules.get(MODULE_ID);
   const sceneBuilder = new JarvisSceneBuilder();
+  const sceneFramework = new JarvisSceneFramework({
+    builder: sceneBuilder,
+    presets: getCoreScenePresetDefinitions()
+  });
   const forjasKeys = ["forjas-01", "forjas-02", "forjas-03"];
 
   const api = {
@@ -152,26 +154,50 @@ Hooks.once("ready", () => {
       formatReport: formatRulesProfileReport
     },
     scenes: {
+      // API V1 mantida por compatibilidade.
       validate: payload => sceneBuilder.validate(payload),
       preview: payload => sceneBuilder.preview(payload),
       build: (payload, options = {}) => sceneBuilder.build(payload, options),
       buildMany: (payloads, options = {}) => sceneBuilder.buildMany(payloads, options),
-      presets: listForjasScenePresets,
-      getPreset: getForjasScenePreset,
-      previewPreset: key => sceneBuilder.preview(getForjasScenePreset(key)),
-      buildPreset: (key, options = {}) => sceneBuilder.build(getForjasScenePreset(key), options),
-      buildForjas: (options = {}) => sceneBuilder.buildMany(
-        forjasKeys.map(getForjasScenePreset),
-        options
-      ),
-      buildForjasVisual: (options = {}) => sceneBuilder.buildMany(
-        forjasKeys.map(getForjasScenePreset),
+
+      // Scene Framework V2 — genérico e reutilizável.
+      framework: {
+        status: () => sceneFramework.status(),
+        version: sceneFramework.version,
+        templates: () => sceneFramework.listTemplates(),
+        skins: () => sceneFramework.listSkins(),
+        presets: () => sceneFramework.listPresets(),
+        compose: spec => sceneFramework.compose(spec),
+        previewSpec: spec => sceneFramework.previewSpec(spec),
+        buildSpec: (spec, options = {}) => sceneFramework.buildSpec(spec, options),
+        buildFromTemplate: (templateKey, config = {}, options = {}) =>
+          sceneFramework.buildFromTemplate(templateKey, config, options),
+        applySkin: (sceneRef, skinKey, options = {}) =>
+          sceneFramework.applySkin(sceneRef, skinKey, options),
+        inspect: sceneRef => sceneFramework.inspect(sceneRef),
+        registerPreset: (key, definition) => sceneFramework.registerPreset(key, definition),
+        unregisterPreset: key => sceneFramework.unregisterPreset(key)
+      },
+
+      // Atalhos de presets agora passam pelo Framework.
+      presets: () => sceneFramework.listPresets(),
+      getPreset: key => sceneFramework.getPreset(key),
+      previewPreset: key => sceneFramework.previewPreset(key),
+      buildPreset: (key, options = {}) => sceneFramework.buildPreset(key, options),
+      buildForjas: (options = {}) => sceneFramework.buildPresets(forjasKeys, options),
+      buildForjasVisual: (options = {}) => sceneFramework.buildPresets(
+        forjasKeys,
         { ...options, includeBlueprintOverlay: false }
       ),
-      buildForjasBlueprint: (options = {}) => sceneBuilder.buildMany(
-        forjasKeys.map(getForjasScenePreset),
+      buildForjasBlueprint: (options = {}) => sceneFramework.buildPresets(
+        forjasKeys,
         { ...options, includeBlueprintOverlay: true }
-      )
+      ),
+      buildFromTemplate: (templateKey, config = {}, options = {}) =>
+        sceneFramework.buildFromTemplate(templateKey, config, options),
+      applySkin: (sceneRef, skinKey, options = {}) =>
+        sceneFramework.applySkin(sceneRef, skinKey, options),
+      inspect: sceneRef => sceneFramework.inspect(sceneRef)
     },
     version: module?.version ?? "desconhecida"
   };
@@ -184,6 +210,6 @@ Hooks.once("ready", () => {
     `${MODULE_ID} | Jarvis Importer V9 ${api.version} disponível. ` +
     `Visage=${appearance.active ? appearance.version : "inativo"} | ` +
     `Metamorph=${transformation.active ? transformation.version : "inativo"} | ` +
-    `SceneBuilder=${listForjasScenePresets().length} preset(s)`
+    `SceneFramework=${sceneFramework.version} | Presets=${sceneFramework.listPresets().length} | Templates=${sceneFramework.listTemplates().length} | Skins=${sceneFramework.listSkins().length}`
   );
 });
