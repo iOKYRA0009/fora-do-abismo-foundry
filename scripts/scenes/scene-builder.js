@@ -239,10 +239,13 @@ async function buildTokenData(tokens = [], gridSize) {
   return { resolved, missing };
 }
 
-function buildSceneData(payload, folder, tokenData) {
+function buildSceneData(payload, folder, tokenData, { includeBlueprintOverlay = false } = {}) {
   const scene = payload.scene;
   const grid = scene.grid ?? {};
   const size = Number(grid.size ?? 100);
+
+  const useVisualBackground = Boolean(scene.backgroundSrc);
+  const includeDrawings = includeBlueprintOverlay || !Boolean(scene.visualMode);
 
   return {
     name: scene.name,
@@ -254,6 +257,13 @@ function buildSceneData(payload, folder, tokenData) {
     navName: scene.navName ?? scene.name,
     tokenVision: scene.tokenVision !== false,
     backgroundColor: scene.backgroundColor ?? "#090807",
+    ...(useVisualBackground ? {
+      background: {
+        src: scene.backgroundSrc,
+        offsetX: Number(scene.backgroundOffsetX ?? 0),
+        offsetY: Number(scene.backgroundOffsetY ?? 0)
+      }
+    } : {}),
     grid: {
       type: CONST.GRID_TYPES.SQUARE,
       size,
@@ -264,7 +274,7 @@ function buildSceneData(payload, folder, tokenData) {
       thickness: Number(grid.thickness ?? 1)
     },
     walls: buildWallData(payload.walls ?? [], size),
-    drawings: buildDrawingData(payload.drawings ?? [], size),
+    drawings: includeDrawings ? buildDrawingData(payload.drawings ?? [], size) : [],
     lights: buildLightData(payload.lights ?? [], size),
     tokens: tokenData,
     flags: {
@@ -316,7 +326,8 @@ export class JarvisSceneBuilder {
     createFolder = true,
     allowMissingActors = false,
     activate = false,
-    view = true
+    view = true,
+    includeBlueprintOverlay = false
   } = {}) {
     if (!game.user?.isGM) throw new Error("Jarvis Scene Builder: apenas o GM pode criar Scenes.");
     validateSceneBlueprint(payload);
@@ -339,7 +350,7 @@ export class JarvisSceneBuilder {
 
     if (existing && replaceExisting) await existing.delete();
 
-    const sceneData = buildSceneData(payload, folder, tokenData);
+    const sceneData = buildSceneData(payload, folder, tokenData, { includeBlueprintOverlay });
     const embedded = {
       walls: sceneData.walls ?? [],
       drawings: sceneData.drawings ?? [],
@@ -413,7 +424,8 @@ export class JarvisSceneBuilder {
     createFolder = true,
     allowMissingActors = false,
     activateLast = false,
-    viewLast = true
+    viewLast = true,
+    includeBlueprintOverlay = false
   } = {}) {
     if (!game.user?.isGM) throw new Error("Jarvis Scene Builder: apenas o GM pode criar Scenes.");
     if (!Array.isArray(payloads) || !payloads.length) {
@@ -450,7 +462,8 @@ export class JarvisSceneBuilder {
         createFolder,
         allowMissingActors,
         activate: isLast && activateLast,
-        view: isLast && !activateLast && viewLast
+        view: isLast && !activateLast && viewLast,
+        includeBlueprintOverlay
       }));
     }
     return { results, previews };

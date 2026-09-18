@@ -163,6 +163,14 @@ Hooks.once("ready", () => {
       buildForjas: (options = {}) => sceneBuilder.buildMany(
         forjasKeys.map(getForjasScenePreset),
         options
+      ),
+      buildForjasVisual: (options = {}) => sceneBuilder.buildMany(
+        forjasKeys.map(getForjasScenePreset),
+        { ...options, includeBlueprintOverlay: false }
+      ),
+      buildForjasBlueprint: (options = {}) => sceneBuilder.buildMany(
+        forjasKeys.map(getForjasScenePreset),
+        { ...options, includeBlueprintOverlay: true }
       )
     },
     version: module?.version ?? "desconhecida"

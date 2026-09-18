@@ -2,8 +2,8 @@ const BASE_GRID = {
   size: 100,
   distance: 5,
   units: "ft",
-  color: "#000000",
-  alpha: 0.2,
+  color: "#59483e",
+  alpha: 0.12,
   thickness: 1
 };
 
@@ -51,6 +51,8 @@ const forjas01 = {
     rows: 30,
     grid: BASE_GRID,
     backgroundColor: "#090705",
+    backgroundSrc: "modules/fora-do-abismo-foundry/assets/maps/forjas-01.svg",
+    visualMode: true,
     tokenVision: true,
     navigation: false
   },
@@ -80,9 +82,9 @@ const forjas01 = {
     wall([37, 18], [37, 25])
   ],
   lights: [
-    light("Forja Oeste", 10, 16, 35, 12, "#e26b2d"),
-    light("Escória Central", 26, 12, 40, 14, "#ff5b24"),
-    light("Forja Leste", 33, 20, 30, 8, "#b94c2a")
+    light("Forja Oeste", 10, 16, 22, 6, "#e26b2d"),
+    light("Escória Central", 26, 12, 26, 8, "#ff5b24"),
+    light("Forja Leste", 33, 20, 18, 5, "#b94c2a")
   ],
   tokens: [
     { actor: "Bror, o Feitor", x: 7, y: 8, disposition: "neutral", role: "social" },
@@ -110,6 +112,8 @@ const forjas02 = {
     rows: 28,
     grid: BASE_GRID,
     backgroundColor: "#08090b",
+    backgroundSrc: "modules/fora-do-abismo-foundry/assets/maps/forjas-02.svg",
+    visualMode: true,
     tokenVision: true,
     navigation: false
   },
@@ -140,9 +144,9 @@ const forjas02 = {
     wall([29, 24], [31, 24]), secret([31, 24], [34, 24]), wall([34, 24], [35, 24])
   ],
   lights: [
-    light("Cristal Arquivo 1", 11, 6, 24, 7, "#7257a8"),
-    light("Cristal Arquivo 2", 25, 7, 26, 8, "#7257a8"),
-    light("Braseiro Central", 22, 17, 28, 8, "#bb6330")
+    light("Cristal Arquivo 1", 11, 6, 16, 4, "#7257a8"),
+    light("Cristal Arquivo 2", 25, 7, 17, 4, "#7257a8"),
+    light("Braseiro Central", 22, 17, 18, 5, "#bb6330")
   ],
   tokens: [
     { actor: "Mestre-Arquivista das Forjas", x: 20, y: 11, disposition: "neutral", role: "social" },
@@ -168,6 +172,8 @@ const forjas03 = {
     rows: 32,
     grid: BASE_GRID,
     backgroundColor: "#070607",
+    backgroundSrc: "modules/fora-do-abismo-foundry/assets/maps/forjas-03.svg",
+    visualMode: true,
     tokenVision: true,
     navigation: false
   },
@@ -202,10 +208,10 @@ const forjas03 = {
     door([31, 13], [31, 16])
   ],
   lights: [
-    light("Forja Regente Central", 21, 17, 45, 15, "#e44d26"),
-    light("Cristal da Rainha", 21, 8, 28, 9, "#7c5ab0"),
-    light("Galeria Oeste", 7, 15, 22, 6, "#8d5e3c"),
-    light("Galeria Leste", 35, 15, 22, 6, "#8d5e3c")
+    light("Forja Regente Central", 21, 17, 30, 9, "#e44d26"),
+    light("Cristal da Rainha", 21, 8, 18, 5, "#7c5ab0"),
+    light("Galeria Oeste", 7, 15, 13, 3, "#8d5e3c"),
+    light("Galeria Leste", 35, 15, 13, 3, "#8d5e3c")
   ],
   tokens: [
     { actor: "Rainha — Mãe de Nicolau", x: 20, y: 8, disposition: "neutral", role: "social" },
