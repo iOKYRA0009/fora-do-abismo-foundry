@@ -61,6 +61,7 @@ Se a versão já existir, a workflow não sobrescreve silenciosamente aquela rel
 - [x] Presets jogáveis das três Forjas de Karak'Zul
 - [x] Backgrounds visuais alinhados e modo Visual/Blueprint para as Forjas
 - [x] Scene Framework V2 com templates, skins, presets e diagnóstico reutilizável
+- [x] Scene Package Builder V1 para visual, paredes, portas, regiões, NPCs e notas em um único pacote
 - [ ] Subclasse e Advancement completos
 - [ ] Magias completas e preparação
 - [ ] Recursos customizados além dos 3 slots nativos
@@ -120,6 +121,40 @@ await jarvis.scenes.buildForjasVisual({ replaceExisting: true });
 ```
 
 O Scene Builder usa o Foundry nativo; não exige Dungeon Draw, Dungeon Alchemist ou outro módulo de mapa. A beta.11 adiciona templates reutilizáveis, skins, presets registráveis, composição V2 e inspeção de cenas. O comportamento de background Tile full-canvas validado na beta.10 foi mantido.
+
+## Scene Package Builder — beta.12
+
+A beta.12 adiciona uma camada acima do Scene Framework. Um **Scene Package** descreve o mapa completo sem exigir uma nova versão do módulo para cada Scene.
+
+O pacote pode conter:
+
+- imagem de fundo já hospedada ou embutida em Base64 para upload automático;
+- dimensões, grid, paredes, portas, passagens secretas e barreiras baixas;
+- luzes;
+- Actors obrigatórios e opcionais, com posição, tamanho, disposição e estado oculto;
+- Scene Regions para perigos, puzzles, gatilhos e áreas narrativas;
+- fallback para Drawing oculto caso o Foundry recuse um Region;
+- puzzles, recompensas e notas do Mestre armazenados no manifesto da Scene;
+- ações manuais reutilizáveis, como revelar ou ocultar um Token;
+- inspeção final do pacote criado.
+
+Exemplo mínimo:
+
+```js
+const jarvis = game.modules.get("fora-do-abismo-foundry").api;
+
+await jarvis.scenes.package.build({
+  schemaVersion: "1.0",
+  id: "minha-scene",
+  scene: { name: "Minha Scene", columns: 40, rows: 30 },
+  visual: { backgroundSrc: "worlds/meu-mundo/assets/mapa.webp" },
+  walls: [],
+  actors: [],
+  regions: []
+}, { replaceExisting: true });
+```
+
+A API principal é `jarvis.scenes.package`: `validate`, `preview`, `build`, `inspect` e `runAction`. O objetivo é manter o motor permanente e trocar apenas os dados e a arte de cada mapa.
 
 ## Compatibilidade-alvo
 
