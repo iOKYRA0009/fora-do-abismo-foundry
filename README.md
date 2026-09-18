@@ -209,3 +209,8 @@ Quando algo ainda não estiver implementado, o Jarvis deve falhar de forma clara
 ### beta.13 — compatibilidade de RegionBehavior no Foundry V14
 
 A beta.13 detecta dinamicamente o tipo real de **Execute Script** registrado em `CONFIG.RegionBehavior.dataModels` e adiciona `repairRegions(scene)` para reparar uma Scene Package existente sem recriar imagem, paredes, luzes ou Tokens.
+
+
+### beta.14 — Actors opcionais não entram sozinhos
+
+Por padrão, Actors marcados com `optional: true` ficam apenas no manifesto e **não são colocados na Scene**. Para incluí-los explicitamente, use `includeOptionalActors: true` no `preview`/`build`. Isso preserva decisões narrativas como aliados que só acompanham o grupo se a sessão justificar.
