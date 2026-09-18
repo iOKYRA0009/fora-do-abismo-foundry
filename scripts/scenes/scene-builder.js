@@ -170,42 +170,40 @@ function buildDrawingData(drawings = [], gridSize) {
 function buildBackgroundTileData(scene = {}, gridSize) {
   const preferred = String(scene.backgroundSrc ?? "").trim();
   const fallback = String(scene.backgroundFallbackSrc ?? "").trim();
-  const sources = [];
+  const src = preferred || fallback;
+  if (!src) return [];
 
-  if (fallback && fallback !== preferred) {
-    sources.push({ src: fallback, name: "Jarvis — Background Fallback", sort: -100001, fallback: true });
-  }
-  if (preferred) {
-    sources.push({ src: preferred, name: "Jarvis — Background Visual", sort: -100000, fallback: false });
-  } else if (fallback) {
-    sources.push({ src: fallback, name: "Jarvis — Background Visual", sort: -100000, fallback: true });
-  }
+  const width = Number(scene.columns) * gridSize;
+  const height = Number(scene.rows) * gridSize;
 
-  return sources.map(source => ({
-    name: source.name,
-    x: 0,
-    y: 0,
-    width: Number(scene.columns) * gridSize,
-    height: Number(scene.rows) * gridSize,
-    anchorX: 0,
-    anchorY: 0,
+  return [{
+    name: "Jarvis — Background Visual",
+    x: Math.round(width / 2),
+    y: Math.round(height / 2),
+    width,
+    height,
+    anchorX: 0.5,
+    anchorY: 0.5,
     alpha: 1,
     rotation: 0,
     hidden: false,
     locked: true,
-    sort: source.sort,
+    sort: -100000,
+    overhead: false,
     texture: {
-      src: source.src
+      src,
+      scaleX: 1,
+      scaleY: 1
     },
     flags: {
       [MODULE_ID]: {
         sceneBackground: true,
-        fallback: source.fallback,
+        fallback: !preferred && Boolean(fallback),
         rasterPreferred: preferred || null,
         fallbackSrc: fallback || null
       }
     }
-  }));
+  }];
 }
 
 function buildLightData(lights = [], gridSize) {
@@ -300,7 +298,7 @@ function buildSceneData(payload, folder, tokenData, { includeBlueprintOverlay = 
     initial: {
       x: Math.round((Number(scene.columns) * size) / 2),
       y: Math.round((Number(scene.rows) * size) / 2),
-      scale: null
+      scale: 1
     },
     grid: {
       type: CONST.GRID_TYPES.SQUARE,
