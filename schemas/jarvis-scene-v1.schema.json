@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fora-do-abismo.local/schemas/jarvis-scene-v1.schema.json",
+  "title": "Jarvis Scene Blueprint V1",
+  "$defs": {
+    "point": {
+      "type": "array",
+      "prefixItems": [{ "type": "number" }, { "type": "number" }],
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "wall": {
+      "type": "object",
+      "required": ["a", "b"],
+      "properties": {
+        "a": { "$ref": "#/$defs/point" },
+        "b": { "$ref": "#/$defs/point" },
+        "type": { "type": "string", "enum": ["wall", "door", "secret"], "default": "wall" },
+        "state": { "type": "string", "enum": ["closed", "open", "locked"], "default": "closed" },
+        "move": { "type": "boolean" },
+        "light": { "type": "boolean" },
+        "sight": { "type": "boolean" },
+        "sound": { "type": "boolean" },
+        "dir": { "type": "number" }
+      },
+      "additionalProperties": true
+    },
+    "drawing": {
+      "type": "object",
+      "required": ["x", "y", "w", "h"],
+      "properties": {
+        "name": { "type": "string" },
+        "kind": { "type": "string", "enum": ["floor", "zone", "gm"], "default": "floor" },
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "w": { "type": "number", "exclusiveMinimum": 0 },
+        "h": { "type": "number", "exclusiveMinimum": 0 },
+        "text": { "type": "string" },
+        "hidden": { "type": "boolean" },
+        "locked": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
+    "light": {
+      "type": "object",
+      "required": ["x", "y", "dim"],
+      "properties": {
+        "name": { "type": "string" },
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "dim": { "type": "number", "minimum": 0 },
+        "bright": { "type": "number", "minimum": 0 },
+        "color": { "type": "string" },
+        "hidden": { "type": "boolean" },
+        "walls": { "type": "boolean" },
+        "vision": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
+    "token": {
+      "type": "object",
+      "required": ["x", "y"],
+      "anyOf": [
+        { "required": ["actor"] },
+        { "required": ["actorId"] },
+        { "required": ["actorUuid"] }
+      ],
+      "properties": {
+        "actor": { "type": "string", "minLength": 1 },
+        "actorId": { "type": "string", "minLength": 1 },
+        "actorUuid": { "type": "string", "minLength": 1 },
+        "name": { "type": "string" },
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "width": { "type": "number", "exclusiveMinimum": 0 },
+        "height": { "type": "number", "exclusiveMinimum": 0 },
+        "elevation": { "type": "number" },
+        "rotation": { "type": "number" },
+        "hidden": { "type": "boolean" },
+        "actorLink": { "type": "boolean" },
+        "disposition": { "type": "string", "enum": ["friendly", "neutral", "hostile", "secret"] },
+        "role": { "type": "string" }
+      },
+      "additionalProperties": true
+    }
+  },
+  "type": "object",
+  "required": ["schemaVersion", "scene"],
+  "additionalProperties": true,
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "id": { "type": "string" },
+    "metadata": { "type": "object" },
+    "scene": {
+      "type": "object",
+      "required": ["name", "columns", "rows"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "folder": { "type": "string" },
+        "columns": { "type": "integer", "minimum": 1 },
+        "rows": { "type": "integer", "minimum": 1 },
+        "padding": { "type": "number", "minimum": 0 },
+        "navigation": { "type": "boolean" },
+        "navName": { "type": "string" },
+        "tokenVision": { "type": "boolean" },
+        "backgroundColor": { "type": "string" },
+        "grid": {
+          "type": "object",
+          "properties": {
+            "size": { "type": "integer", "minimum": 50, "default": 100 },
+            "distance": { "type": "number", "exclusiveMinimum": 0, "default": 5 },
+            "units": { "type": "string", "default": "ft" },
+            "color": { "type": "string" },
+            "alpha": { "type": "number", "minimum": 0, "maximum": 1 },
+            "thickness": { "type": "number", "minimum": 0 }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "walls": { "type": "array", "items": { "$ref": "#/$defs/wall" }, "default": [] },
+    "drawings": { "type": "array", "items": { "$ref": "#/$defs/drawing" }, "default": [] },
+    "lights": { "type": "array", "items": { "$ref": "#/$defs/light" }, "default": [] },
+    "tokens": { "type": "array", "items": { "$ref": "#/$defs/token" }, "default": [] }
+  }
+}
