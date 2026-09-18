@@ -126,6 +126,12 @@ function drawingDefaults(kind) {
   };
 }
 
+function getRectangleDrawingType() {
+  return foundry.data?.ShapeData?.TYPES?.RECTANGLE
+    ?? CONFIG.Canvas?.drawingTypes?.RECTANGLE
+    ?? "r";
+}
+
 function buildDrawingData(drawings = [], gridSize) {
   return drawings.map((drawing, index) => {
     const defaults = drawingDefaults(drawing.kind ?? "floor");
@@ -134,7 +140,7 @@ function buildDrawingData(drawings = [], gridSize) {
       x: px(drawing.x, gridSize),
       y: px(drawing.y, gridSize),
       shape: {
-        type: "rectangle",
+        type: getRectangleDrawingType(),
         width: px(drawing.w, gridSize),
         height: px(drawing.h, gridSize)
       },
