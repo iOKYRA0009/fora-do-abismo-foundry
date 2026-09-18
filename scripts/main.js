@@ -15,6 +15,42 @@ import {
   registerJackEngine,
   syncJackSoulTiers
 } from "./automation/jack-engine.js";
+import {
+  applyAppearance,
+  applyAppearanceToActor,
+  getAppearanceProfiles,
+  getAppearanceStatus,
+  getAvailableAppearances,
+  isAppearanceActive,
+  removeAppearance,
+  removeAppearanceFromActor,
+  removeAppearanceProfile,
+  revertAppearance,
+  revertAppearanceForActor,
+  setAppearanceProfile
+} from "./integrations/visage-bridge.js";
+import {
+  buildLocalAppearance,
+  createAudioEffect,
+  createVisualEffect,
+  getAppearancePackStatus,
+  importVisageExport,
+  installAppearancePack,
+  installLocalAppearance,
+  makeAppearancePack
+} from "./integrations/appearance-pack.js";
+import {
+  getCurrentForm,
+  getMainActor,
+  getTransformationProfiles,
+  getTransformationStatus,
+  morphToken,
+  openTransformationPicker,
+  promptForm,
+  removeTransformationProfile,
+  revertToken,
+  setTransformationProfile
+} from "./integrations/metamorph-bridge.js";
 import { registerProgressionEngine } from "./progression/progression-engine.js";
 import {
   analyzeActorProvenance,
@@ -55,6 +91,40 @@ Hooks.once("ready", () => {
       removeAppliedFromActor: removeAppliedEmbeddedEffectFromActor,
       resolveEmbedded: resolveEmbeddedEffect
     },
+    appearance: {
+      status: getAppearanceStatus,
+      getProfiles: getAppearanceProfiles,
+      setProfile: setAppearanceProfile,
+      removeProfile: removeAppearanceProfile,
+      apply: applyAppearance,
+      applyToActor: applyAppearanceToActor,
+      remove: removeAppearance,
+      removeFromActor: removeAppearanceFromActor,
+      revert: revertAppearance,
+      revertActor: revertAppearanceForActor,
+      getAvailable: getAvailableAppearances,
+      isActive: isAppearanceActive,
+      packStatus: getAppearancePackStatus,
+      buildLocal: buildLocalAppearance,
+      makePack: makeAppearancePack,
+      visualEffect: createVisualEffect,
+      audioEffect: createAudioEffect,
+      installLocal: installLocalAppearance,
+      installPack: installAppearancePack,
+      importVisageExport
+    },
+    transformation: {
+      status: getTransformationStatus,
+      getProfiles: getTransformationProfiles,
+      setProfile: setTransformationProfile,
+      removeProfile: removeTransformationProfile,
+      morph: morphToken,
+      revert: revertToken,
+      getForm: getCurrentForm,
+      getMainActor,
+      promptForm,
+      openPicker: openTransformationPicker
+    },
     jack: {
       syncActor: syncJackSoulTiers,
       getSoulStatus: getJackSoulStatus
@@ -75,7 +145,11 @@ Hooks.once("ready", () => {
 
   if (module) module.api = api;
 
+  const appearance = getAppearanceStatus();
+  const transformation = getTransformationStatus();
   console.log(
-    `${MODULE_ID} | Jarvis Importer V9 ${api.version} disponível em game.modules.get(\"${MODULE_ID}\").api.importer`
+    `${MODULE_ID} | Jarvis Importer V9 ${api.version} disponível. ` +
+    `Visage=${appearance.active ? appearance.version : "inativo"} | ` +
+    `Metamorph=${transformation.active ? transformation.version : "inativo"}`
   );
 });
