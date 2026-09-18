@@ -1,6 +1,6 @@
 # Jarvis V9 — Appearance & Transformation Beta
 
-Versão-alvo: `0.2.0-beta.2`
+Versão-alvo: `0.2.0-beta.3`
 
 ## Objetivo
 
@@ -285,3 +285,41 @@ Esse fluxo permite reutilizar a mesma infraestrutura para Thors, Sonson, Jack, N
 ### Limite atual
 
 O Jarvis não chama um gerador de imagens de dentro do Foundry. A geração da arte/token acontece fora do Foundry; o módulo cuida da instalação, organização, VFX e aplicação da aparência.
+
+
+---
+
+## Active Effect -> Visage (beta.3)
+
+A beta.3 permite vincular uma aparência do Visage a um Active Effect real do Actor.
+
+O fluxo é:
+
+1. a habilidade aplica um Active Effect no personagem;
+2. se esse Effect tiver `flags.fora-do-abismo-foundry.appearance.key`, o Jarvis aplica a skin registrada com essa chave;
+3. quando o Effect é removido, desativado ou expira, o Jarvis remove apenas essa aparência;
+4. outras camadas/overlays do Visage não são revertidas junto.
+
+Exemplo de flag no Active Effect:
+
+```js
+await effect.setFlag("fora-do-abismo-foundry", "appearance", {
+  key: "avatar-tempestade",
+  clearStack: true,
+  switchIdentity: true,
+  removeOnDelete: true
+});
+```
+
+Esse mecanismo é genérico e pode ser usado depois para Thors, Sonson, Jack, Nicolau e NPCs, desde que a aparência já tenha sido instalada/registrada no Actor.
+
+### Thors — Avatar da Tempestade
+
+Para o Thors, a integração recomendada é:
+
+- Activity: `Avatar da Tempestade`;
+- Active Effect embutido: o Effect mecânico já existente da habilidade;
+- chave de aparência: `avatar-tempestade`;
+- chave de automação: `thors-avatar-tempestade`.
+
+A beta não inventa duração nem mecânica se a habilidade não possuir Active Effect configurado. Nesse caso, o instalador deve parar e pedir revisão da ficha em vez de criar regras silenciosamente.
