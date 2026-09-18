@@ -4,7 +4,7 @@ Base técnica oficial da campanha **Fora do Abismo** para Foundry VTT.
 
 ## Objetivo
 
-Este repositório concentra o código da campanha: Jarvis Importer, macros, automações, Active Effects, utilitários e, futuramente, compêndios próprios.
+Este repositório concentra o código da campanha: Jarvis Importer, macros, automações, Active Effects, utilitários, Scene Builder e, futuramente, compêndios próprios.
 
 A lore completa não deve ser duplicada aqui. O Google Drive continua sendo a fonte documental da campanha; este repositório é a oficina técnica.
 
@@ -26,7 +26,7 @@ No Foundry VTT:
 
 O Foundry usa o mesmo Manifest URL para detectar atualizações futuras.
 
-> O pipeline de distribuição é estável; o Jarvis Importer V9 ainda está em versão alpha enquanto validamos fichas reais da campanha.
+> O pipeline de distribuição é estável; o Jarvis V9 continua em desenvolvimento incremental enquanto validamos fichas e cenas reais da campanha.
 
 ## Publicação automática
 
@@ -56,13 +56,50 @@ Se a versão já existir, a workflow não sobrescreve silenciosamente aquela rel
 - [x] Actor semântico: atributos, salvaguardas, perícias, PV, CA e movimento
 - [x] Recursos nativos de Actor: primary, secondary e tertiary
 - [x] Classe semântica básica: níveis, dado de vida, atributo primário e spellcasting
+- [x] Active Effects Jarvis aplicados por Activity
+- [x] Scene Builder semântico inicial para Foundry V14
+- [x] Presets jogáveis das três Forjas de Karak'Zul
 - [ ] Subclasse e Advancement completos
-- [ ] Active Effects aplicados por Activity
 - [ ] Magias completas e preparação
 - [ ] Recursos customizados além dos 3 slots nativos
-- [ ] Teste com personagem real
 - [ ] Testes automatizados
-- [ ] Interface de importação dentro do Foundry
+- [ ] Interface visual completa de importação dentro do Foundry
+
+## Scene Builder — beta.5
+
+O V9 agora pode construir Scenes funcionais usando um blueprint em quadrados de grid. Ele cria:
+
+- dimensões e grid;
+- paredes;
+- portas normais, secretas e trancadas;
+- luzes;
+- desenhos de piso/zona para prototipagem;
+- marcações GM ocultas;
+- Tokens usando o Prototype Token dos Actors já existentes;
+- pasta de Scenes;
+- preflight para impedir criação parcial quando Actors obrigatórios não existem.
+
+A beta.5 inclui três presets preparados para a quest das Forjas:
+
+- `forjas-01` — Fundição e Controle;
+- `forjas-02` — Arquivo das Correntes;
+- `forjas-03` — Forja Regente.
+
+No console ou em uma Macro Script:
+
+```js
+const jarvis = game.modules.get("fora-do-abismo-foundry").api;
+console.table(jarvis.scenes.presets());
+await jarvis.scenes.buildForjas();
+```
+
+Para recriar depois de alterações:
+
+```js
+await jarvis.scenes.buildForjas({ replaceExisting: true });
+```
+
+O Scene Builder usa o Foundry nativo; não exige Dungeon Draw, Dungeon Alchemist ou outro módulo de mapa para criar o protótipo funcional.
 
 ## Compatibilidade-alvo
 
@@ -81,6 +118,10 @@ O D&D5e 6.0.2 é a base de desenvolvimento e teste do Jarvis V9. A camada `jarvi
 ├── module.json
 ├── scripts/
 │   ├── main.js
+│   ├── scenes/
+│   │   ├── forjas-presets.js
+│   │   ├── scene-blueprint-validator.js
+│   │   └── scene-builder.js
 │   └── importer/
 │       ├── adapters/
 │       ├── images/
@@ -97,10 +138,13 @@ O D&D5e 6.0.2 é a base de desenvolvimento e teste do Jarvis V9. A camada `jarvi
 
 O importer não deve apenas criar uma ficha "bonita". Ele precisa preservar funcionalidade: atributos, rolagens, recursos, consumo, usos, efeitos e descansos devem funcionar dentro do Foundry.
 
-Quando algo ainda não estiver implementado, o importer deve falhar de forma clara em vez de fingir que funcionou.
+A mesma regra agora vale para Scenes: um mapa não deve apenas ser bonito. Entrada, circulação, paredes, portas, visão, luz, posição de NPCs e rotas precisam funcionar na mesa.
+
+Quando algo ainda não estiver implementado, o Jarvis deve falhar de forma clara em vez de fingir que funcionou.
 
 ## Documentação
 
 - `docs/importer-format.md` — formato geral do payload V9
 - `docs/image-pipeline.md` — arquitetura de imagens e geração futura
 - `docs/dnd5e-adapter.md` — camada semântica e adaptação para D&D5e
+- `docs/scene-builder.md` — formato e uso do Scene Builder

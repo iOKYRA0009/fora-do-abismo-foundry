@@ -64,6 +64,11 @@ import {
   formatRulesProfileReport,
   setActorRulesProfile
 } from "./rules/rules-profile.js";
+import { JarvisSceneBuilder } from "./scenes/scene-builder.js";
+import {
+  getForjasScenePreset,
+  listForjasScenePresets
+} from "./scenes/forjas-presets.js";
 
 const MODULE_ID = "fora-do-abismo-foundry";
 
@@ -83,6 +88,9 @@ Hooks.once("ready", () => {
   }
 
   const module = game.modules.get(MODULE_ID);
+  const sceneBuilder = new JarvisSceneBuilder();
+  const forjasKeys = ["forjas-01", "forjas-02", "forjas-03"];
+
   const api = {
     importer: new JarvisImporterV9(),
     effects: {
@@ -143,6 +151,20 @@ Hooks.once("ready", () => {
       setActorProfile: setActorRulesProfile,
       formatReport: formatRulesProfileReport
     },
+    scenes: {
+      validate: payload => sceneBuilder.validate(payload),
+      preview: payload => sceneBuilder.preview(payload),
+      build: (payload, options = {}) => sceneBuilder.build(payload, options),
+      buildMany: (payloads, options = {}) => sceneBuilder.buildMany(payloads, options),
+      presets: listForjasScenePresets,
+      getPreset: getForjasScenePreset,
+      previewPreset: key => sceneBuilder.preview(getForjasScenePreset(key)),
+      buildPreset: (key, options = {}) => sceneBuilder.build(getForjasScenePreset(key), options),
+      buildForjas: (options = {}) => sceneBuilder.buildMany(
+        forjasKeys.map(getForjasScenePreset),
+        options
+      )
+    },
     version: module?.version ?? "desconhecida"
   };
 
@@ -153,6 +175,7 @@ Hooks.once("ready", () => {
   console.log(
     `${MODULE_ID} | Jarvis Importer V9 ${api.version} disponível. ` +
     `Visage=${appearance.active ? appearance.version : "inativo"} | ` +
-    `Metamorph=${transformation.active ? transformation.version : "inativo"}`
+    `Metamorph=${transformation.active ? transformation.version : "inativo"} | ` +
+    `SceneBuilder=${listForjasScenePresets().length} preset(s)`
   );
 });
