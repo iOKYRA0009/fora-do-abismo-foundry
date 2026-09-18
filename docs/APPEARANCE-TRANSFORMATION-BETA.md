@@ -323,3 +323,36 @@ Para o Thors, a integração recomendada é:
 - chave de automação: `thors-avatar-tempestade`.
 
 A beta não inventa duração nem mecânica se a habilidade não possuir Active Effect configurado. Nesse caso, o instalador deve parar e pedir revisão da ficha em vez de criar regras silenciosamente.
+
+
+---
+
+## Appearance Choreography — beta.4
+
+A beta.4 adiciona uma coreografia visual ligada a Active Effects. Um efeito pode agora manter uma lista de identidades Visage e alterná-las automaticamente enquanto estiver ativo, preservando overlays persistentes.
+
+Flag:
+
+```js
+flags["fora-do-abismo-foundry"].appearanceChoreography = {
+  variants: ["forma-a", "forma-b", "forma-c"],
+  overlays: ["aura-persistente"],
+  intervalMs: 1800,
+  random: true,
+  clearStackOnStart: false,
+  removeOnDelete: true
+};
+```
+
+Comportamento:
+- aplica overlays uma única vez;
+- aplica a primeira identidade;
+- alterna as identidades em intervalo configurável;
+- nunca mantém duas identidades simultaneamente;
+- ao Active Effect expirar, ser desativado ou apagado, para o ciclo;
+- remove overlays e identidade atual;
+- deixa o Visage restaurar a aparência original do token.
+
+Uso principal inicial: **Jack Ebonhart — Arauto do Pavor**, permitindo simular um Véu do Pavor mutável com três artes quase idênticas que diferem principalmente no padrão facial.
+
+A beta.4 também adiciona `blendMode` ao helper `appearance.visualEffect()`, permitindo efeitos Visage com modos como `screen`.
