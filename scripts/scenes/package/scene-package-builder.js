@@ -199,6 +199,31 @@ function getRectangleDrawingType() {
     ?? "r";
 }
 
+function getExecuteScriptBehaviorType() {
+  const models = CONFIG.RegionBehavior?.dataModels ?? {};
+
+  if (models.executeScript) return "executeScript";
+  if (models.script) return "script";
+
+  const target =
+    foundry.data?.regionBehaviors?.ExecuteScriptRegionBehaviorType
+    ?? foundry.data?.foundry_data_regionBehaviors?.ExecuteScriptRegionBehaviorType
+    ?? null;
+
+  if (target) {
+    for (const [key, model] of Object.entries(models)) {
+      if (model === target) return key;
+    }
+  }
+
+  const heuristic = Object.entries(models).find(([key, model]) =>
+    /execute.*script|script.*execute/i.test(key)
+    || /ExecuteScriptRegionBehaviorType/i.test(model?.name ?? "")
+  );
+
+  return heuristic?.[0] ?? null;
+}
+
 function regionColor(kind) {
   const colors = {
     hazard: "#b03a2e",
@@ -249,15 +274,23 @@ function buildRegionData(spec, gridSize) {
 
   const actions = spec.automation?.actions ?? [];
   if (actions.length) {
-    const events = (spec.automation?.events ?? ["TOKEN_ENTER"]).map(eventConstant);
-    data.behaviors = [{
-      name: "Jarvis — " + (spec.name ?? spec.id ?? "Região"),
-      type: "script",
-      system: {
-        source: REGION_SCRIPT_SOURCE,
-        events
-      }
-    }];
+    const behaviorType = getExecuteScriptBehaviorType();
+    if (behaviorType) {
+      const events = (spec.automation?.events ?? ["TOKEN_ENTER"]).map(eventConstant);
+      data.behaviors = [{
+        name: "Jarvis — " + (spec.name ?? spec.id ?? "Região"),
+        type: behaviorType,
+        system: {
+          source: REGION_SCRIPT_SOURCE,
+          events
+        }
+      }];
+    } else {
+      console.warn(
+        MODULE_ID + " | Execute Script RegionBehavior não encontrado; região será criada sem automação.",
+        spec.id
+      );
+    }
   }
 
   return data;
@@ -764,6 +797,53 @@ export class JarvisScenePackageBuilder {
     );
 
     return { skipped: false, results };
+  }
+
+  async repairRegions(sceneRef, { strictRegions = false } = {}) {
+    if (!game.user?.isGM) throw new Error("Scene Package: apenas o GM pode reparar Regions.");
+
+    const scene = resolveScene(sceneRef);
+    if (!scene) throw new Error("Scene Package: Scene não encontrada.");
+
+    const packageFlag = scene.getFlag(MODULE_ID, "scenePackage");
+    const regions = packageFlag?.manifest?.regions;
+
+    if (!Array.isArray(regions)) {
+      throw new Error("Scene Package: esta Scene não possui manifesto de Regions para reparar.");
+    }
+
+    const existingRegions = scene.regions?.contents?.filter(region =>
+      Boolean(region.getFlag(MODULE_ID, "scenePackageRegion"))
+    ) ?? [];
+    if (existingRegions.length) {
+      await scene.deleteEmbeddedDocuments("Region", existingRegions.map(region => region.id));
+    }
+
+    const fallbackDrawings = scene.drawings?.contents?.filter(drawing =>
+      Boolean(drawing.getFlag(MODULE_ID, "scenePackageRegionFallback"))
+    ) ?? [];
+    if (fallbackDrawings.length) {
+      await scene.deleteEmbeddedDocuments("Drawing", fallbackDrawings.map(drawing => drawing.id));
+    }
+
+    const gridSize = Number(scene.grid?.size ?? 100);
+    const regionSummary = await createRegions(scene, regions, gridSize, { strictRegions });
+
+    await scene.update({
+      ["flags." + MODULE_ID + ".scenePackage.regionSummary"]: regionSummary,
+      ["flags." + MODULE_ID + ".scenePackage.repairedAt"]: Date.now()
+    });
+
+    const inspection = this.inspect(scene);
+
+    ui.notifications?.info(
+      "Jarvis: Regions reparadas — " +
+      regionSummary.regions + " Region(s), " +
+      regionSummary.automationFallbacks + " sem automação, " +
+      regionSummary.fallbacks + " fallback(s)."
+    );
+
+    return { scene, regionSummary, inspection };
   }
 
   async runAction(sceneRef, key) {
