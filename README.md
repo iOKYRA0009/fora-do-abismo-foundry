@@ -66,7 +66,7 @@ Se a versão já existir, a workflow não sobrescreve silenciosamente aquela rel
 - [ ] Testes automatizados
 - [ ] Interface visual completa de importação dentro do Foundry
 
-## Scene Builder — beta.8
+## Scene Builder — beta.9
 
 O V9 agora pode construir Scenes funcionais usando um blueprint em quadrados de grid. Ele cria:
 
@@ -80,7 +80,7 @@ O V9 agora pode construir Scenes funcionais usando um blueprint em quadrados de 
 - pasta de Scenes;
 - preflight para impedir criação parcial quando Actors obrigatórios não existem.
 
-A beta.8 inclui três presets preparados para a quest das Forjas:
+A beta.9 inclui três presets preparados para a quest das Forjas:
 
 - `forjas-01` — Fundição e Controle;
 - `forjas-02` — Arquivo das Correntes;
@@ -100,7 +100,7 @@ Para recriar depois de alterações:
 await jarvis.scenes.buildForjasVisual({ replaceExisting: true });
 ```
 
-O Scene Builder usa o Foundry nativo; não exige Dungeon Draw, Dungeon Alchemist ou outro módulo de mapa. A beta.8 entrega backgrounds WEBP rasterizados na própria release e os instala como Tiles travados de tela inteira, reduzindo incompatibilidades de background no Foundry V14. O modo Blueprint continua separado para diagnóstico.
+O Scene Builder usa o Foundry nativo; não exige Dungeon Draw, Dungeon Alchemist ou outro módulo de mapa. A beta.9 mantém os backgrounds WEBP como Tiles full-canvas, corrige explicitamente os anchors X/Y exigidos pelo comportamento do Foundry V14, centraliza a visão inicial e refina grid/iluminação. O modo Blueprint continua separado para diagnóstico.
 
 ## Compatibilidade-alvo
 

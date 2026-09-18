@@ -3,7 +3,7 @@ const BASE_GRID = {
   distance: 5,
   units: "ft",
   color: "#59483e",
-  alpha: 0.12,
+  alpha: 0.07,
   thickness: 1
 };
 
@@ -31,8 +31,8 @@ function gm(name, x, y, w, h, extra = {}) {
   return { kind: "gm", name, x, y, w, h, text: name, hidden: true, ...extra };
 }
 
-function light(name, x, y, dim = 30, bright = 10, color = "#d46a2f") {
-  return { name, x, y, dim, bright, color, alpha: 0.42, luminosity: 0.3, contrast: 0.15, shadows: 0.4 };
+function light(name, x, y, dim = 18, bright = 4, color = "#d46a2f") {
+  return { name, x, y, dim, bright, color, alpha: 0.24, luminosity: 0.22, contrast: 0.08, shadows: 0.28 };
 }
 
 const forjas01 = {
@@ -83,9 +83,9 @@ const forjas01 = {
     wall([37, 18], [37, 25])
   ],
   lights: [
-    light("Forja Oeste", 10, 16, 22, 6, "#e26b2d"),
-    light("Escória Central", 26, 12, 26, 8, "#ff5b24"),
-    light("Forja Leste", 33, 20, 18, 5, "#b94c2a")
+    light("Forja Oeste", 10, 16, 14, 3, "#e26b2d"),
+    light("Escória Central", 26, 12, 16, 4, "#ff5b24"),
+    light("Forja Leste", 33, 20, 12, 3, "#b94c2a")
   ],
   tokens: [
     { actor: "Bror, o Feitor", x: 7, y: 8, disposition: "neutral", role: "social" },
@@ -146,9 +146,9 @@ const forjas02 = {
     wall([29, 24], [31, 24]), secret([31, 24], [34, 24]), wall([34, 24], [35, 24])
   ],
   lights: [
-    light("Cristal Arquivo 1", 11, 6, 16, 4, "#7257a8"),
-    light("Cristal Arquivo 2", 25, 7, 17, 4, "#7257a8"),
-    light("Braseiro Central", 22, 17, 18, 5, "#bb6330")
+    light("Cristal Arquivo 1", 11, 6, 11, 2, "#7257a8"),
+    light("Cristal Arquivo 2", 25, 7, 11, 2, "#7257a8"),
+    light("Braseiro Central", 22, 17, 12, 3, "#bb6330")
   ],
   tokens: [
     { actor: "Mestre-Arquivista das Forjas", x: 20, y: 11, disposition: "neutral", role: "social" },
@@ -211,10 +211,10 @@ const forjas03 = {
     door([31, 13], [31, 16])
   ],
   lights: [
-    light("Forja Regente Central", 21, 17, 30, 9, "#e44d26"),
-    light("Cristal da Rainha", 21, 8, 18, 5, "#7c5ab0"),
-    light("Galeria Oeste", 7, 15, 13, 3, "#8d5e3c"),
-    light("Galeria Leste", 35, 15, 13, 3, "#8d5e3c")
+    light("Forja Regente Central", 21, 17, 18, 5, "#e44d26"),
+    light("Cristal da Rainha", 21, 8, 12, 3, "#7c5ab0"),
+    light("Galeria Oeste", 7, 15, 9, 2, "#8d5e3c"),
+    light("Galeria Leste", 35, 15, 9, 2, "#8d5e3c")
   ],
   tokens: [
     { actor: "Rainha — Mãe de Nicolau", x: 20, y: 8, disposition: "neutral", role: "social" },
