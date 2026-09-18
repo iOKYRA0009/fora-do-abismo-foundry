@@ -1,6 +1,6 @@
 # Jarvis V9 — Scene Builder
 
-Versão inicial: `0.2.0-beta.5`
+Versão visual: `0.2.0-beta.7`
 
 ## Objetivo
 
@@ -8,7 +8,7 @@ O Scene Builder transforma um blueprint semântico em uma Scene funcional do Fou
 
 Ele existe para resolver um problema diferente do Actor Importer: antes da arte final, o Mestre precisa de um mapa que faça sentido para jogar. O blueprint define o espaço em **quadrados de grid**, e o Jarvis converte isso para pixels, paredes, portas, luzes, desenhos de apoio e Tokens reais.
 
-O Scene Builder não substitui um editor artístico. A beta.5 cria deliberadamente um **mapa funcional de prototipagem**. Depois que o layout for aprovado em mesa, uma arte final pode substituir o piso sem refazer paredes e posicionamentos.
+A beta.7 adiciona uma segunda camada: **backgrounds visuais alinhados ao blueprint**. As paredes, portas, luzes e Tokens continuam sendo documentos nativos do Foundry, enquanto a arte de fundo é entregue pelo próprio módulo. O overlay técnico de Drawings fica desligado por padrão no modo visual.
 
 ## API
 
@@ -39,7 +39,7 @@ await jarvis.scenes.buildPreset("forjas-01");
 ### Criar as três Scenes das Forjas de uma vez
 
 ```js
-await jarvis.scenes.buildForjas();
+await jarvis.scenes.buildForjasVisual({ replaceExisting: true });
 ```
 
 O pacote faz uma checagem completa antes de criar qualquer Scene. Se um Actor obrigatório não for encontrado, **nenhuma Scene é criada**.
@@ -116,3 +116,30 @@ Coordenadas de paredes, desenhos e Tokens usam **quadrados do grid**. Por exempl
 ## Limite atual
 
 A beta.5 não instala uma arte de background automaticamente. Foundry V14 possui Scene Levels e a integração de arte deve ser feita como uma segunda etapa para não misturar prototipagem de layout com pipeline visual.
+
+
+## Modos da beta.7
+
+### Visual — recomendado para mesa
+
+```js
+await jarvis.scenes.buildForjasVisual({ replaceExisting: true });
+```
+
+Usa os backgrounds de `assets/maps/`, mantém paredes/portas/luzes/tokens e não cria o overlay técnico de Drawings.
+
+### Blueprint — diagnóstico
+
+```js
+await jarvis.scenes.buildForjasBlueprint({ replaceExisting: true });
+```
+
+Recria as mesmas Scenes com os retângulos e rótulos técnicos. Use apenas quando for necessário conferir geometria ou posição.
+
+### Backgrounds inclusos
+
+- `assets/maps/forjas-01.svg` — Fundição industrial, canal de escória, sala de controle e manutenção.
+- `assets/maps/forjas-02.svg` — Arquivo élfico, cela, estantes, inscrições e passagem técnica.
+- `assets/maps/forjas-03.svg` — Forja Regente, plataforma da Rainha, galerias laterais, canal de metal vivo e cicatriz geométrica ligada ao ponto de manifestação de Proxy.
+
+Os SVGs têm as mesmas dimensões lógicas dos presets (100 px por quadrado), então o background, grid e paredes permanecem alinhados.
