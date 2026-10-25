@@ -47,6 +47,17 @@ test("UVTT keeps ambiguous open portals and object blockers visible in warnings"
   assert.match(warnings.join(" "), /Obstáculos/);
 });
 
+test("UVTT preserves a WEBP image data URI MIME type", () => {
+  const { payload } = convertUniversalVtt({ ...sample, image: "data:image/webp;base64,QUJD" });
+  assert.equal(payload.visual.backgroundBase64, "QUJD");
+  assert.equal(payload.visual.mimeType, "image/webp");
+  assert.match(payload.visual.fileName, /\.webp$/);
+});
+
+test("UVTT rejects an unsupported embedded image MIME type", () => {
+  assert.throws(() => convertUniversalVtt({ ...sample, image: "data:image/gif;base64,QUJD" }), /PNG, WEBP ou JPEG/);
+});
+
 test("wall validation catches zero-length and out-of-bounds geometry", () => {
   const { errors, warnings } = inspectWallGeometry([
     { a: [0, 0], b: [0, 0] },

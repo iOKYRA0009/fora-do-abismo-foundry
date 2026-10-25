@@ -1,5 +1,7 @@
 import { validateJarvisActorPayload } from "../importer/validators/payload-validator.js";
 import { Dnd5eV6Adapter } from "../importer/adapters/dnd5e-adapter.js";
+import { suggestRasterWalls } from "../scenes/raster-wall-assist.js";
+import { applyLightingPreset } from "../scenes/lighting-presets.js";
 
 const MODULE_ID = "fora-do-abismo-foundry";
 
@@ -41,7 +43,8 @@ const API_CONTRACT = [
   "rules.analyzeActor", "scenes.validate", "scenes.preview", "scenes.build",
   "scenes.framework.selfTest", "scenes.package.validate", "scenes.package.preview",
   "scenes.package.build", "scenes.package.fromUvtt", "scenes.package.previewUvtt",
-  "scenes.package.buildUvtt"
+  "scenes.package.buildUvtt", "scenes.openStudio", "scenes.suggestRasterWalls", "scenes.lightingPresets",
+  "scenes.applyLightingPreset", "scenes.audit", "diagnostics.compareActor"
 ];
 
 function atPath(object, path) {
@@ -170,6 +173,31 @@ export async function runJarvisDiagnostics(api, {
     }
     return "UVTT 0.3 convertido e pré-visualizado com parede, porta e luz.";
   });
+
+  await run("map-studio", () => {
+    const data = new Uint8ClampedArray(200 * 200 * 4);
+    for (let y = 0; y < 200; y += 1) for (let x = 0; x < 200; x += 1) {
+      const index = (y * 200 + x) * 4;
+      const value = Math.abs(x - 100) <= 2 ? 0 : 255;
+      data[index] = data[index + 1] = data[index + 2] = value;
+      data[index + 3] = 255;
+    }
+    const result = suggestRasterWalls({ data, width: 200, height: 200 }, 100);
+    if (result.walls.length !== 1) throw new Error("Sugestão raster inesperada.");
+    const lit = applyLightingPreset({ ...SCENE_SAMPLE }, "cavern");
+    api.scenes.package.validate(lit);
+    if (lit.scene.environment.darknessLevel !== 0.88) throw new Error("Perfil de iluminação não aplicado.");
+    return "Sugestão raster e perfil de ambiente validados em memória; nenhuma Scene alterada.";
+  });
+
+  const activeScene = globalThis.canvas?.scene;
+  if (activeScene) {
+    try {
+      const audit = api.scenes.audit(activeScene);
+      add("cena-ativa", audit.issues.length ? "warn" : "pass",
+        `${audit.counts.walls} paredes, ${audit.counts.lights} luzes, ${audit.counts.sounds} sons; ${audit.issues.length} ponto(s) para revisão. Detalhes em jarvis.scenes.audit().`);
+    } catch (error) { add("cena-ativa", "fail", error?.message ?? error); }
+  } else add("cena-ativa", "skip", "Nenhuma Scene ativa para auditoria somente leitura.");
 
   for (const [id, getter] of [
     ["visage", api.appearance?.status],

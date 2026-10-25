@@ -499,6 +499,10 @@ export class JarvisScenePackageBuilder {
       if (!Number.isInteger(Number(payload.scene.rows)) || Number(payload.scene.rows) <= 0) {
         errors.push("scene.rows deve ser inteiro positivo.");
       }
+      const darkness = payload.scene.environment?.darknessLevel;
+      if (darkness !== undefined && (!Number.isFinite(Number(darkness)) || Number(darkness) < 0 || Number(darkness) > 1)) {
+        errors.push("scene.environment.darknessLevel deve estar entre 0 e 1.");
+      }
     }
 
     if (payload.walls !== undefined && !Array.isArray(payload.walls)) {
@@ -634,6 +638,7 @@ export class JarvisScenePackageBuilder {
         navName: scene.navName ?? scene.name,
         tokenVision: scene.tokenVision !== false,
         backgroundColor: scene.backgroundColor ?? "#090807",
+        environment: clone(scene.environment ?? {}),
         visualMode: Boolean(backgroundSrc),
         backgroundSrc: backgroundSrc || undefined,
         grid: {

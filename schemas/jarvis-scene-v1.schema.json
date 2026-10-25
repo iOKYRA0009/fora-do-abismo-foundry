@@ -99,6 +99,10 @@
         "folder": { "type": "string" },
         "columns": { "type": "integer", "minimum": 1 },
         "rows": { "type": "integer", "minimum": 1 },
+        "environment": {
+          "type": "object",
+          "properties": { "darknessLevel": { "type": "number", "minimum": 0, "maximum": 1 } }
+        },
         "padding": { "type": "number", "minimum": 0 },
         "navigation": { "type": "boolean" },
         "navName": { "type": "string" },

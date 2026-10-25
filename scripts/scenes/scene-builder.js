@@ -313,6 +313,7 @@ function buildSceneData(payload, folder, tokenData, { includeBlueprintOverlay = 
     navName: scene.navName ?? scene.name,
     tokenVision: scene.tokenVision !== false,
     backgroundColor: scene.backgroundColor ?? "#090807",
+    environment: clone(scene.environment ?? {}),
     initial: {
       x: Math.round((Number(scene.columns) * size) / 2),
       y: Math.round((Number(scene.rows) * size) / 2),

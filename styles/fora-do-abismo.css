@@ -55,3 +55,21 @@
 .jarvis-macro-drop-zone.jarvis-drag-active .jarvis-macro-drop-hint {
   opacity: 1;
 }
+
+/* Map Studio -------------------------------------------------------------- */
+.jarvis-map-setup, .jarvis-map-review { display: grid; gap: 0.7rem; }
+.jarvis-map-setup label { display: grid; gap: 0.2rem; }
+.jarvis-map-tools { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: end; }
+.jarvis-map-tools label { display: grid; gap: 0.15rem; }
+.jarvis-map-tools button { width: auto; }
+.jarvis-map-caution { color: var(--color-text-light-6, #b9a994); font-size: 0.85em; }
+.jarvis-map-surface { max-width: 100%; max-height: 60vh; overflow: auto; background: #111; }
+.jarvis-map-svg { display: block; width: 100%; min-height: 280px; max-height: 58vh; cursor: crosshair; }
+.jarvis-map-wall { stroke: #28d5e5; stroke-width: 0.16; pointer-events: stroke; cursor: pointer; }
+.jarvis-map-wall.door { stroke: #f1a536; }
+.jarvis-map-wall.secret { stroke: #d778dc; stroke-dasharray: 0.25 0.15; }
+.jarvis-map-wall.disabled { stroke: #999; opacity: 0.5; stroke-dasharray: 0.18 0.18; }
+.jarvis-map-light { fill: #ffe784; stroke: #2c1e08; stroke-width: 0.05; pointer-events: none; }
+.jarvis-map-sound { fill: #82d7a8; stroke: #153524; stroke-width: 0.05; pointer-events: none; }
+.jarvis-map-point { fill: #fff; stroke: #111; stroke-width: 0.05; pointer-events: none; }
+.jarvis-map-counts { font-weight: 600; }
