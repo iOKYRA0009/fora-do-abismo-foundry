@@ -65,6 +65,10 @@ export function validateSceneBlueprint(payload) {
 
     const distance = Number(payload.scene.grid?.distance ?? 5);
     if (!Number.isFinite(distance) || distance <= 0) errors.push("scene.grid.distance deve ser maior que 0.");
+    const darkness = payload.scene.environment?.darknessLevel;
+    if (darkness !== undefined && (!Number.isFinite(Number(darkness)) || Number(darkness) < 0 || Number(darkness) > 1)) {
+      errors.push("scene.environment.darknessLevel deve estar entre 0 e 1.");
+    }
   }
 
   if (payload.walls !== undefined && !Array.isArray(payload.walls)) {

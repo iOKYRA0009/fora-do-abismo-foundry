@@ -2,6 +2,10 @@ import { JarvisImporterV9 } from "./importer/v9/jarvis-importer-v9.js";
 import { registerHybridFeatureLayout } from "./ui/hybrid-features.js";
 import { registerMacroFileDrop } from "./ui/macro-file-drop.js";
 import { openUniversalVttImporter, registerUniversalVttControl } from "./ui/universal-vtt-importer.js";
+import { openMapStudio, registerMapStudioControl } from "./ui/map-studio.js";
+import { suggestRasterWalls } from "./scenes/raster-wall-assist.js";
+import { applyLightingPreset, listLightingPresets } from "./scenes/lighting-presets.js";
+import { auditScene } from "./scenes/scene-audit.js";
 import { registerActivityAutomation } from "./automation/activity-automation.js";
 import { getAppearanceChoreographyStatus, registerAppearanceEffectAutomation } from "./automation/appearance-effect-automation.js";
 import {
@@ -71,6 +75,7 @@ import { getCoreScenePresetDefinitions } from "./scenes/presets/core-presets.js"
 import { JarvisScenePackageBuilder } from "./scenes/package/scene-package-builder.js";
 import { convertUniversalVtt } from "./scenes/importers/universal-vtt.js";
 import { formatJarvisDiagnostics, runJarvisDiagnostics } from "./diagnostics/health-check.js";
+import { compareActorToPayload } from "./diagnostics/actor-equivalence.js";
 
 const MODULE_ID = "fora-do-abismo-foundry";
 
@@ -79,6 +84,7 @@ Hooks.once("init", () => {
   registerHybridFeatureLayout();
   registerMacroFileDrop();
   registerUniversalVttControl();
+  registerMapStudioControl();
   registerActivityAutomation();
   registerAppearanceEffectAutomation();
   registerJackEngine();
@@ -164,6 +170,11 @@ Hooks.once("ready", () => {
     },
     scenes: {
       openImporter: openUniversalVttImporter,
+      openStudio: openMapStudio,
+      suggestRasterWalls,
+      lightingPresets: listLightingPresets,
+      applyLightingPreset,
+      audit: (scene = globalThis.canvas?.scene) => auditScene(scene),
       // API V1 mantida por compatibilidade.
       validate: payload => sceneBuilder.validate(payload),
       preview: payload => sceneBuilder.preview(payload),
@@ -241,7 +252,8 @@ Hooks.once("ready", () => {
 
   api.diagnostics = {
     run: options => runJarvisDiagnostics(api, options),
-    format: formatJarvisDiagnostics
+    format: formatJarvisDiagnostics,
+    compareActor: compareActorToPayload
   };
 
   if (module) module.api = api;

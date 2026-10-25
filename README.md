@@ -72,6 +72,10 @@ Se a versão já existir, a workflow não sobrescreve silenciosamente aquela rel
 
 **Diagnóstico beta.16:** `jarvis.diagnostics.run()` confere a versão publicada, compatibilidade, Importer V9, Scene Builder, Scene Framework, Scene Package, Universal VTT, integrações opcionais e uma amostra de fichas sem alterar o mundo. Veja [como executar e interpretar](docs/diagnostics.md).
 
+**Estúdio de Mapas beta.17:** o controle **Paredes → Jarvis: Estúdio de Mapas** aceita PNG, WEBP e Universal VTT; sugere paredes alinhadas à grade em imagens comuns, permite revisar e desenhar paredes/portas, posicionar luz e som, escolher o ambiente e criar a cena com confirmação. A auditoria `jarvis.scenes.audit()` examina a cena ativa sem alterá-la. Veja [o fluxo e seus limites](docs/scene-workflow-phase-2.md).
+
+**Qualidade de ficha:** `jarvis.diagnostics.compareActor(payload, actor)` compara campos explícitos do arquivo V9 com um Actor já importado e lista diferenças sem modificar a ficha.
+
 ## Scene Builder Framework — beta.11
 
 O V9 agora pode construir Scenes funcionais usando um blueprint em quadrados de grid. Ele cria:

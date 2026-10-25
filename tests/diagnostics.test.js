@@ -31,10 +31,16 @@ function fakeApi() {
     jack: { getSoulStatus: () => ({}) },
     provenance: { analyzeActor: () => ({ summary: {} }) },
     rules: { analyzeActor: () => ({ summary: {} }) },
+    diagnostics: { compareActor: () => ({}) },
     scenes: {
       validate: () => true,
       preview: async () => ({ walls: 2, doors: 1, lights: 1, sounds: 1 }),
       build: noWrite,
+      openStudio: noWrite,
+      suggestRasterWalls: () => ({}),
+      lightingPresets: () => [],
+      applyLightingPreset: () => ({}),
+      audit: () => ({}),
       framework: { selfTest: async () => ({ ok: true, counts: { templates: 7, skins: 4, presets: 3 } }) },
       package: {
         validate: () => true,
@@ -114,7 +120,7 @@ test("diagnostic previews pass against the real scene engines", async () => {
   };
   const report = await runJarvisDiagnostics(api, { gameRef: world, checkUpdates: false });
   assert.equal(report.ok, true, formatJarvisDiagnostics(report));
-  for (const id of ["scene-builder-v1", "scene-framework-v2", "scene-package-v1", "universal-vtt"]) {
+  for (const id of ["scene-builder-v1", "scene-framework-v2", "scene-package-v1", "universal-vtt", "map-studio"]) {
     assert.equal(report.checks.find(check => check.id === id).status, "pass", id);
   }
 });

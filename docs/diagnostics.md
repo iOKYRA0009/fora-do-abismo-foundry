@@ -28,6 +28,8 @@ Para analisar apenas a API e os dados sintéticos, sem ler Actors do mundo, use 
 | `scene-framework-v2` | Todos os templates, skins e presets das Forjas | Não posiciona Actors nem renderiza mapa |
 | `scene-package-v1` | Validação e prévia de pacote com geometria e áudio | Não envia imagem/áudio ao servidor |
 | `universal-vtt` | Conversão e prévia de UVTT 0.3 | Não testa um mapa real nem renderização |
+| `map-studio` | Sugestão raster e perfil de luz sintéticos | Não testa o editor visual no Foundry |
+| `cena-ativa` | Geometria, luzes, sons e Tokens da cena aberta | Não simula visão ou movimento; aparece como `NÃO EXECUTADO` sem cena |
 | `visage` e `metamorph` | Estado das integrações opcionais | Inativa aparece como `NÃO EXECUTADO` |
 | `fichas-leitura` | Análise de proveniência e edição de regras | Amostra limitada; não corrige ficha |
 | `integracao-de-escrita` | Registra os testes de criação/backup/combate pendentes | Sempre `NÃO EXECUTADO` neste diagnóstico |

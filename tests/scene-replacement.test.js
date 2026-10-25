@@ -95,10 +95,12 @@ test("failed embedded wall creation leaves the original scene untouched", async 
 
 test("Scene Builder creates a native ambient sound from package data", async () => {
   let createdSound;
+  let createdScene;
   globalThis.game.scenes = { find: () => null };
   globalThis.Scene = {
     implementation: {
       async create(data) {
+        createdScene = data;
         return {
           ...data,
           async createEmbeddedDocuments(type, documents) {
@@ -115,11 +117,12 @@ test("Scene Builder creates a native ambient sound from package data", async () 
 
   await new JarvisSceneBuilder().build({
     schemaVersion: "1.0",
-    scene: { name: "Caverna", columns: 10, rows: 10 },
+    scene: { name: "Caverna", columns: 10, rows: 10, environment: { darknessLevel: 0.88 } },
     sounds: [{ x: 2, y: 3, radius: 15, path: "sounds/goteira.ogg", volume: 0.4 }]
   }, { view: false });
   assert.equal(createdSound.x, 200);
   assert.equal(createdSound.y, 300);
   assert.equal(createdSound.radius, 15);
   assert.equal(createdSound.path, "sounds/goteira.ogg");
+  assert.equal(createdScene.environment.darknessLevel, 0.88);
 });
