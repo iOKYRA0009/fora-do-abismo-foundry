@@ -68,6 +68,8 @@ Se a versão já existir, a workflow não sobrescreve silenciosamente aquela rel
 - [ ] Testes automatizados
 - [ ] Interface visual completa de importação dentro do Foundry
 
+**Primeira entrega de cenas (beta.15):** importação Universal VTT com prévia pelo controle Paredes, validação geométrica inicial, sons em Scene Packages e substituição de cenas com backup. Consulte [o fluxo e seus limites](docs/scene-workflow-phase-1.md).
+
 ## Scene Builder Framework — beta.11
 
 O V9 agora pode construir Scenes funcionais usando um blueprint em quadrados de grid. Ele cria:
@@ -162,6 +164,8 @@ A API principal é `jarvis.scenes.package`: `validate`, `preview`, `build`, `ins
 - Sistema principal: **D&D5e 6.0.x**
 - D&D5e mínimo no manifesto: **6.0.0**
 - D&D5e verificado: **6.0.2**
+
+O ambiente informado pelo mestre usa **Foundry 14.369 / dnd5e 6.0.6**. A faixa 6.0.x é aceita com aviso, mas 6.0.6 ainda precisa de teste de integração no mundo antes de ser marcada como verificada.
 
 O D&D5e 6.0.2 é a base de desenvolvimento e teste do Jarvis V9. A camada `jarvis` serve como API estável para evitar que cada atualização do sistema obrigue a reescrever todas as fichas.
 

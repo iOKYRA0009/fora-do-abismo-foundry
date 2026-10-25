@@ -156,6 +156,7 @@ export class JarvisSceneFramework {
       walls: arrayMode(generated.walls, spec.walls, replaceGeometry),
       drawings: arrayMode(generated.drawings, spec.drawings, replaceGeometry),
       lights: arrayMode(generated.lights, spec.lights, replaceGeometry),
+      sounds: arrayMode(generated.sounds, spec.sounds, replaceGeometry),
       tokens: arrayMode(generated.tokens, spec.tokens, replaceGeometry)
     };
 
@@ -314,6 +315,7 @@ export class JarvisSceneFramework {
         walls: scene.walls?.size ?? 0,
         doors: scene.walls?.filter?.(wall => wall.door !== CONST.WALL_DOOR_TYPES.NONE)?.length ?? 0,
         lights: scene.lights?.size ?? 0,
+        sounds: scene.sounds?.size ?? 0,
         tokens: scene.tokens?.size ?? 0,
         drawings: scene.drawings?.size ?? 0,
         tiles: scene.tiles?.size ?? 0,

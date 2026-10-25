@@ -65,6 +65,41 @@
         }
       }
     },
+    "lights": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["x", "y", "dim"],
+        "properties": {
+          "name": { "type": "string" },
+          "x": { "type": "number" },
+          "y": { "type": "number" },
+          "dim": { "type": "number", "minimum": 0 },
+          "bright": { "type": "number", "minimum": 0 },
+          "color": { "type": "string" },
+          "hidden": { "type": "boolean" }
+        }
+      }
+    },
+    "sounds": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["x", "y", "radius", "path"],
+        "properties": {
+          "name": { "type": "string" },
+          "x": { "type": "number" },
+          "y": { "type": "number" },
+          "radius": { "type": "number", "exclusiveMinimum": 0 },
+          "path": { "type": "string", "minLength": 1 },
+          "volume": { "type": "number", "minimum": 0, "maximum": 1 },
+          "walls": { "type": "boolean" },
+          "easing": { "type": "boolean" },
+          "repeat": { "type": "boolean" },
+          "hidden": { "type": "boolean" }
+        }
+      }
+    },
     "actors": {
       "type": "array",
       "items": {

@@ -85,6 +85,7 @@
     "walls": { "type": "array", "items": { "type": "object" }, "default": [] },
     "drawings": { "type": "array", "items": { "type": "object" }, "default": [] },
     "lights": { "type": "array", "items": { "type": "object" }, "default": [] },
+    "sounds": { "type": "array", "items": { "type": "object" }, "default": [] },
     "tokens": { "type": "array", "items": { "type": "object" }, "default": [] }
   }
 }
