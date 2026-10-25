@@ -65,10 +65,12 @@ Se a versão já existir, a workflow não sobrescreve silenciosamente aquela rel
 - [ ] Subclasse e Advancement completos
 - [ ] Magias completas e preparação
 - [ ] Recursos customizados além dos 3 slots nativos
-- [ ] Testes automatizados
+- [x] Testes automatizados de regressão e diagnóstico somente leitura
 - [ ] Interface visual completa de importação dentro do Foundry
 
 **Primeira entrega de cenas (beta.15):** importação Universal VTT com prévia pelo controle Paredes, validação geométrica inicial, sons em Scene Packages e substituição de cenas com backup. Consulte [o fluxo e seus limites](docs/scene-workflow-phase-1.md).
+
+**Diagnóstico beta.16:** `jarvis.diagnostics.run()` confere a versão publicada, compatibilidade, Importer V9, Scene Builder, Scene Framework, Scene Package, Universal VTT, integrações opcionais e uma amostra de fichas sem alterar o mundo. Veja [como executar e interpretar](docs/diagnostics.md).
 
 ## Scene Builder Framework — beta.11
 

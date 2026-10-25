@@ -70,6 +70,7 @@ import { JarvisSceneFramework } from "./scenes/framework/scene-framework.js";
 import { getCoreScenePresetDefinitions } from "./scenes/presets/core-presets.js";
 import { JarvisScenePackageBuilder } from "./scenes/package/scene-package-builder.js";
 import { convertUniversalVtt } from "./scenes/importers/universal-vtt.js";
+import { formatJarvisDiagnostics, runJarvisDiagnostics } from "./diagnostics/health-check.js";
 
 const MODULE_ID = "fora-do-abismo-foundry";
 
@@ -236,6 +237,11 @@ Hooks.once("ready", () => {
       inspect: sceneRef => sceneFramework.inspect(sceneRef)
     },
     version: module?.version ?? "desconhecida"
+  };
+
+  api.diagnostics = {
+    run: options => runJarvisDiagnostics(api, options),
+    format: formatJarvisDiagnostics
   };
 
   if (module) module.api = api;
