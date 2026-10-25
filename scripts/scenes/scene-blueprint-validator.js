@@ -1,3 +1,5 @@
+import { inspectWallGeometry } from "./scene-geometry.js";
+
 export class SceneBlueprintValidationError extends Error {
   constructor(message, details = []) {
     super(message);
@@ -83,6 +85,11 @@ export function validateSceneBlueprint(payload) {
       errors.push(`${path}.state deve ser closed, open ou locked.`);
     }
   });
+  if (Array.isArray(payload.walls) && isObject(payload.scene)) {
+    errors.push(...inspectWallGeometry(
+      payload.walls, payload.scene.columns, payload.scene.rows
+    ).errors);
+  }
 
   if (payload.drawings !== undefined && !Array.isArray(payload.drawings)) {
     errors.push("drawings deve ser uma lista.");
@@ -112,6 +119,23 @@ export function validateSceneBlueprint(payload) {
     if (!isFiniteNumber(light.dim) || Number(light.dim) < 0) errors.push(`${path}.dim deve ser número >= 0.`);
     if (light.bright !== undefined && (!isFiniteNumber(light.bright) || Number(light.bright) < 0)) {
       errors.push(`${path}.bright deve ser número >= 0.`);
+    }
+  });
+
+  if (payload.sounds !== undefined && !Array.isArray(payload.sounds)) {
+    errors.push("sounds deve ser uma lista.");
+  }
+  (Array.isArray(payload.sounds) ? payload.sounds : []).forEach((sound, index) => {
+    const path = `sounds[${index}]`;
+    if (!isObject(sound)) {
+      errors.push(`${path} deve ser objeto.`);
+      return;
+    }
+    if (!sound.path || typeof sound.path !== "string") errors.push(`${path}.path é obrigatório.`);
+    if (!isFiniteNumber(sound.x) || !isFiniteNumber(sound.y)) errors.push(`${path}.x/y devem ser números.`);
+    if (!isFiniteNumber(sound.radius) || Number(sound.radius) <= 0) errors.push(`${path}.radius deve ser maior que zero.`);
+    if (sound.volume !== undefined && (!isFiniteNumber(sound.volume) || Number(sound.volume) < 0 || Number(sound.volume) > 1)) {
+      errors.push(`${path}.volume deve estar entre 0 e 1.`);
     }
   });
 

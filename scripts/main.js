@@ -1,6 +1,7 @@
 import { JarvisImporterV9 } from "./importer/v9/jarvis-importer-v9.js";
 import { registerHybridFeatureLayout } from "./ui/hybrid-features.js";
 import { registerMacroFileDrop } from "./ui/macro-file-drop.js";
+import { openUniversalVttImporter, registerUniversalVttControl } from "./ui/universal-vtt-importer.js";
 import { registerActivityAutomation } from "./automation/activity-automation.js";
 import { getAppearanceChoreographyStatus, registerAppearanceEffectAutomation } from "./automation/appearance-effect-automation.js";
 import {
@@ -68,6 +69,7 @@ import { JarvisSceneBuilder } from "./scenes/scene-builder.js";
 import { JarvisSceneFramework } from "./scenes/framework/scene-framework.js";
 import { getCoreScenePresetDefinitions } from "./scenes/presets/core-presets.js";
 import { JarvisScenePackageBuilder } from "./scenes/package/scene-package-builder.js";
+import { convertUniversalVtt } from "./scenes/importers/universal-vtt.js";
 
 const MODULE_ID = "fora-do-abismo-foundry";
 
@@ -75,6 +77,7 @@ Hooks.once("init", () => {
   console.log(`${MODULE_ID} | Inicializando Jarvis Tools`);
   registerHybridFeatureLayout();
   registerMacroFileDrop();
+  registerUniversalVttControl();
   registerActivityAutomation();
   registerAppearanceEffectAutomation();
   registerJackEngine();
@@ -159,6 +162,7 @@ Hooks.once("ready", () => {
       formatReport: formatRulesProfileReport
     },
     scenes: {
+      openImporter: openUniversalVttImporter,
       // API V1 mantida por compatibilidade.
       validate: payload => sceneBuilder.validate(payload),
       preview: payload => sceneBuilder.preview(payload),
@@ -168,6 +172,16 @@ Hooks.once("ready", () => {
       // Scene Package V1 — pacote completo de Scene, visual, geometria e conteúdo.
       package: {
         version: scenePackageBuilder.version,
+        fromUvtt: (source, options = {}) => convertUniversalVtt(source, options),
+        previewUvtt: async (source, options = {}) => {
+          const converted = convertUniversalVtt(source, options);
+          return { ...converted, preview: await scenePackageBuilder.preview(converted.payload) };
+        },
+        buildUvtt: async (source, conversionOptions = {}, buildOptions = {}) => {
+          const converted = convertUniversalVtt(source, conversionOptions);
+          const result = await scenePackageBuilder.build(converted.payload, buildOptions);
+          return { ...result, warnings: converted.warnings };
+        },
         validate: payload => scenePackageBuilder.validate(payload),
         preview: (payload, options = {}) => scenePackageBuilder.preview(payload, options),
         build: (payload, options = {}) => scenePackageBuilder.build(payload, options),

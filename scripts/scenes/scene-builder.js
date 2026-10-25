@@ -2,6 +2,7 @@ import {
   SceneBlueprintValidationError,
   validateSceneBlueprint
 } from "./scene-blueprint-validator.js";
+import { inspectWallGeometry } from "./scene-geometry.js";
 
 const MODULE_ID = "fora-do-abismo-foundry";
 
@@ -237,6 +238,23 @@ function buildLightData(lights = [], gridSize) {
   }));
 }
 
+function buildSoundData(sounds = [], gridSize) {
+  return sounds.map((sound, index) => ({
+    name: sound.name ?? `Som ${index + 1}`,
+    x: px(sound.x, gridSize),
+    y: px(sound.y, gridSize),
+    path: sound.path,
+    radius: Number(sound.radius),
+    volume: Number(sound.volume ?? 0.5),
+    easing: sound.easing !== false,
+    walls: sound.walls !== false,
+    repeat: sound.repeat !== false,
+    hidden: Boolean(sound.hidden),
+    darkness: clone(sound.darkness ?? { min: 0, max: 1 }),
+    flags: { [MODULE_ID]: { sceneBlueprint: true, sourceIndex: index } }
+  }));
+}
+
 async function buildTokenData(tokens = [], gridSize) {
   const resolved = [];
   const missing = [];
@@ -313,6 +331,7 @@ function buildSceneData(payload, folder, tokenData, { includeBlueprintOverlay = 
     walls: buildWallData(payload.walls ?? [], size),
     drawings: includeDrawings ? buildDrawingData(payload.drawings ?? [], size) : [],
     lights: buildLightData(payload.lights ?? [], size),
+    sounds: buildSoundData(payload.sounds ?? [], size),
     tokens: tokenData,
     flags: {
       [MODULE_ID]: {
@@ -341,6 +360,7 @@ function formatSummary(payload, { missing = [] } = {}) {
     doors: payload.walls?.filter(w => w.type === "door" || w.type === "secret").length ?? 0,
     drawings: payload.drawings?.length ?? 0,
     lights: payload.lights?.length ?? 0,
+    sounds: payload.sounds?.length ?? 0,
     tokens: payload.tokens?.length ?? 0,
     missingActors: [...missing]
   };
@@ -355,11 +375,17 @@ export class JarvisSceneBuilder {
     validateSceneBlueprint(payload);
     const gridSize = Number(payload.scene.grid?.size ?? 100);
     const { missing } = await buildTokenData(payload.tokens ?? [], gridSize);
-    return formatSummary(payload, { missing });
+    return {
+      ...formatSummary(payload, { missing }),
+      geometryWarnings: inspectWallGeometry(
+        payload.walls ?? [], payload.scene.columns, payload.scene.rows
+      ).warnings
+    };
   }
 
   async build(payload, {
     replaceExisting = false,
+    deferFinalize = false,
     createFolder = true,
     allowMissingActors = false,
     activate = false,
@@ -385,20 +411,26 @@ export class JarvisSceneBuilder {
 
     const folder = await resolveFolder(payload.scene, { createFolder });
 
-    if (existing && replaceExisting) await existing.delete();
-
     const sceneData = buildSceneData(payload, folder, tokenData, { includeBlueprintOverlay });
+    const requestedName = sceneData.name;
+    const requestedNavigation = sceneData.navigation;
+    if (existing || deferFinalize) {
+      sceneData.name = `${requestedName} — preparação Jarvis ${Date.now()}`;
+      sceneData.navigation = false;
+    }
     const embedded = {
       tiles: sceneData.tiles ?? [],
       walls: sceneData.walls ?? [],
       drawings: sceneData.drawings ?? [],
       lights: sceneData.lights ?? [],
+      sounds: sceneData.sounds ?? [],
       tokens: sceneData.tokens ?? []
     };
     delete sceneData.tiles;
     delete sceneData.walls;
     delete sceneData.drawings;
     delete sceneData.lights;
+    delete sceneData.sounds;
     delete sceneData.tokens;
 
     let created;
@@ -411,6 +443,7 @@ export class JarvisSceneBuilder {
         ["Wall", embedded.walls],
         ["Drawing", embedded.drawings],
         ["AmbientLight", embedded.lights],
+        ["AmbientSound", embedded.sounds],
         ["Token", embedded.tokens]
       ];
 
@@ -443,11 +476,19 @@ export class JarvisSceneBuilder {
       );
     }
 
-    if (activate) await created.activate({ pullUsers: false });
-    else if (view) await created.view();
+    if (!deferFinalize) {
+      try {
+        await this.finalize({ scene: created, existing, requestedName, requestedNavigation, activate, view });
+      } catch (error) {
+        await created.delete().catch(cleanupError =>
+          console.error(`${MODULE_ID} | Falha ao limpar Scene preparada`, cleanupError)
+        );
+        throw error;
+      }
+    }
 
     const summary = formatSummary(payload, { missing });
-    ui.notifications?.info(
+    if (!deferFinalize) ui.notifications?.info(
       `Jarvis: Scene '${created.name}' criada — ${summary.walls} paredes, ${summary.doors} portas, ` +
       `${tokenData.length} tokens, ${summary.lights} luzes, ${embedded.tiles.length} background tile(s).`
     );
@@ -456,7 +497,53 @@ export class JarvisSceneBuilder {
       console.warn(`${MODULE_ID} | Actors ausentes na Scene '${created.name}':`, missing);
     }
 
-    return { scene: created, summary };
+    return { scene: created, summary, existing, requestedName, requestedNavigation, pending: deferFinalize };
+  }
+
+  async finalize({ scene, existing = null, requestedName, requestedNavigation = false, activate = false, view = true }) {
+    if (!game.user?.isGM) throw new Error("Jarvis Scene Builder: apenas o GM pode finalizar Scenes.");
+    if (!scene || !requestedName) throw new Error("Jarvis Scene Builder: Scene preparada inválida.");
+
+    const oldName = existing?.name;
+    const oldNavigation = existing?.navigation;
+    const stagedName = scene.name;
+    if (existing) {
+      const backupName = `${requestedName} — backup Jarvis ${new Date().toISOString()}`;
+      await existing.update({
+        name: backupName,
+        navigation: false,
+        [`flags.${MODULE_ID}.sceneBuilderBackup`]: {
+          replacementId: scene.id,
+          originalName: requestedName,
+          createdAt: Date.now()
+        }
+      });
+    }
+
+    try {
+      await scene.update({ name: requestedName, navigation: requestedNavigation });
+      if (activate) await scene.activate({ pullUsers: false });
+      else if (view) await scene.view();
+    } catch (error) {
+      if (scene.name !== stagedName) {
+        try {
+          await scene.update({ name: stagedName });
+        } catch (restoreError) {
+          console.error(`${MODULE_ID} | Falha ao restaurar nome da Scene preparada`, restoreError);
+        }
+      }
+      if (existing) {
+        try {
+          await existing.update({ name: oldName, navigation: oldNavigation });
+          await existing.unsetFlag(MODULE_ID, "sceneBuilderBackup");
+        } catch (restoreError) {
+          console.error(`${MODULE_ID} | Falha ao restaurar nome da Scene anterior`, restoreError);
+        }
+      }
+      throw error;
+    }
+
+    return { scene, backup: existing };
   }
 
   async buildMany(payloads = [], {

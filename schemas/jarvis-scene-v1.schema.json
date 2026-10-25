@@ -122,6 +122,7 @@
     "walls": { "type": "array", "items": { "$ref": "#/$defs/wall" }, "default": [] },
     "drawings": { "type": "array", "items": { "$ref": "#/$defs/drawing" }, "default": [] },
     "lights": { "type": "array", "items": { "$ref": "#/$defs/light" }, "default": [] },
+    "sounds": { "type": "array", "items": { "type": "object" }, "default": [] },
     "tokens": { "type": "array", "items": { "$ref": "#/$defs/token" }, "default": [] }
   }
 }

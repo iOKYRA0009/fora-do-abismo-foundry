@@ -1,3 +1,5 @@
+import { inspectWallGeometry } from "../scene-geometry.js";
+
 const MODULE_ID = "fora-do-abismo-foundry";
 const PACKAGE_VERSION = "1.0";
 
@@ -119,7 +121,12 @@ async function uploadVisualAsset(visual = {}) {
     visual.target
     ?? ("worlds/" + worldId + "/assets/fora-do-abismo/maps")
   );
-  const fileName = String(visual.fileName ?? "jarvis-scene.webp");
+  const requestedFileName = String(visual.fileName ?? "jarvis-scene.webp")
+    .split(/[\\/]/).pop().replace(/[^a-zA-Z0-9._-]/g, "-");
+  const extensionIndex = requestedFileName.lastIndexOf(".");
+  const stem = extensionIndex > 0 ? requestedFileName.slice(0, extensionIndex) : requestedFileName;
+  const extension = extensionIndex > 0 ? requestedFileName.slice(extensionIndex) : "";
+  const fileName = `${stem}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}${extension}`;
   const mimeType = String(visual.mimeType ?? "image/webp");
 
   await ensureDirectory(source, target);
@@ -497,6 +504,9 @@ export class JarvisScenePackageBuilder {
     if (payload.walls !== undefined && !Array.isArray(payload.walls)) {
       errors.push("walls deve ser lista.");
     }
+    if (payload.lights !== undefined && !Array.isArray(payload.lights)) {
+      errors.push("lights deve ser lista.");
+    }
 
     const wallTypes = new Set(["wall", "door", "secret", "low_barrier"]);
     payload.walls?.forEach((wall, index) => {
@@ -510,10 +520,24 @@ export class JarvisScenePackageBuilder {
         errors.push("walls[" + index + "].type inválido.");
       }
     });
+    if (Array.isArray(payload.walls) && payload.scene) {
+      errors.push(...inspectWallGeometry(
+        payload.walls, payload.scene.columns, payload.scene.rows
+      ).errors);
+    }
 
     if (payload.actors !== undefined && !Array.isArray(payload.actors)) {
       errors.push("actors deve ser lista.");
     }
+    if (payload.sounds !== undefined && !Array.isArray(payload.sounds)) {
+      errors.push("sounds deve ser lista.");
+    }
+    (Array.isArray(payload.sounds) ? payload.sounds : []).forEach((sound, index) => {
+      if (!sound?.path || typeof sound.path !== "string") errors.push(`sounds[${index}].path é obrigatório.`);
+      if (!finite(sound?.x) || !finite(sound?.y) || !finite(sound?.radius) || Number(sound.radius) <= 0) {
+        errors.push(`sounds[${index}] precisa de x, y e radius válido.`);
+      }
+    });
     payload.actors?.forEach((actor, index) => {
       if (!actor.actor && !actor.actorId && !actor.actorUuid) {
         errors.push("actors[" + index + "] precisa de actor, actorId ou actorUuid.");
@@ -624,6 +648,7 @@ export class JarvisScenePackageBuilder {
       walls: (payload.walls ?? []).map(normalizeWall),
       drawings: clone(payload.drawings ?? []),
       lights: clone(payload.lights ?? []),
+      sounds: clone(payload.sounds ?? []),
       tokens: clone(tokens ?? [])
     };
   }
@@ -639,6 +664,7 @@ export class JarvisScenePackageBuilder {
       walls: payload.walls?.length ?? 0,
       doors: payload.walls?.filter(wall => wall.type === "door" || wall.type === "secret").length ?? 0,
       lights: payload.lights?.length ?? 0,
+      sounds: payload.sounds?.length ?? 0,
       actors: payload.actors?.length ?? 0,
       resolvedActors: actors.resolved,
       requiredMissing: actors.requiredMissing,
@@ -647,7 +673,10 @@ export class JarvisScenePackageBuilder {
       regions: payload.regions?.length ?? 0,
       puzzles: payload.puzzles?.length ?? 0,
       rewards: payload.rewards?.length ?? 0,
-      hasVisual: Boolean(payload.visual?.backgroundSrc || payload.visual?.backgroundBase64)
+      hasVisual: Boolean(payload.visual?.backgroundSrc || payload.visual?.backgroundBase64),
+      geometryWarnings: inspectWallGeometry(
+        payload.walls ?? [], payload.scene.columns, payload.scene.rows
+      ).warnings
     };
   }
 
@@ -671,40 +700,54 @@ export class JarvisScenePackageBuilder {
 
     const built = await this.builder.build(blueprint, {
       replaceExisting,
+      deferFinalize: true,
       createFolder,
       allowMissingActors,
-      activate,
+      activate: false,
       view: false,
       includeBlueprintOverlay
     });
 
     const scene = built.scene;
-    const gridSize = Number(scene.grid?.size ?? payload.scene.grid?.size ?? 100);
+    let regionSummary;
+    try {
+      const gridSize = Number(scene.grid?.size ?? payload.scene.grid?.size ?? 100);
+      regionSummary = await createRegions(
+        scene,
+        payload.regions ?? [],
+        gridSize,
+        { strictRegions }
+      );
 
-    const regionSummary = await createRegions(
-      scene,
-      payload.regions ?? [],
-      gridSize,
-      { strictRegions }
-    );
+      const manifest = stripLargePackageData(payload);
+      await scene.setFlag(MODULE_ID, "scenePackage", {
+        version: PACKAGE_VERSION,
+        id: payload.id ?? null,
+        builtAt: Date.now(),
+        manifest,
+        actorResolution: {
+          resolved: actors.resolved,
+          requiredMissing: actors.requiredMissing,
+          optionalMissing: actors.optionalMissing,
+          optionalSkipped: actors.optionalSkipped
+        },
+        regionSummary
+      });
 
-    const manifest = stripLargePackageData(payload);
-    await scene.setFlag(MODULE_ID, "scenePackage", {
-      version: PACKAGE_VERSION,
-      id: payload.id ?? null,
-      builtAt: Date.now(),
-      manifest,
-      actorResolution: {
-        resolved: actors.resolved,
-        requiredMissing: actors.requiredMissing,
-        optionalMissing: actors.optionalMissing,
-        optionalSkipped: actors.optionalSkipped
-      },
-      regionSummary
-    });
-
-    if (activate) await scene.activate({ pullUsers: false });
-    else if (view) await scene.view();
+      await this.builder.finalize({
+        scene,
+        existing: built.existing,
+        requestedName: built.requestedName,
+        requestedNavigation: built.requestedNavigation,
+        activate,
+        view
+      });
+    } catch (error) {
+      await scene.delete().catch(cleanupError =>
+        console.error(`${MODULE_ID} | Falha ao limpar pacote preparado`, cleanupError)
+      );
+      throw error;
+    }
 
     const inspection = this.inspect(scene);
 
@@ -764,6 +807,7 @@ export class JarvisScenePackageBuilder {
         walls: scene.walls?.size ?? 0,
         doors: scene.walls?.filter?.(wall => wall.door !== CONST.WALL_DOOR_TYPES.NONE)?.length ?? 0,
         lights: scene.lights?.size ?? 0,
+        sounds: scene.sounds?.size ?? 0,
         tokens: scene.tokens?.size ?? 0,
         drawings: scene.drawings?.size ?? 0,
         tiles: scene.tiles?.size ?? 0,

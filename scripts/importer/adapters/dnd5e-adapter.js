@@ -494,15 +494,18 @@ export class Dnd5eV6Adapter {
     if (info.systemId !== "dnd5e") {
       throw new Error(`Adaptador D&D5e recebeu sistema '${info.systemId ?? "desconhecido"}'.`);
     }
-    if (info.foundryGeneration && Number(info.foundryGeneration) < 14) {
-      throw new Error(`Foundry V${info.foundryGeneration} não é suportado pelo Jarvis V9. Alvo: V14+.`);
+    if (Number(info.foundryGeneration) !== 14) {
+      throw new Error(`Foundry V${info.foundryGeneration ?? "desconhecida"} não é suportado pelo Jarvis V9. Alvo: V14.`);
     }
 
-    const [major, minor] = String(info.systemVersion ?? "0.0").split(".").map(Number);
-    if (major < 6) {
-      ui.notifications?.warn(`Jarvis V9 agora tem D&D5e 6.0.2 como alvo principal. Detectado ${info.systemVersion}.`);
-    } else if (major === 6 && minor === 0) {
-      // Faixa principal validada durante o desenvolvimento atual.
+    const [major, minor, patch] = String(info.systemVersion ?? "0.0.0").split(".").map(Number);
+    if (major !== 6 || minor !== 0 || !Number.isInteger(patch)) {
+      throw new Error(`D&D5e ${info.systemVersion ?? "desconhecido"} não é suportado pelo Jarvis V9. Alvo: 6.0.x.`);
+    }
+    if (patch > 2) {
+      ui.notifications?.warn(
+        `Jarvis V9: D&D5e ${info.systemVersion} está dentro de 6.0.x, mas a última versão verificada no manifesto é 6.0.2. Confira o diagnóstico antes de importar.`
+      );
     }
 
     return info;
