@@ -106,7 +106,7 @@ async function prepareMap({ file, name, gridSize, threshold }) {
   const extension = file.name.split(".").pop()?.toLowerCase();
   if (["dd2vtt", "uvtt", "json"].includes(extension)) {
     const { payload, warnings } = convertUniversalVtt(await file.text(), { name });
-    return { payload, warnings, imageUrl: imageUrlFromBase64(payload.visual?.backgroundBase64) };
+    return { payload, warnings, imageUrl: imageUrlFromBase64(payload.visual?.backgroundBase64, payload.visual?.mimeType) };
   }
   if (!["png", "webp"].includes(extension)) throw new Error("Use PNG, WEBP, DD2VTT ou UVTT.");
   const bitmap = await createImageBitmap(file);
@@ -219,11 +219,11 @@ function svgNode(name, attributes) {
   return node;
 }
 
-function imageUrlFromBase64(base64) {
+function imageUrlFromBase64(base64, mimeType = "image/png") {
   if (!base64) return null;
   const binary = atob(base64);
   const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
-  return URL.createObjectURL(new Blob([bytes], { type: "image/png" }));
+  return URL.createObjectURL(new Blob([bytes], { type: mimeType }));
 }
 
 function fileToDataUrl(file) {

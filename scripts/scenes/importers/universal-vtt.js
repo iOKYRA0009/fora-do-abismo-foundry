@@ -111,9 +111,17 @@ export function convertUniversalVtt(source, {
     warnings.push("A arte tem luz embutida; as luzes importadas começam ocultas para evitar duplicação.");
   }
 
-  const image = typeof data.image === "string"
-    ? data.image.replace(/^data:image\/[^;]+;base64,/, "")
+  const imageDataUrl = typeof data.image === "string"
+    ? /^data:(image\/(?:png|webp|jpeg));base64,([\s\S]+)$/i.exec(data.image)
     : null;
+  if (typeof data.image === "string" && data.image.startsWith("data:") && !imageDataUrl) {
+    throw new Error("Universal VTT: imagem embutida deve ser PNG, WEBP ou JPEG em Base64.");
+  }
+  const imageMimeType = imageDataUrl?.[1]?.toLowerCase() ?? "image/png";
+  const image = typeof data.image === "string" ? (imageDataUrl?.[2] ?? data.image) : null;
+  const extension = imageMimeType === "image/webp" ? "webp" : imageMimeType === "image/jpeg" ? "jpg" : "png";
+  const resolvedFileName = imageFileName === "mapa-universal-vtt.png"
+    ? `mapa-universal-vtt.${extension}` : imageFileName;
   if (!image) warnings.push("Imagem não incluída no arquivo; forneça visual.backgroundSrc antes de construir.");
 
   const payload = {
@@ -123,7 +131,7 @@ export function convertUniversalVtt(source, {
       name, folder, columns: width, rows: height,
       grid: { size: gridSize, distance, units: gridUnits }
     },
-    visual: image ? { backgroundBase64: image, fileName: imageFileName, mimeType: "image/png" } : {},
+    visual: image ? { backgroundBase64: image, fileName: resolvedFileName, mimeType: imageMimeType } : {},
     walls, lights, actors: [], regions: [],
     metadata: { source: "universal-vtt", sourceFormat: Number(data.format) }
   };
