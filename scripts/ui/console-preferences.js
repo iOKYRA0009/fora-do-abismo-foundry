@@ -1,9 +1,12 @@
+import { TOOL_CATALOG } from "./console-tool-catalog.js";
+
 const MODULE_ID = "fora-do-abismo-foundry";
 const FLAG_KEY = "consolePreferences";
 const MAX_FAVORITES = 12;
 const MAX_RECENTS = 10;
 
-export const CONSOLE_TOOL_IDS = Object.freeze([
+export const CONSOLE_TOOL_IDS = Object.freeze([...new Set([
+  // Preserve saved shortcuts/recents created by earlier Jarvis console versions.
   "actor-open", "actor-create", "actor-import", "actor-provenance", "actor-rules",
   "actor-progression", "item-create", "items-import", "map-studio", "map-uvtt",
   "map-audit", "map-template-preview", "map-template-create", "map-preset-preview",
@@ -12,7 +15,9 @@ export const CONSOLE_TOOL_IDS = Object.freeze([
   "scene-migration-preview", "scene-assets-review", "appearance-list", "appearance-available",
   "appearance-apply", "appearance-revert", "form-picker", "form-apply", "form-revert",
   "pack-search", "diagnostics-run", "modules-list", "macro-install"
-]);
+  // The current UI actions share their identifiers with this preference validator.
+  ...TOOL_CATALOG.map(tool => tool.id)
+])]);
 
 const validTools = new Set(CONSOLE_TOOL_IDS);
 let writeQueue = Promise.resolve();
