@@ -14,7 +14,7 @@ export const CONSOLE_TOOL_IDS = Object.freeze([...new Set([
   "scene-package-create", "scene-package-inspect", "scene-package-repair",
   "scene-migration-preview", "scene-assets-review", "appearance-list", "appearance-available",
   "appearance-apply", "appearance-revert", "form-picker", "form-apply", "form-revert",
-  "pack-search", "diagnostics-run", "modules-list", "macro-install"
+  "pack-search", "diagnostics-run", "modules-list", "macro-install",
   // The current UI actions share their identifiers with this preference validator.
   ...TOOL_CATALOG.map(tool => tool.id)
 ])]);
