@@ -120,7 +120,8 @@ test("direct console calls cannot bypass GM actions hidden from the player UI", 
   for (const action of ["actor-create", "actor-import", "actor-compare", "actor-progression",
     "actor-rules-set", "actor-provenance-stamp", "actor-jack-sync", "item-create", "items-import",
     "map-studio", "map-uvtt", "map-audit", "scene-package-create", "scene-package-inspect",
-    "scene-package-repair", "scene-package-action",
+    "scene-package-repair", "scene-package-action", "scene-migration-preview",
+    "scene-migration-run", "scene-assets-review",
     "diagnostics-run", "macro-install"]) {
     await assert.rejects(executeJarvisConsoleAction(action, root), /Mestre/, action);
   }

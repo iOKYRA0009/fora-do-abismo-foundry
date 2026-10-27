@@ -69,7 +69,14 @@ function regionFixture({ failCreate = false } = {}) {
   globalThis.CONFIG = { RegionBehavior: { dataModels: {} }, Canvas: {} };
   globalThis.CONST = { DRAWING_FILL_TYPES: { SOLID: 1 } };
   globalThis.ui = { notifications: { info() {} } };
-  const flagged = (id, flag) => ({ id, getFlag: (_module, key) => key === flag });
+  const flagged = (id, flag) => {
+    const flags = { [flag]: true };
+    return { id,
+      getFlag: (_module, key) => flags[key],
+      async setFlag(_module, key, value) { flags[key] = value; },
+      async unsetFlag(_module, key) { delete flags[key]; }
+    };
+  };
   const oldRegion = flagged("old-region", "scenePackageRegion");
   const oldDrawing = flagged("old-drawing", "scenePackageRegionFallback");
   const calls = [];
@@ -77,10 +84,13 @@ function regionFixture({ failCreate = false } = {}) {
     id: "scene-1", name: "Mapa", documentName: "Scene", grid: { size: 100 },
     regions: { contents: [oldRegion] }, drawings: { contents: [oldDrawing] },
     getFlag: () => ({ manifest: { regions: [{ id: "repair-1", rect: [0, 0, 1, 1] }] } }),
-    async createEmbeddedDocuments(type) {
+    async createEmbeddedDocuments(type, documents) {
       calls.push(`create ${type}`);
       if (failCreate) throw new Error(`Falhou ${type}`);
       const created = flagged(`new-${type.toLowerCase()}`, type === "Region" ? "scenePackageRegion" : "scenePackageRegionFallback");
+      for (const [key, value] of Object.entries(documents[0].flags?.[MODULE_ID] ?? {})) {
+        await created.setFlag(MODULE_ID, key, value);
+      }
       this[type === "Region" ? "regions" : "drawings"].contents.push(created);
       return [created];
     },
@@ -154,4 +164,145 @@ test("secondary GM skips Region actions", async () => {
   game.user = { id: "gm-2", isGM: true };
   const builder = new JarvisScenePackageBuilder({ builder: {} });
   assert.deepEqual(await builder.handleRegionEvent({}), { skipped: true, reason: "not-active-gm" });
+  await assert.rejects(builder.repairRegions({ documentName: "Scene" }), /GM ativo/);
+});
+
+test("Region repair carries the once-triggered state to replacement Regions", async () => {
+  const { scene } = regionFixture();
+  const original = scene.regions.contents[0];
+  await original.setFlag(MODULE_ID, "packageRegionIndex", 0);
+  await original.setFlag(MODULE_ID, "triggered", true);
+  await original.setFlag(MODULE_ID, "automationState", { status: "partial", completed: 1, failed: 1 });
+  const builder = new JarvisScenePackageBuilder({ builder: {} });
+  await builder.repairRegions(scene);
+  assert.equal(scene.regions.contents.length, 1);
+  assert.equal(scene.regions.contents[0].getFlag(MODULE_ID, "triggered"), true);
+  assert.equal(scene.regions.contents[0].getFlag(MODULE_ID, "automationState").status, "partial");
+  assert.equal(scene.regions.contents[0].getFlag(MODULE_ID, "repairStaged"), undefined);
+});
+
+test("replacement Regions remain inert until old Regions are deleted", async () => {
+  const { scene } = regionFixture();
+  const originalDelete = scene.deleteEmbeddedDocuments;
+  scene.deleteEmbeddedDocuments = async function (type, ids) {
+    if (type === "Region") {
+      const replacement = this.regions.contents.find(entry => entry.id === "new-region");
+      assert.equal(replacement.getFlag(MODULE_ID, "repairStaged"), true);
+    }
+    return originalDelete.call(this, type, ids);
+  };
+  const builder = new JarvisScenePackageBuilder({ builder: {} });
+  await builder.repairRegions(scene);
+  assert.equal(scene.regions.contents[0].getFlag(MODULE_ID, "repairStaged"), undefined);
+});
+
+function onceRegionFixture(actions, filter = {}) {
+  const { scene } = regionFixture();
+  const spec = { id: "once", rect: [0, 0, 1, 1], automation: { once: true, filter, actions } };
+  scene.getFlag = () => ({ manifest: { regions: [spec] } });
+  scene.tokens = [];
+  const flags = { packageRegionIndex: 0 };
+  const region = {
+    id: "event-region",
+    getFlag: (_module, key) => flags[key],
+    async setFlag(_module, key, value) { flags[key] = value; },
+    async unsetFlag(_module, key) { delete flags[key]; }
+  };
+  flags.scenePackageRegion = true;
+  scene.regions.contents = [region];
+  return { scene, region, flags, builder: new JarvisScenePackageBuilder({ builder: {} }) };
+}
+
+test("once Region is consumed only after every action succeeds", async () => {
+  const { scene, region, flags, builder } = onceRegionFixture([
+    { type: "setTokenHidden", tokenId: "actor-token" }
+  ]);
+  const first = await builder.handleRegionEvent({ scene, region });
+  assert.equal(first.succeeded, false);
+  assert.equal(flags.triggered, undefined);
+  assert.equal(flags.automationState.status, "partial");
+  const token = { id: "actor-token", name: "Herói", async update(changes) { this.hidden = changes.hidden; } };
+  scene.tokens.push(token);
+  assert.equal((await builder.handleRegionEvent({ scene, region })).reason, "needs-review");
+  assert.equal((await builder.resetRegionAutomation(scene, region)).reason, "confirmation-required");
+  assert.equal((await builder.resetRegionAutomation(scene, region, { confirmed: true })).reset, true);
+  const second = await builder.handleRegionEvent({ scene, region });
+  assert.equal(second.succeeded, true);
+  assert.equal(flags.triggered, true);
+  assert.equal(flags.automationState, undefined);
+  assert.equal(token.hidden, false);
+  assert.equal((await builder.handleRegionEvent({ scene, region })).reason, "already-triggered");
+});
+
+test("actor-filtered Region ignores events without a matching token", async () => {
+  const { scene, region, flags, builder } = onceRegionFixture([
+    { type: "sceneFlag", key: "test", value: 1 }
+  ], { actor: "Herói" });
+  assert.equal((await builder.handleRegionEvent({ scene, region })).reason, "actor-filter");
+  assert.equal(flags.triggered, undefined);
+});
+
+test("concurrent Region events on the active GM execute once", async () => {
+  const { scene, region, flags, builder } = onceRegionFixture([
+    { type: "gmWhisper", text: "Evento" }
+  ]);
+  let finish;
+  let messages = 0;
+  globalThis.ChatMessage = {
+    getWhisperRecipients: () => [{ id: "gm-1" }],
+    async create() { messages += 1; await new Promise(resolve => { finish = resolve; }); }
+  };
+  const first = builder.handleRegionEvent({ scene, region });
+  const second = await builder.handleRegionEvent({ scene, region });
+  assert.equal(second.reason, "in-progress");
+  assert.equal(messages, 1);
+  finish();
+  assert.equal((await first).succeeded, true);
+  assert.equal(flags.triggered, true);
+  assert.equal(messages, 1);
+});
+
+test("interrupted once action remains blocked for GM review", async () => {
+  const { scene, region, flags, builder } = onceRegionFixture([
+    { type: "gmWhisper", text: "Evento" }
+  ]);
+  let messages = 0;
+  globalThis.ChatMessage = {
+    getWhisperRecipients: () => [{ id: "gm-1" }],
+    async create() { messages += 1; throw new Error("rede interrompida"); }
+  };
+  await assert.rejects(builder.handleRegionEvent({ scene, region }), /rede interrompida/);
+  assert.equal(flags.automationState.status, "partial");
+  assert.equal(flags.triggered, undefined);
+  assert.equal((await builder.handleRegionEvent({ scene, region })).reason, "needs-review");
+  assert.equal(messages, 1);
+});
+
+test("a successful action is not replayed after a later once action fails", async () => {
+  const { scene, region, flags, builder } = onceRegionFixture([
+    { type: "gmWhisper", text: "Primeira ação" },
+    { type: "setTokenHidden", tokenId: "ausente" }
+  ]);
+  let messages = 0;
+  globalThis.ChatMessage = {
+    getWhisperRecipients: () => [{ id: "gm-1" }],
+    async create() { messages += 1; }
+  };
+  const result = await builder.handleRegionEvent({ scene, region });
+  assert.equal(result.succeeded, false);
+  assert.equal(flags.automationState.completed, 1);
+  assert.equal(flags.automationState.failed, 1);
+  assert.equal((await builder.handleRegionEvent({ scene, region })).reason, "needs-review");
+  assert.equal(messages, 1);
+});
+
+test("a persisted running Region state remains blocked after an interrupted client", async () => {
+  const { scene, region, flags, builder } = onceRegionFixture([
+    { type: "notify", text: "Não repetir" }
+  ]);
+  flags.automationState = { status: "running", startedAt: 1 };
+  assert.deepEqual(await builder.handleRegionEvent({ scene, region }), {
+    skipped: true, reason: "needs-review", state: "running"
+  });
+  assert.equal(flags.triggered, undefined);
 });

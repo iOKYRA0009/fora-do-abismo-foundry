@@ -8,6 +8,12 @@ import { suggestRasterWalls } from "./scenes/raster-wall-assist.js";
 import { applyLightingPreset, listLightingPresets } from "./scenes/lighting-presets.js";
 import { auditScene } from "./scenes/scene-audit.js";
 import { registerActivityAutomation } from "./automation/activity-automation.js";
+import {
+  approveActivityAutomation,
+  inspectActivityAutomation,
+  registerActivityAutomationSettings,
+  revokeActivityAutomation
+} from "./automation/automation-approval.js";
 import { getAppearanceChoreographyStatus, registerAppearanceEffectAutomation } from "./automation/appearance-effect-automation.js";
 import {
   applyEmbeddedEffect,
@@ -74,6 +80,7 @@ import { JarvisSceneBuilder } from "./scenes/scene-builder.js";
 import { JarvisSceneFramework } from "./scenes/framework/scene-framework.js";
 import { getCoreScenePresetDefinitions } from "./scenes/presets/core-presets.js";
 import { JarvisScenePackageBuilder } from "./scenes/package/scene-package-builder.js";
+import { inspectSceneAssetLedger, listSceneAssetLedger, registerSceneAssetLedger } from "./scenes/package/asset-ledger.js";
 import { convertUniversalVtt } from "./scenes/importers/universal-vtt.js";
 import { formatJarvisDiagnostics, runJarvisDiagnostics } from "./diagnostics/health-check.js";
 import { compareActorToPayload } from "./diagnostics/actor-equivalence.js";
@@ -84,6 +91,7 @@ Hooks.once("init", () => {
   console.log(`${MODULE_ID} | Inicializando Jarvis Tools`);
   registerHybridFeatureLayout();
   registerMacroFileDrop();
+  registerActivityAutomationSettings();
   registerJarvisConsoleControl();
   registerUniversalVttControl();
   registerMapStudioControl();
@@ -91,6 +99,7 @@ Hooks.once("init", () => {
   registerAppearanceEffectAutomation();
   registerJackEngine();
   registerProgressionEngine();
+  registerSceneAssetLedger();
 });
 
 Hooks.once("ready", () => {
@@ -119,6 +128,11 @@ Hooks.once("ready", () => {
     ui: { open: openJarvisConsole },
     importer: new JarvisImporterV9(),
     progression: { applyActor: applyActorProgressions },
+    automation: {
+      inspect: inspectActivityAutomation,
+      approve: approveActivityAutomation,
+      revoke: revokeActivityAutomation
+    },
     effects: {
       applyEmbedded: applyEmbeddedEffect,
       applyEmbeddedToActor: applyEmbeddedEffectToActor,
@@ -207,9 +221,15 @@ Hooks.once("ready", () => {
         preview: (payload, options = {}) => scenePackageBuilder.preview(payload, options),
         build: (payload, options = {}) => scenePackageBuilder.build(payload, options),
         inspect: sceneRef => scenePackageBuilder.inspect(sceneRef),
-        migrateLegacyManifests: () => scenePackageBuilder.migrateLegacyManifests(),
+        previewLegacyManifests: () => scenePackageBuilder.previewLegacyManifests(),
+        migrateLegacyManifests: (options = {}) => scenePackageBuilder.migrateLegacyManifests(options),
+        restoreMigrationBackup: (sceneRef, options = {}) => scenePackageBuilder.restoreMigrationBackup(sceneRef, options),
+        listAssetLedger: () => listSceneAssetLedger(),
+        inspectAssetLedger: options => inspectSceneAssetLedger(options),
         cleanupDeletedSceneManifest: sceneRef => scenePackageBuilder.cleanupDeletedSceneManifest(sceneRef),
         repairRegions: (sceneRef, options = {}) => scenePackageBuilder.repairRegions(sceneRef, options),
+        resetRegionAutomation: (sceneRef, regionRef, options = {}) =>
+          scenePackageBuilder.resetRegionAutomation(sceneRef, regionRef, options),
         handleRegionEvent: context => scenePackageBuilder.handleRegionEvent(context),
         runAction: (sceneRef, key) => scenePackageBuilder.runAction(sceneRef, key)
       },
@@ -268,19 +288,6 @@ Hooks.once("ready", () => {
   };
 
   if (module) module.api = api;
-
-  if (game.user?.isGM && game.users?.activeGM?.id === game.user.id) {
-    void api.scenes.package.migrateLegacyManifests().then(report => {
-      if (report.migrated) ui.notifications?.info(`Jarvis: ${report.migrated} manifesto(s) de mapa migrado(s) para Journal privado.`);
-      if (report.failures.length) {
-        ui.notifications?.warn(`Jarvis: ${report.failures.length} manifesto(s) antigo(s) exigem revisão. Veja o console.`);
-        console.warn(`${MODULE_ID} | Migração de manifestos incompleta`, report.failures);
-      }
-    }).catch(error => {
-      ui.notifications?.error(`Jarvis: falha ao migrar manifestos privados. ${error.message}`);
-      console.error(`${MODULE_ID} | Migração de manifestos falhou`, error);
-    });
-  }
 
   const appearance = getAppearanceStatus();
   const transformation = getTransformationStatus();

@@ -1,0 +1,9 @@
+# Aprovação de automações de Activity
+
+O Jarvis preserva as flags `automation.pre`, `automation.post` e `automation.effects` dos Itens existentes. Na versão 1.1.0, elas ficam inativas até que o Mestre ativo revise e aprove a Activity. A aprovação não ocorre automaticamente na importação, abertura da ficha ou uso do Item.
+
+O módulo expõe `automation.inspect(activity)`, `automation.approve(activity)` e `automation.revoke(activity)` em sua API pública. A interface do Mestre deve apresentar o código e os efeitos antes de chamar `approve`. Só o Mestre ativo pode aprovar ou revogar. A aprovação exige UUIDs persistentes de Item e Activity e cobre todo o objeto `automation`, inclusive scripts, efeitos e alvos, além dos dados de todos os Active Effects embutidos no Item. Qualquer alteração invalida a aprovação até uma nova revisão. O registro do mundo armazena somente SHA-256 do conteúdo canônico e os UUIDs, sem copiar o código para uma configuração sincronizada com jogadores. Conteúdo aprovado acima de 128 KiB não é aceito.
+
+Mesmo aprovada, a automação JavaScript só roda quando o Mestre ativo dispara a Activity em seu próprio cliente. Hooks locais disparados por jogadores ou por um segundo Mestre não executam código nem efeitos Jarvis. Activities usadas por jogadores continuam usando os recursos nativos do D&D5e, mas seus scripts `pre`/`post` Jarvis não são executados nessa situação. Quando o Mestre ativo usa uma Activity com `pre` não aprovado, o Jarvis cancela esse uso para não ignorar validações ou custos. Uma Activity com apenas `post` pode ser usada, mas seus efeitos Jarvis não são aplicados até a aprovação. Para ações disponíveis aos jogadores, use os comandos declarativos aprovados da Central.
+
+Ao aprovar, revise especialmente código de Itens que jogadores podem editar. Alterar flags depois da aprovação cancela imediatamente a execução; scripts legados continuam guardados no Item para revisão, sem migração destrutiva.

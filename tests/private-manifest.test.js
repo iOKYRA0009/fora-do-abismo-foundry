@@ -29,11 +29,17 @@ function setup() {
     async setFlag(_module, key, value) { sceneFlags.set(key, value); },
     async unsetFlag(_module, key) { sceneFlags.delete(key); },
     async delete() {},
-    async update() {}
+    async update(data) {
+      for (const [path, value] of Object.entries(data)) {
+        if (path.startsWith(`flags.${MODULE_ID}.`)) {
+          sceneFlags.set(path.slice(`flags.${MODULE_ID}.`.length), value?.replacement ?? value);
+        }
+      }
+    }
   };
   globalThis.game = {
     user: { id: "gm", isGM: true }, users: { activeGM: { id: "gm" } },
-    scenes: [], journal: { get: id => journal.get(id) },
+    scenes: [], journal: { get: id => journal.get(id), get contents() { return [...journal.values()]; } },
     world: { id: "test-world" }
   };
   globalThis.foundry = { utils: { deepClone: structuredClone } };
@@ -52,6 +58,7 @@ function setup() {
     createdJournals.push(entry);
     return entry;
   } } };
+  globalThis._replace = undefined;
   return { scene, sceneFlags, createdJournals, journal };
 }
 
@@ -105,7 +112,12 @@ test("legacy Scene manifest migrates only after Journal persistence succeeds", a
     } }
   }]);
   const builder = new JarvisScenePackageBuilder({ builder: {} });
-  const result = await builder.migrateLegacyManifests();
+  const preview = builder.previewLegacyManifests();
+  assert.equal(preview.count, 1);
+  assert.equal(preview.scenes[0].state, "legacy");
+  assert.equal((await builder.migrateLegacyManifests()).reason, "confirmation-required");
+  assert.equal(createdJournals.length, 0);
+  const result = await builder.migrateLegacyManifests({ confirmed: true });
   assert.equal(result.migrated, 1);
   assert.deepEqual(result.failures, []);
   assert.equal(createdJournals.length, 1);
@@ -126,7 +138,7 @@ test("legacy Scene manifest migrates only after Journal persistence succeeds", a
       document[method] = function (...args) { repeatedWrites += 1; return original.apply(this, args); };
     }
   }
-  const second = await builder.migrateLegacyManifests();
+  const second = await builder.migrateLegacyManifests({ confirmed: true });
   assert.equal(second.migrated, 0);
   assert.equal(repeatedWrites, 0);
 
@@ -142,9 +154,103 @@ test("failed private Journal verification leaves legacy Scene manifest intact", 
     id: "bad-journal", getFlag: () => null, async delete() {}
   });
   const builder = new JarvisScenePackageBuilder({ builder: {} });
-  const result = await builder.migrateLegacyManifests();
+  const result = await builder.migrateLegacyManifests({ confirmed: true });
   assert.equal(result.migrated, 0);
   assert.equal(result.failures.length, 1);
+  assert.equal(sceneFlags.get("scenePackage").manifest.puzzles[0].answer, "Âncora Mental");
+});
+
+test("V14 forced replacement makes the public manifest swap one update", async () => {
+  const { scene, sceneFlags, createdJournals } = setup();
+  game.scenes.push(scene);
+  sceneFlags.set("scenePackage", { version: "1.0", manifest: structuredClone(payload) });
+  globalThis._replace = value => ({ replacement: value });
+  let removals = 0;
+  scene.unsetFlag = async () => { removals += 1; };
+  const builder = new JarvisScenePackageBuilder({ builder: {} });
+  const result = await builder.migrateLegacyManifests({ confirmed: true });
+  assert.equal(result.migrated, 1);
+  assert.equal(removals, 0);
+  assert.equal(sceneFlags.get("scenePackage").manifest, undefined);
+  assert.equal(createdJournals.length, 1);
+});
+
+test("interrupted flag replacement resumes from the surviving private Journal", async () => {
+  const { scene, sceneFlags, createdJournals } = setup();
+  game.scenes.push(scene);
+  sceneFlags.set("scenePackage", { version: "1.0", manifest: structuredClone(payload) });
+  const originalUnset = scene.unsetFlag;
+  let interrupt = true;
+  scene.unsetFlag = async function (...args) {
+    await originalUnset.apply(this, args);
+    if (args[1] === "scenePackage" && interrupt) {
+      interrupt = false;
+      throw new Error("conexão interrompida");
+    }
+  };
+  const builder = new JarvisScenePackageBuilder({ builder: {} });
+  const failed = await builder.migrateLegacyManifests({ confirmed: true });
+  assert.equal(failed.failures.length, 1);
+  assert.equal(createdJournals.length, 1);
+  assert.equal(sceneFlags.get("scenePackage"), undefined);
+  assert.equal(builder.previewLegacyManifests().scenes[0].state, "recoverable");
+
+  const recovered = await builder.migrateLegacyManifests({ confirmed: true });
+  assert.equal(recovered.recovered, 1);
+  assert.deepEqual(recovered.failures, []);
+  assert.equal(sceneFlags.get("scenePackage").manifestJournalId, createdJournals[0].id);
+  assert.equal(createdJournals.length, 1);
+});
+
+test("missing linked Journal is shown in preview and relinked from its backup", async () => {
+  const { scene, sceneFlags, createdJournals } = setup();
+  game.scenes.push(scene);
+  sceneFlags.set("scenePackage", { version: "1.0", manifest: structuredClone(payload) });
+  const builder = new JarvisScenePackageBuilder({ builder: {} });
+  await builder.migrateLegacyManifests({ confirmed: true });
+  sceneFlags.set("scenePackage", {
+    ...sceneFlags.get("scenePackage"), manifestJournalId: "missing-journal"
+  });
+  assert.equal(builder.previewLegacyManifests().scenes[0].state, "missing-journal");
+  const result = await builder.migrateLegacyManifests({ confirmed: true });
+  assert.equal(result.recovered, 1);
+  assert.deepEqual(result.failures, []);
+  assert.equal(sceneFlags.get("scenePackage").manifestJournalId, createdJournals[0].id);
+});
+
+test("failed Region scrub resumes without recreating the private backup", async () => {
+  const { scene, sceneFlags, createdJournals } = setup();
+  game.scenes.push(scene);
+  sceneFlags.set("scenePackage", { version: "1.0", manifest: structuredClone(payload) });
+  const [region] = await scene.createEmbeddedDocuments("Region", [{ name: "Legado", flags: {
+    [MODULE_ID]: { scenePackageRegion: true, packageRegionId: "ancora-real", purpose: "segredo" }
+  } }]);
+  const originalUnset = region.unsetFlag;
+  let fail = true;
+  region.unsetFlag = async function (...args) {
+    if (fail) { fail = false; throw new Error("falha temporária"); }
+    return originalUnset.apply(this, args);
+  };
+  const builder = new JarvisScenePackageBuilder({ builder: {} });
+  assert.equal((await builder.migrateLegacyManifests({ confirmed: true })).failures.length, 1);
+  assert.equal(sceneFlags.get("scenePackage").manifest, undefined);
+  assert.equal(createdJournals.length, 1);
+  assert.deepEqual((await builder.migrateLegacyManifests({ confirmed: true })).failures, []);
+  assert.equal(region.getFlag(MODULE_ID, "purpose"), undefined);
+  assert.equal(createdJournals.length, 1);
+});
+
+test("emergency rollback requires confirmation and restores the original flags", async () => {
+  const { scene, sceneFlags } = setup();
+  game.scenes.push(scene);
+  sceneFlags.set("scenePackage", { version: "1.0", manifest: structuredClone(payload) });
+  const builder = new JarvisScenePackageBuilder({ builder: {} });
+  await builder.migrateLegacyManifests({ confirmed: true });
+  assert.equal(sceneFlags.get("scenePackage").manifest, undefined);
+  assert.equal((await builder.restoreMigrationBackup(scene)).reason, "confirmation-required");
+  const restored = await builder.restoreMigrationBackup(scene, { confirmed: true });
+  assert.equal(restored.restored, true);
+  assert.match(restored.warning, /segredos/);
   assert.equal(sceneFlags.get("scenePackage").manifest.puzzles[0].answer, "Âncora Mental");
 });
 

@@ -4,9 +4,33 @@ import {
   removeAppliedEmbeddedEffect,
   removeAppliedEmbeddedEffectFromActor
 } from "./embedded-effect-engine.js";
+import { inspectActivityAutomation } from "./automation-approval.js";
 
 const MODULE_ID = "fora-do-abismo-foundry";
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+let hooksRegistered = false;
+const warnedUnapproved = new Set();
+
+function warnUnapproved(activity, reason, phase) {
+  const key = `${activity?.uuid ?? activity?.name ?? "unknown"}|${reason}|${phase}`;
+  if (warnedUnapproved.has(key)) return;
+  warnedUnapproved.add(key);
+  ui.notifications?.warn?.(
+    `Jarvis: automação de '${activity?.item?.name ?? "Item"} / ${activity?.name ?? "Activity"}' ` +
+    (phase === "pre"
+      ? "não aprovada; uso cancelado até revisão pelo Mestre ativo."
+      : "não aprovada; efeitos e script Jarvis não foram executados.")
+  );
+}
+
+function isActiveGm() {
+  const user = game.user;
+  const activeGm = game.users?.activeGM;
+  // Activity hooks run locally on every connected client. Fail closed when
+  // Foundry has not elected an active GM, rather than evaluating flag code on
+  // a player or allowing two GM clients to apply the same effects.
+  return Boolean(user?.isGM && user.id && activeGm?.id === user.id);
+}
 
 function getAutomation(activity) {
   return activity?.flags?.[MODULE_ID]?.automation ?? null;
@@ -169,6 +193,14 @@ function runPre(activity, usageConfig) {
   const automation = getAutomation(activity);
   const script = automation?.pre;
   if (!script) return undefined;
+  const approval = inspectActivityAutomation(activity);
+  if (!approval.approved) {
+    warnUnapproved(activity, approval.reason, "pre");
+    // A pre script may enforce cost or prerequisites. Allowing the activity
+    // to proceed without an approved pre check could spend or grant resources
+    // under different rules from those authored by the GM.
+    return false;
+  }
 
   const label = `${activity?.item?.name ?? "Item"} / ${activity?.name ?? "Activity"} / pre`;
   try {
@@ -207,12 +239,18 @@ async function applyConfiguredEffect(activity, config) {
 async function runPost(activity, usageConfig, results) {
   const automation = getAutomation(activity);
   if (!automation) return undefined;
+  const approval = inspectActivityAutomation(activity);
+  if (!approval.approved) {
+    warnUnapproved(activity, approval.reason, "post");
+    return undefined;
+  }
 
   const label = `${activity?.item?.name ?? "Item"} / ${activity?.name ?? "Activity"}`;
   const scope = buildScope(activity, usageConfig, results);
 
   try {
     for (const config of getEffectConfigs(automation)) {
+      if (!isActiveGm() || !inspectActivityAutomation(activity).approved) return undefined;
       await applyConfiguredEffect(activity, config);
     }
   } catch (error) {
@@ -223,6 +261,7 @@ async function runPost(activity, usageConfig, results) {
 
   const script = automation?.post;
   if (!script) return undefined;
+  if (!isActiveGm() || !inspectActivityAutomation(activity).approved) return undefined;
 
   try {
     return await executePostScript(script, scope, `${label} / post`);
@@ -234,13 +273,18 @@ async function runPost(activity, usageConfig, results) {
 }
 
 export function registerActivityAutomation() {
+  if (hooksRegistered) return;
+  hooksRegistered = true;
+
   Hooks.on("dnd5e.preUseActivity", (activity, usageConfig) => {
+    if (!isActiveGm()) return undefined;
     const result = runPre(activity, usageConfig);
     if (result === false) return false;
     return undefined;
   });
 
   Hooks.on("dnd5e.postUseActivity", (activity, usageConfig, results) => {
+    if (!isActiveGm()) return undefined;
     void runPost(activity, usageConfig, results);
     return undefined;
   });

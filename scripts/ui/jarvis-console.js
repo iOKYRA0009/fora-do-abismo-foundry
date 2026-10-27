@@ -187,6 +187,7 @@ function renderContent() {
     <div class="jarvis-console-row">${button("scene-package-preview", "Validar e pré-visualizar")}${button("scene-package-create", "Criar Scene Package")}</div>
     <h3>Manutenção da cena ativa</h3><div class="jarvis-console-row">${button("scene-package-inspect", "Inspecionar pacote")}${button("scene-package-repair", "Reparar regiões")}
     <label>Ação manual do pacote<input name="scene-action-key" placeholder="Chave da ação"></label>${button("scene-package-action", "Executar ação")}</div>
+    <h3>Recuperação de mapas</h3><div class="jarvis-console-row">${button("scene-migration-preview", "Prévia de migração")}${button("scene-migration-run", "Migrar após revisão")}${button("scene-assets-review", "Revisar arquivos enviados")}</div>
   `) : "";
 
   const appearances = panel("appearances", `
@@ -457,6 +458,19 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
     if (!key) throw new Error("Informe a chave de uma ação manual do Scene Package.");
     if (!await confirmAction("Ação manual", `Executar a ação '${key}' em '${scene.name}'?`)) return;
     return setOutput(root, "Ação executada", await jarvis.scenes.package.runAction(scene, key));
+  }
+  if (["scene-migration-preview", "scene-migration-run", "scene-assets-review"].includes(action)) {
+    requireGM();
+    if (action === "scene-assets-review") {
+      return setOutput(root, "Arquivos de mapas para revisão", jarvis.scenes.package.inspectAssetLedger()
+        .filter(entry => entry.needsReview));
+    }
+    const preview = jarvis.scenes.package.previewLegacyManifests();
+    if (action === "scene-migration-preview") return setOutput(root, "Prévia da migração", preview);
+    if (!preview.count) return setOutput(root, "Migração de mapas", "Nenhuma cena exige migração.");
+    if (!await confirmAction("Migrar mapas legados",
+      `Migrar ${preview.count} cena(s) após criar backup privado? Revise primeiro a prévia exibida nesta Central.`)) return;
+    return setOutput(root, "Relatório da migração", await jarvis.scenes.package.migrateLegacyManifests({ confirmed: true }));
   }
 
   if (["appearance-list", "appearance-available", "appearance-save", "appearance-apply", "appearance-revert",
