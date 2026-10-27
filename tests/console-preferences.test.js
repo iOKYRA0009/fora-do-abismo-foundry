@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { TOOL_CATALOG } from "../scripts/ui/console-tool-catalog.js";
 
 import {
   loadConsolePreferences, recordConsoleRecent, setConsoleSidebarCollapsed,
@@ -47,4 +48,22 @@ test("preferences discard malformed flag entries", () => {
   assert.deepEqual(loadConsolePreferences(), {
     favorites: ["map-audit"], recents: [], sidebarCollapsed: false
   });
+});
+
+
+test("every current Jarvis toolbar action is recognized by favorites and recents", async () => {
+  setup();
+  const ids = TOOL_CATALOG.map(tool => tool.id);
+  assert.equal(new Set(ids).size, ids.length, "tool IDs must be unique");
+  for (const id of ids) {
+    await recordConsoleRecent(id);
+    assert.equal(loadConsolePreferences().recents[0], id);
+    await toggleConsoleFavorite(id);
+    assert.equal(loadConsolePreferences().favorites[0], id);
+  }
+  for (const id of ["managed-macro-run", "actor-wizard-preview",
+    "item-wizard-preview", "scene-edit-preview"]) {
+    assert.ok(ids.includes(id), `Missing action in shared catalog: ${id}`);
+  }
+  assert.throws(() => recordConsoleRecent("unsafe-action"), /desconhecida/);
 });
