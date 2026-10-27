@@ -30,6 +30,41 @@ function resolveToken(tokenOrId) {
   return null;
 }
 
+function hasPermission(document, level) {
+  const user = globalThis.game?.user;
+  return Boolean(user && (user.isGM || document?.testUserPermission?.(user, level)));
+}
+
+function assertActorPermission(actor, level) {
+  if (hasPermission(actor, level)) return;
+  throw new Error(`Jarvis Transformation: sem permissão ${level} para ${actor?.name ?? "este Actor"}.`);
+}
+
+async function assertTokenPermission(token, level) {
+  const document = token.document?.documentName === "Token" ? token.document : token;
+  const baseActor = globalThis.game?.actors?.get?.(document.actorId);
+  if ([document, token.actor, document.actor, baseActor].some(candidate => hasPermission(candidate, level))) return;
+
+  // Metamorph can replace token.actor and actorId with an unowned form Actor.
+  // The original Actor remains the authority for the player's own Token.
+  const api = getMetamorphApi({ required: false });
+  if (typeof api?.getMainActor === "function") {
+    try {
+      const mainRef = await api.getMainActor(token);
+      const mainActor = typeof mainRef === "string"
+        ? globalThis.game?.actors?.get?.(mainRef)
+          ?? (typeof globalThis.fromUuid === "function" ? await globalThis.fromUuid(mainRef) : null)
+        : mainRef;
+      if (hasPermission(mainActor, level)) return;
+    } catch (_error) { /* An unavailable original Actor must not grant access. */ }
+  }
+  throw new Error(`Jarvis Transformation: sem permissão ${level} para ${token.name ?? "este Token"}.`);
+}
+
+function profilesFromActor(actor) {
+  return foundry.utils.deepClone(actor.getFlag(MODULE_ID, FORMS_FLAG) ?? {});
+}
+
 export function getTransformationStatus() {
   const module = getMetamorphModule();
   return {
@@ -42,7 +77,8 @@ export function getTransformationStatus() {
 
 export function getTransformationProfiles(actor) {
   if (!actor) return {};
-  return foundry.utils.deepClone(actor.getFlag(MODULE_ID, FORMS_FLAG) ?? {});
+  assertActorPermission(actor, "OBSERVER");
+  return profilesFromActor(actor);
 }
 
 export async function setTransformationProfile(actor, key, target, {
@@ -50,6 +86,7 @@ export async function setTransformationProfile(actor, key, target, {
   label = null
 } = {}) {
   if (!actor) throw new Error("Jarvis Transformation: Actor ausente.");
+  assertActorPermission(actor, "OWNER");
   if (!key) throw new Error("Jarvis Transformation: chave da forma ausente.");
   if (!target) throw new Error("Jarvis Transformation: Actor/UUID alvo ausente.");
 
@@ -67,7 +104,7 @@ export async function setTransformationProfile(actor, key, target, {
     else throw new Error("Jarvis Transformation: não consegui obter id/uuid do Actor alvo.");
   }
 
-  const profiles = getTransformationProfiles(actor);
+  const profiles = profilesFromActor(actor);
   profiles[normalizeKey(key)] = {
     target: String(targetRef),
     hpMode,
@@ -79,7 +116,8 @@ export async function setTransformationProfile(actor, key, target, {
 
 export async function removeTransformationProfile(actor, key) {
   if (!actor) throw new Error("Jarvis Transformation: Actor ausente.");
-  const profiles = getTransformationProfiles(actor);
+  assertActorPermission(actor, "OWNER");
+  const profiles = profilesFromActor(actor);
   const normalized = normalizeKey(key);
   if (!Object.prototype.hasOwnProperty.call(profiles, normalized)) return false;
   delete profiles[normalized];
@@ -100,7 +138,7 @@ async function getProfileOwner(token, api) {
 async function resolveTransformation(token, keyOrTarget, options = {}) {
   const api = getMetamorphApi();
   const owner = await getProfileOwner(token, api);
-  const profiles = getTransformationProfiles(owner);
+  const profiles = owner ? profilesFromActor(owner) : {};
   const stored = profiles[normalizeKey(keyOrTarget)];
   if (stored) return { ...stored };
 
@@ -111,9 +149,10 @@ async function resolveTransformation(token, keyOrTarget, options = {}) {
 }
 
 export async function morphToken(tokenOrId, keyOrTarget, options = {}) {
-  const api = getMetamorphApi();
   const token = resolveToken(tokenOrId);
   if (!token) throw new Error("Jarvis Transformation: Token não encontrado no canvas atual.");
+  await assertTokenPermission(token, "OWNER");
+  const api = getMetamorphApi();
 
   const profile = await resolveTransformation(token, keyOrTarget, options);
   if (!profile.target) throw new Error("Jarvis Transformation: forma alvo vazia.");
@@ -123,37 +162,42 @@ export async function morphToken(tokenOrId, keyOrTarget, options = {}) {
 }
 
 export async function revertToken(tokenOrId) {
-  const api = getMetamorphApi();
   const token = resolveToken(tokenOrId);
   if (!token) throw new Error("Jarvis Transformation: Token não encontrado no canvas atual.");
+  await assertTokenPermission(token, "OWNER");
+  const api = getMetamorphApi();
   return api.revert(token);
 }
 
 export async function getCurrentForm(tokenOrId) {
-  const api = getMetamorphApi();
   const token = resolveToken(tokenOrId);
   if (!token) return null;
+  await assertTokenPermission(token, "OBSERVER");
+  const api = getMetamorphApi();
   return api.getForm(token);
 }
 
 export async function getMainActor(tokenOrId) {
-  const api = getMetamorphApi();
   const token = resolveToken(tokenOrId);
   if (!token) return null;
+  await assertTokenPermission(token, "OBSERVER");
+  const api = getMetamorphApi();
   return api.getMainActor(token);
 }
 
 export async function promptForm(tokenOrId, options = {}) {
-  const api = getMetamorphApi();
   const token = resolveToken(tokenOrId);
   if (!token) throw new Error("Jarvis Transformation: Token não encontrado no canvas atual.");
+  await assertTokenPermission(token, "OWNER");
+  const api = getMetamorphApi();
   return api.promptForm(token, options);
 }
 
 export async function openTransformationPicker(tokenOrId, anchorEl = null) {
-  const api = getMetamorphApi();
   const token = resolveToken(tokenOrId);
   if (!token) throw new Error("Jarvis Transformation: Token não encontrado no canvas atual.");
+  await assertTokenPermission(token, "OWNER");
+  const api = getMetamorphApi();
   if (typeof api.openPicker !== "function") {
     throw new Error("Jarvis Transformation: esta versão do Metamorph não expõe openPicker().");
   }

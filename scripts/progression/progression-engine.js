@@ -1,4 +1,11 @@
 const MODULE_ID = "fora-do-abismo-foundry";
+const progressionInFlight = new WeakMap();
+
+function isAuthoritativeGm() {
+  if (!game.user?.isGM) return false;
+  const activeGm = game.users?.activeGM;
+  return !activeGm || activeGm.id === game.user.id;
+}
 
 function slugify(value = "entry") {
   return String(value)
@@ -58,7 +65,7 @@ async function markEntriesGranted(item, granted) {
   });
 }
 
-export async function applyItemProgression(item, { notify = false } = {}) {
+async function applyItemProgressionOnce(item, { notify = false } = {}) {
   if (!item?.actor || !["class", "subclass"].includes(item.type)) return 0;
 
   const progression = getProgression(item);
@@ -108,6 +115,20 @@ export async function applyItemProgression(item, { notify = false } = {}) {
   return createdCount;
 }
 
+export async function applyItemProgression(item, options = {}) {
+  if (!item || typeof item !== "object") return 0;
+  const pending = progressionInFlight.get(item);
+  if (pending) return pending;
+
+  const current = applyItemProgressionOnce(item, options);
+  progressionInFlight.set(item, current);
+  try {
+    return await current;
+  } finally {
+    progressionInFlight.delete(item);
+  }
+}
+
 export async function applyActorProgressions(actor, options = {}) {
   if (!actor) return 0;
   let created = 0;
@@ -121,7 +142,7 @@ export async function applyActorProgressions(actor, options = {}) {
 
 export function registerProgressionEngine() {
   Hooks.on("updateItem", (item, changes) => {
-    if (item?.type !== "class" || !item.actor) return;
+    if (!isAuthoritativeGm() || item?.type !== "class" || !item.actor) return;
 
     const changedLevels = Object.prototype.hasOwnProperty.call(changes, "system.levels")
       || foundry.utils.hasProperty(changes, "system.levels");
@@ -140,6 +161,20 @@ export function registerProgressionEngine() {
       } catch (error) {
         console.error(`${MODULE_ID} | Falha na progressão automática`, error);
         ui.notifications?.error(`Jarvis Progression: falha ao processar ${item.name}. Veja o console.`);
+      }
+    })();
+  });
+
+  Hooks.once("ready", () => {
+    if (!isAuthoritativeGm()) return;
+    void (async () => {
+      for (const actor of game.actors ?? []) {
+        if (!actor.items?.some(item => ["class", "subclass"].includes(item.type) && getProgression(item).length)) continue;
+        try {
+          await applyActorProgressions(actor);
+        } catch (error) {
+          console.error(`${MODULE_ID} | Falha ao reconciliar progressão de ${actor.name}`, error);
+        }
       }
     })();
   });

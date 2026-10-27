@@ -2,6 +2,8 @@ import { inspectWallGeometry } from "../scene-geometry.js";
 
 const MODULE_ID = "fora-do-abismo-foundry";
 const PACKAGE_VERSION = "1.0";
+const privateJournalDeletes = new WeakMap();
+const deletedPrivateJournals = new WeakSet();
 
 const REGION_SCRIPT_SOURCE =
   'const api = game.modules.get("' + MODULE_ID + '")?.api?.scenes?.package; ' +
@@ -9,6 +11,22 @@ const REGION_SCRIPT_SOURCE =
 
 function clone(value) {
   return foundry.utils.deepClone(value);
+}
+
+async function deletePrivateJournal(journal) {
+  if (!journal || deletedPrivateJournals.has(journal)) return false;
+  const pending = privateJournalDeletes.get(journal);
+  if (pending) return pending;
+  const deletion = Promise.resolve().then(() => journal.delete()).then(() => {
+    deletedPrivateJournals.add(journal);
+    return true;
+  });
+  privateJournalDeletes.set(journal, deletion);
+  try {
+    return await deletion;
+  } finally {
+    privateJournalDeletes.delete(journal);
+  }
 }
 
 function normalize(value) {
@@ -171,6 +189,61 @@ function stripLargePackageData(payload) {
   return result;
 }
 
+function publicRegionSummary(summary = {}) {
+  return {
+    requested: Number(summary.requested ?? 0),
+    regions: Number(summary.regions ?? 0),
+    fallbacks: Number(summary.fallbacks ?? 0),
+    automationFallbacks: Number(summary.automationFallbacks ?? 0),
+    failureCount: Number(summary.failureCount ?? summary.failures?.length ?? 0)
+  };
+}
+
+function publicPackageFlag(packageFlag = {}, journalId = null) {
+  return {
+    version: packageFlag.version ?? PACKAGE_VERSION,
+    builtAt: packageFlag.builtAt ?? Date.now(),
+    manifestJournalId: journalId ?? packageFlag.manifestJournalId ?? null,
+    regionSummary: publicRegionSummary(packageFlag.regionSummary),
+    ...(packageFlag.repairedAt ? { repairedAt: packageFlag.repairedAt } : {})
+  };
+}
+
+function privateManifestRecord(scene, packageFlag = scene.getFlag(MODULE_ID, "scenePackage")) {
+  if (!game.user?.isGM || !packageFlag) return null;
+  if (packageFlag.manifestJournalId) {
+    const journal = game.journal?.get(packageFlag.manifestJournalId);
+    const record = journal?.getFlag(MODULE_ID, "scenePackagePrivate");
+    if (!record || record.sceneId !== scene.id || !record.manifest) {
+      throw new Error("Scene Package: manifesto privado não encontrado ou não corresponde à Scene.");
+    }
+    return record;
+  }
+  // Scenes criadas por versões anteriores mantêm o manifesto no flag até a migração.
+  return packageFlag.manifest
+    ? { sceneId: scene.id, manifest: packageFlag.manifest, actorResolution: packageFlag.actorResolution ?? null }
+    : null;
+}
+
+async function createPrivateManifest(scene, record) {
+  const Journal = globalThis.JournalEntry?.implementation;
+  if (!Journal?.create) throw new Error("Scene Package: JournalEntry não disponível para manifesto privado.");
+  const journal = await Journal.create({
+    name: `Jarvis — manifesto privado ${scene.id}`,
+    ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS?.NONE ?? 0 },
+    flags: { [MODULE_ID]: { scenePackagePrivate: record } }
+  }, { renderSheet: false });
+  if (!journal) throw new Error("Scene Package: Foundry não retornou o Journal privado.");
+  const saved = journal.getFlag?.(MODULE_ID, "scenePackagePrivate");
+  if (saved?.sceneId !== scene.id || !saved?.manifest) {
+    await deletePrivateJournal(journal).catch(cleanupError =>
+      console.error(`${MODULE_ID} | Falha ao limpar Journal privado inválido`, cleanupError)
+    );
+    throw new Error("Scene Package: manifesto privado não foi persistido no Journal.");
+  }
+  return journal;
+}
+
 function eventConstant(name) {
   const E = CONST.REGION_EVENTS ?? {};
   const key = String(name ?? "TOKEN_ENTER").trim().toUpperCase();
@@ -244,7 +317,7 @@ function regionColor(kind) {
   return colors[normalize(kind)] ?? "#6c757d";
 }
 
-function buildRegionData(spec, gridSize) {
+function buildRegionData(spec, gridSize, index) {
   const rect = spec.rect;
   const x = px(rect[0], gridSize);
   const y = px(rect[1], gridSize);
@@ -252,7 +325,7 @@ function buildRegionData(spec, gridSize) {
   const height = px(rect[3], gridSize);
 
   const data = {
-    name: spec.name ?? spec.id ?? "Jarvis Region",
+    name: `Jarvis Region ${index + 1}`,
     color: spec.color ?? regionColor(spec.kind),
     hidden: spec.hidden !== false,
     locked: spec.locked !== false,
@@ -270,11 +343,7 @@ function buildRegionData(spec, gridSize) {
     flags: {
       [MODULE_ID]: {
         scenePackageRegion: true,
-        packageRegionId: spec.id ?? null,
-        kind: spec.kind ?? "narrative",
-        purpose: spec.purpose ?? "",
-        automation: clone(spec.automation ?? null),
-        mechanics: clone(spec.mechanics ?? null)
+        packageRegionIndex: index
       }
     }
   };
@@ -285,7 +354,7 @@ function buildRegionData(spec, gridSize) {
     if (behaviorType) {
       const events = (spec.automation?.events ?? ["TOKEN_ENTER"]).map(eventConstant);
       data.behaviors = [{
-        name: "Jarvis — " + (spec.name ?? spec.id ?? "Região"),
+        name: `Jarvis — Region ${index + 1}`,
         type: behaviorType,
         system: {
           source: REGION_SCRIPT_SOURCE,
@@ -303,10 +372,10 @@ function buildRegionData(spec, gridSize) {
   return data;
 }
 
-function buildRegionFallbackDrawing(spec, gridSize) {
+function buildRegionFallbackDrawing(spec, gridSize, index) {
   const rect = spec.rect;
   return {
-    name: "Jarvis Region Fallback — " + (spec.name ?? spec.id ?? "Região"),
+    name: `Jarvis Region Fallback ${index + 1}`,
     x: px(rect[0], gridSize),
     y: px(rect[1], gridSize),
     shape: {
@@ -320,7 +389,7 @@ function buildRegionFallbackDrawing(spec, gridSize) {
     strokeColor: spec.color ?? regionColor(spec.kind),
     strokeAlpha: 0.35,
     strokeWidth: Math.max(2, Math.round(gridSize / 25)),
-    text: spec.name ?? spec.id ?? "",
+    text: "",
     textColor: "#ffffff",
     textAlpha: 0.45,
     fontSize: Math.max(18, Math.round(gridSize / 3)),
@@ -329,10 +398,7 @@ function buildRegionFallbackDrawing(spec, gridSize) {
     flags: {
       [MODULE_ID]: {
         scenePackageRegionFallback: true,
-        packageRegionId: spec.id ?? null,
-        kind: spec.kind ?? "narrative",
-        automation: clone(spec.automation ?? null),
-        mechanics: clone(spec.mechanics ?? null)
+        packageRegionIndex: index
       }
     }
   };
@@ -347,8 +413,8 @@ async function createRegions(scene, regions = [], gridSize, { strictRegions = fa
     failures: []
   };
 
-  for (const spec of regions) {
-    const data = buildRegionData(spec, gridSize);
+  for (const [index, spec] of regions.entries()) {
+    const data = buildRegionData(spec, gridSize, index);
 
     try {
       const created = await scene.createEmbeddedDocuments("Region", [data]);
@@ -372,7 +438,7 @@ async function createRegions(scene, regions = [], gridSize, { strictRegions = fa
       }
 
       try {
-        const drawing = buildRegionFallbackDrawing(spec, gridSize);
+        const drawing = buildRegionFallbackDrawing(spec, gridSize, index);
         const created = await scene.createEmbeddedDocuments("Drawing", [drawing]);
         if (!created?.length) throw new Error("Foundry não retornou o Drawing fallback.");
         summary.fallbacks += 1;
@@ -389,14 +455,84 @@ async function createRegions(scene, regions = [], gridSize, { strictRegions = fa
   return summary;
 }
 
-function getRegionSpec(region) {
+function getRegionSpec(region, scene) {
+  const regions = privateManifestRecord(scene)?.manifest?.regions ?? [];
+  const storedIndex = region?.getFlag?.(MODULE_ID, "packageRegionIndex");
+  const index = Number(storedIndex);
+  if (storedIndex !== null && storedIndex !== undefined && Number.isInteger(index) && index >= 0 && regions[index]) {
+    return regions[index];
+  }
+  const id = region?.getFlag?.(MODULE_ID, "packageRegionId");
+  if (id) {
+    const spec = regions.find(entry => entry.id === id);
+    if (spec) return spec;
+  }
+  // Compatibilidade com Regions antigas sem índice ou ID no manifesto.
   return region?.getFlag?.(MODULE_ID, "automation")
     ? {
-        id: region.getFlag(MODULE_ID, "packageRegionId"),
+        id,
         automation: region.getFlag(MODULE_ID, "automation"),
         mechanics: region.getFlag(MODULE_ID, "mechanics")
       }
     : null;
+}
+
+async function scrubLegacyRegionFlags(scene, manifest) {
+  const specs = manifest?.regions ?? [];
+  for (const collection of [scene.regions, scene.drawings]) {
+    for (const document of collection?.contents ?? []) {
+      const managed = document.getFlag?.(MODULE_ID, "scenePackageRegion")
+        || document.getFlag?.(MODULE_ID, "scenePackageRegionFallback");
+      if (!managed) continue;
+      const id = document.getFlag(MODULE_ID, "packageRegionId");
+      const storedIndex = document.getFlag(MODULE_ID, "packageRegionIndex");
+      const knownIndex = Number(storedIndex);
+      const index = storedIndex !== null && storedIndex !== undefined
+        && Number.isInteger(knownIndex) && specs[knownIndex]
+        ? knownIndex
+        : specs.findIndex(spec => spec.id === id);
+      if (index < 0) {
+        throw new Error(`Region legado '${document.name ?? document.id}' não corresponde ao manifesto privado.`);
+      }
+      const publicName = document.getFlag(MODULE_ID, "scenePackageRegion")
+        ? `Jarvis Region ${index + 1}` : `Jarvis Region Fallback ${index + 1}`;
+      const legacyKeys = ["packageRegionId", "automation", "mechanics", "purpose", "kind"];
+      const dirtyKeys = legacyKeys.filter(key => document.getFlag(MODULE_ID, key) !== undefined);
+      const dirtyName = document.name !== publicName
+        || Boolean(document.getFlag(MODULE_ID, "scenePackageRegionFallback") && document.text);
+      if (storedIndex === index && !dirtyKeys.length && !dirtyName) continue;
+      if (storedIndex !== index) await document.setFlag(MODULE_ID, "packageRegionIndex", index);
+      for (const key of dirtyKeys) {
+        if (document.getFlag(MODULE_ID, key) !== undefined) await document.unsetFlag(MODULE_ID, key);
+      }
+      if (dirtyName) await document.update({ name: publicName,
+        ...(document.getFlag(MODULE_ID, "scenePackageRegionFallback") ? { text: "" } : {}) });
+    }
+  }
+}
+
+async function scrubLegacySceneBuilderFlag(scene) {
+  const previous = scene.getFlag(MODULE_ID, "sceneBuilder");
+  if (!previous) return;
+  if (previous.blueprintId === "scene-package-private"
+    && Object.keys(previous.metadata ?? {}).length === 1
+    && previous.metadata?.scenePackage?.version === PACKAGE_VERSION
+    && Object.keys(previous.metadata.scenePackage).length === 1) return;
+  const safe = {
+    schemaVersion: previous.schemaVersion ?? "1.0",
+    blueprintId: "scene-package-private",
+    builtAt: previous.builtAt ?? null,
+    metadata: { scenePackage: { version: PACKAGE_VERSION } }
+  };
+  await scene.unsetFlag(MODULE_ID, "sceneBuilder");
+  try {
+    await scene.setFlag(MODULE_ID, "sceneBuilder", safe);
+  } catch (error) {
+    await scene.setFlag(MODULE_ID, "sceneBuilder", previous).catch(restoreError =>
+      console.error(`${MODULE_ID} | Falha ao restaurar metadata legada da Scene`, restoreError)
+    );
+    throw error;
+  }
 }
 
 function gmRecipients() {
@@ -476,6 +612,79 @@ export class JarvisScenePackageBuilder {
 
   get version() {
     return PACKAGE_VERSION;
+  }
+
+  async migrateLegacyManifests() {
+    if (!game.user?.isGM || (game.users?.activeGM && game.users.activeGM.id !== game.user.id)) {
+      return { skipped: true, migrated: 0, failures: [] };
+    }
+
+    const result = { skipped: false, migrated: 0, failures: [] };
+    for (const scene of game.scenes ?? []) {
+      const oldFlag = scene.getFlag(MODULE_ID, "scenePackage");
+      if (!oldFlag?.manifest && !oldFlag?.manifestJournalId) continue;
+      let privateJournal = null;
+      try {
+        if (oldFlag.manifest) {
+          privateJournal = await createPrivateManifest(scene, {
+            sceneId: scene.id,
+            manifest: clone(oldFlag.manifest),
+            actorResolution: clone(oldFlag.actorResolution ?? null)
+          });
+          const safeFlag = publicPackageFlag(oldFlag, privateJournal.id);
+          await scene.unsetFlag(MODULE_ID, "scenePackage");
+          try {
+            await scene.setFlag(MODULE_ID, "scenePackage", safeFlag);
+            const persisted = scene.getFlag(MODULE_ID, "scenePackage");
+            if (persisted?.manifest || persisted?.manifestJournalId !== privateJournal.id) {
+              throw new Error("Scene Package: Scene ainda contém manifesto público após a migração.");
+            }
+          } catch (error) {
+            let restored = false;
+            try {
+              await scene.setFlag(MODULE_ID, "scenePackage", oldFlag);
+              restored = Boolean(scene.getFlag(MODULE_ID, "scenePackage")?.manifest);
+            } catch (restoreError) {
+              console.error(`${MODULE_ID} | Falha ao restaurar manifesto legado de ${scene.name}`, restoreError);
+            }
+            if (restored) await deletePrivateJournal(privateJournal).catch(cleanupError =>
+              console.error(`${MODULE_ID} | Falha ao limpar Journal de migração`, cleanupError)
+            );
+            if (restored) privateJournal = null;
+            throw error;
+          }
+          result.migrated += 1;
+        }
+        await scrubLegacyRegionFlags(scene, privateManifestRecord(scene)?.manifest);
+        await scrubLegacySceneBuilderFlag(scene);
+      } catch (error) {
+        const currentFlag = scene.getFlag(MODULE_ID, "scenePackage");
+        if (privateJournal && currentFlag?.manifest && currentFlag.manifestJournalId !== privateJournal.id) {
+          await deletePrivateJournal(privateJournal).catch(cleanupError =>
+            console.error(`${MODULE_ID} | Falha ao limpar Journal de migração`, cleanupError)
+          );
+        }
+        result.failures.push({ sceneId: scene.id, name: scene.name, error: error.message ?? String(error) });
+      }
+    }
+    return result;
+  }
+
+  async cleanupDeletedSceneManifest(scene) {
+    if (!game.user?.isGM || (game.users?.activeGM && game.users.activeGM.id !== game.user.id)) {
+      return { skipped: true, reason: "not-active-gm" };
+    }
+    const journalId = scene?.getFlag?.(MODULE_ID, "scenePackage")?.manifestJournalId;
+    if (!journalId) return { skipped: true, reason: "no-private-manifest" };
+    if (Array.from(game.scenes ?? []).some(other =>
+      other.id !== scene.id && other.getFlag?.(MODULE_ID, "scenePackage")?.manifestJournalId === journalId
+    )) return { skipped: true, reason: "shared-manifest" };
+    const journal = game.journal?.get(journalId);
+    if (!journal || journal.getFlag(MODULE_ID, "scenePackagePrivate")?.sceneId !== scene.id) {
+      return { skipped: true, reason: "manifest-mismatch" };
+    }
+    await deletePrivateJournal(journal);
+    return { skipped: false, deletedJournalId: journalId };
   }
 
   validate(payload) {
@@ -619,14 +828,9 @@ export class JarvisScenePackageBuilder {
 
     return {
       schemaVersion: "1.0",
-      id: payload.id ?? ("scene-package-" + Date.now()),
+      id: "scene-package-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8),
       metadata: {
-        ...(clone(payload.metadata ?? {})),
-        scenePackage: {
-          version: PACKAGE_VERSION,
-          id: payload.id ?? null,
-          purpose: payload.purpose ?? ""
-        }
+        scenePackage: { version: PACKAGE_VERSION }
       },
       scene: {
         name: scene.name,
@@ -699,6 +903,10 @@ export class JarvisScenePackageBuilder {
 
     this.validate(payload);
 
+    if (!replaceExisting && game.scenes?.find(scene => normalize(scene.name) === normalize(payload.scene.name))) {
+      throw new Error(`Scene Package: a Scene '${payload.scene.name}' já existe. Use replaceExisting: true.`);
+    }
+
     const actors = await this.prepareActors(payload, { allowMissingActors, includeOptionalActors });
     const backgroundSrc = await uploadVisualAsset(payload.visual ?? {});
     const blueprint = this.toBlueprint(payload, backgroundSrc, actors.tokens);
@@ -715,6 +923,7 @@ export class JarvisScenePackageBuilder {
 
     const scene = built.scene;
     let regionSummary;
+    let privateJournal;
     try {
       const gridSize = Number(scene.grid?.size ?? payload.scene.grid?.size ?? 100);
       regionSummary = await createRegions(
@@ -725,19 +934,21 @@ export class JarvisScenePackageBuilder {
       );
 
       const manifest = stripLargePackageData(payload);
-      await scene.setFlag(MODULE_ID, "scenePackage", {
-        version: PACKAGE_VERSION,
-        id: payload.id ?? null,
-        builtAt: Date.now(),
+      privateJournal = await createPrivateManifest(scene, {
+        sceneId: scene.id,
         manifest,
         actorResolution: {
           resolved: actors.resolved,
           requiredMissing: actors.requiredMissing,
           optionalMissing: actors.optionalMissing,
           optionalSkipped: actors.optionalSkipped
-        },
-        regionSummary
+        }
       });
+      await scene.setFlag(MODULE_ID, "scenePackage", publicPackageFlag({
+        version: PACKAGE_VERSION,
+        builtAt: Date.now(),
+        regionSummary
+      }, privateJournal.id));
 
       await this.builder.finalize({
         scene,
@@ -748,6 +959,9 @@ export class JarvisScenePackageBuilder {
         view
       });
     } catch (error) {
+      if (privateJournal) await deletePrivateJournal(privateJournal).catch(cleanupError =>
+        console.error(`${MODULE_ID} | Falha ao limpar manifesto privado`, cleanupError)
+      );
       await scene.delete().catch(cleanupError =>
         console.error(`${MODULE_ID} | Falha ao limpar pacote preparado`, cleanupError)
       );
@@ -793,6 +1007,8 @@ export class JarvisScenePackageBuilder {
     if (!scene) throw new Error("Scene Package: Scene não encontrada.");
 
     const packageFlag = scene.getFlag(MODULE_ID, "scenePackage") ?? null;
+    const safePackage = packageFlag ? publicPackageFlag(packageFlag) : null;
+    const privateRecord = game.user?.isGM ? privateManifestRecord(scene, packageFlag) : null;
     const regions = scene.regions?.contents?.filter(region =>
       Boolean(region.getFlag(MODULE_ID, "scenePackageRegion"))
     ) ?? [];
@@ -806,7 +1022,7 @@ export class JarvisScenePackageBuilder {
     return {
       id: scene.id,
       name: scene.name,
-      packageId: packageFlag?.id ?? null,
+      packageId: game.user?.isGM ? (privateRecord?.manifest?.id ?? packageFlag?.id ?? null) : null,
       version: packageFlag?.version ?? null,
       counts: {
         walls: scene.walls?.size ?? 0,
@@ -823,16 +1039,22 @@ export class JarvisScenePackageBuilder {
       healthy:
         backgrounds.length <= 1
         && Boolean(packageFlag)
-        && (packageFlag.regionSummary?.failures?.length ?? 0) === 0,
-      package: packageFlag
+        && safePackage.regionSummary.failureCount === 0,
+      package: game.user?.isGM && privateRecord
+        ? { ...safePackage, id: privateRecord.manifest.id ?? null,
+            manifest: privateRecord.manifest, actorResolution: privateRecord.actorResolution }
+        : safePackage
     };
   }
 
   async handleRegionEvent({ behavior, event, region, scene } = {}) {
     if (!game.user?.isGM) return { skipped: true, reason: "not-gm" };
+    if (game.users?.activeGM && game.users.activeGM.id !== game.user.id) {
+      return { skipped: true, reason: "not-active-gm" };
+    }
     if (!scene || !region) return { skipped: true, reason: "missing-context" };
 
-    const spec = getRegionSpec(region);
+    const spec = getRegionSpec(region, scene);
     if (!spec?.automation) return { skipped: true, reason: "no-automation" };
 
     const token = event?.data?.token ?? null;
@@ -863,8 +1085,7 @@ export class JarvisScenePackageBuilder {
     const scene = resolveScene(sceneRef);
     if (!scene) throw new Error("Scene Package: Scene não encontrada.");
 
-    const packageFlag = scene.getFlag(MODULE_ID, "scenePackage");
-    const regions = packageFlag?.manifest?.regions;
+    const regions = privateManifestRecord(scene)?.manifest?.regions;
 
     if (!Array.isArray(regions)) {
       throw new Error("Scene Package: esta Scene não possui manifesto de Regions para reparar.");
@@ -873,22 +1094,47 @@ export class JarvisScenePackageBuilder {
     const existingRegions = scene.regions?.contents?.filter(region =>
       Boolean(region.getFlag(MODULE_ID, "scenePackageRegion"))
     ) ?? [];
-    if (existingRegions.length) {
-      await scene.deleteEmbeddedDocuments("Region", existingRegions.map(region => region.id));
-    }
-
     const fallbackDrawings = scene.drawings?.contents?.filter(drawing =>
       Boolean(drawing.getFlag(MODULE_ID, "scenePackageRegionFallback"))
     ) ?? [];
-    if (fallbackDrawings.length) {
-      await scene.deleteEmbeddedDocuments("Drawing", fallbackDrawings.map(drawing => drawing.id));
-    }
+    const previousRegionIds = new Set(existingRegions.map(region => region.id));
+    const previousDrawingIds = new Set(fallbackDrawings.map(drawing => drawing.id));
+
+    const stagedIds = (collection, previousIds, flag) =>
+      collection?.contents?.filter(document =>
+        !previousIds.has(document.id) && Boolean(document.getFlag(MODULE_ID, flag))
+      ).map(document => document.id) ?? [];
 
     const gridSize = Number(scene.grid?.size ?? 100);
-    const regionSummary = await createRegions(scene, regions, gridSize, { strictRegions });
+    let regionSummary;
+    try {
+      // Build replacements first so a failed Region or Drawing cannot erase working originals.
+      regionSummary = await createRegions(scene, regions, gridSize, { strictRegions });
+      if (regionSummary.failures.length) {
+        throw new Error(`Scene Package: ${regionSummary.failures.length} Region(s) não puderam ser reparadas.`);
+      }
+    } catch (error) {
+      const stagedRegions = stagedIds(scene.regions, previousRegionIds, "scenePackageRegion");
+      const stagedDrawings = stagedIds(scene.drawings, previousDrawingIds, "scenePackageRegionFallback");
+      if (stagedRegions.length) await scene.deleteEmbeddedDocuments("Region", stagedRegions).catch(cleanupError =>
+        console.error(`${MODULE_ID} | Falha ao limpar Regions de reparo`, cleanupError)
+      );
+      if (stagedDrawings.length) await scene.deleteEmbeddedDocuments("Drawing", stagedDrawings).catch(cleanupError =>
+        console.error(`${MODULE_ID} | Falha ao limpar Drawings de reparo`, cleanupError)
+      );
+      throw error;
+    }
+
+    // A deletion failure leaves the newly built replacements in place for recovery.
+    if (existingRegions.length) {
+      await scene.deleteEmbeddedDocuments("Region", [...previousRegionIds]);
+    }
+    if (fallbackDrawings.length) {
+      await scene.deleteEmbeddedDocuments("Drawing", [...previousDrawingIds]);
+    }
 
     await scene.update({
-      ["flags." + MODULE_ID + ".scenePackage.regionSummary"]: regionSummary,
+      ["flags." + MODULE_ID + ".scenePackage.regionSummary"]: publicRegionSummary(regionSummary),
       ["flags." + MODULE_ID + ".scenePackage.repairedAt"]: Date.now()
     });
 
@@ -910,8 +1156,7 @@ export class JarvisScenePackageBuilder {
     const scene = resolveScene(sceneRef);
     if (!scene) throw new Error("Scene Package: Scene não encontrada.");
 
-    const packageFlag = scene.getFlag(MODULE_ID, "scenePackage");
-    const actions = packageFlag?.manifest?.manualActions?.[key];
+    const actions = privateManifestRecord(scene)?.manifest?.manualActions?.[key];
 
     if (!Array.isArray(actions)) {
       throw new Error("Scene Package: ação manual desconhecida: '" + key + "'.");

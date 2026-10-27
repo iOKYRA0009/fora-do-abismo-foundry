@@ -2,8 +2,8 @@
   "id": "fora-do-abismo-foundry",
   "type": "module",
   "title": "Fora do Abismo — Jarvis Tools",
-  "description": "Ferramentas da campanha Fora do Abismo para Foundry VTT, incluindo Jarvis Importer V9, automações, transformações, Scene Framework V2 e Scene Package Builder para construir mapas completos e reutilizáveis no Foundry V14.",
-  "version": "0.2.0-beta.17",
+  "description": "Central Jarvis para Fora do Abismo no Foundry V14: personagens, itens, classes, mapas, aparências, compêndios, automações e diagnóstico com permissões por papel.",
+  "version": "1.0.0",
   "authors": [
     {
       "name": "iOKYRA0009",

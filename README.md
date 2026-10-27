@@ -26,7 +26,19 @@ No Foundry VTT:
 
 O Foundry usa o mesmo Manifest URL para detectar atualizações futuras.
 
-> O pipeline de distribuição é estável; o Jarvis V9 continua em desenvolvimento incremental enquanto validamos fichas e cenas reais da campanha.
+## Jarvis 1.0.0 — Central no Foundry
+
+Após ativar o módulo, clique em **Jarvis — Fora do Abismo** nos controles de **Tokens**. A janela única reúne personagens, itens e classes, mapas, aparências, compêndios, diagnóstico, jogadores e Macro. O Mestre vê todas as opções; jogadores e Trusted Players recebem ações compatíveis com suas permissões e com a propriedade do Actor.
+
+O Estúdio de Mapas revisa sugestões antes de criar paredes, portas, luzes e sons. A auditoria da cena ativa verifica geometria e dados de iluminação sem alterar o mapa. Itens e classes podem ser criados como documentos nativos do D&D5e ou copiados de compêndios visíveis. Consulte [o guia da Central](docs/jarvis-console.md) para fluxos, permissões e limites.
+
+Macro Script equivalente ao botão:
+
+```js
+game.modules.get("fora-do-abismo-foundry")?.api?.ui?.open()
+```
+
+> O pipeline de distribuição é estável. O Importer V9 mantém seu formato e as fichas/cenas da campanha ainda exigem validação dentro do mundo Foundry.
 
 ## Publicação automática
 
@@ -66,7 +78,7 @@ Se a versão já existir, a workflow não sobrescreve silenciosamente aquela rel
 - [ ] Magias completas e preparação
 - [ ] Recursos customizados além dos 3 slots nativos
 - [x] Testes automatizados de regressão e diagnóstico somente leitura
-- [ ] Interface visual completa de importação dentro do Foundry
+- [x] Interface visual unificada de importação e ferramentas dentro do Foundry
 
 **Primeira entrega de cenas (beta.15):** importação Universal VTT com prévia pelo controle Paredes, validação geométrica inicial, sons em Scene Packages e substituição de cenas com backup. Consulte [o fluxo e seus limites](docs/scene-workflow-phase-1.md).
 
@@ -142,7 +154,7 @@ O pacote pode conter:
 - Actors obrigatórios e opcionais, com posição, tamanho, disposição e estado oculto;
 - Scene Regions para perigos, puzzles, gatilhos e áreas narrativas;
 - fallback para Drawing oculto caso o Foundry recuse um Region;
-- puzzles, recompensas e notas do Mestre armazenados no manifesto da Scene;
+- puzzles, recompensas e notas do Mestre armazenados em um Journal privado associado à Scene;
 - ações manuais reutilizáveis, como revelar ou ocultar um Token;
 - inspeção final do pacote criado.
 

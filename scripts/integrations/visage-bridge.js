@@ -29,6 +29,27 @@ function resolveToken(tokenOrId) {
   return null;
 }
 
+function hasPermission(document, level) {
+  const user = globalThis.game?.user;
+  return Boolean(user && (user.isGM || document?.testUserPermission?.(user, level)));
+}
+
+function assertActorPermission(actor, level) {
+  if (hasPermission(actor, level)) return;
+  throw new Error(`Jarvis Appearance: sem permissão ${level} para ${actor?.name ?? "este Actor"}.`);
+}
+
+function assertTokenPermission(token, level) {
+  const document = token.document?.documentName === "Token" ? token.document : token;
+  const baseActor = globalThis.game?.actors?.get?.(document.actorId);
+  if ([document, token.actor, document.actor, baseActor].some(candidate => hasPermission(candidate, level))) return;
+  throw new Error(`Jarvis Appearance: sem permissão ${level} para ${token.name ?? "este Token"}.`);
+}
+
+function profilesFromActor(actor) {
+  return foundry.utils.deepClone(actor.getFlag(MODULE_ID, PROFILE_FLAG) ?? {});
+}
+
 export function getActorTokens(actor) {
   if (!actor || !canvas?.ready) return [];
   return canvas.tokens.placeables.filter(token => {
@@ -50,7 +71,8 @@ export function getAppearanceStatus() {
 
 export function getAppearanceProfiles(actor) {
   if (!actor) return {};
-  return foundry.utils.deepClone(actor.getFlag(MODULE_ID, PROFILE_FLAG) ?? {});
+  assertActorPermission(actor, "OBSERVER");
+  return profilesFromActor(actor);
 }
 
 export async function setAppearanceProfile(actor, key, visageId, {
@@ -58,13 +80,14 @@ export async function setAppearanceProfile(actor, key, visageId, {
   label = null
 } = {}) {
   if (!actor) throw new Error("Jarvis Appearance: Actor ausente.");
+  assertActorPermission(actor, "OWNER");
   if (!key) throw new Error("Jarvis Appearance: chave do perfil ausente.");
   if (!visageId) throw new Error("Jarvis Appearance: visageId ausente.");
   if (!["identity", "overlay"].includes(mode)) {
     throw new Error("Jarvis Appearance: mode deve ser 'identity' ou 'overlay'.");
   }
 
-  const profiles = getAppearanceProfiles(actor);
+  const profiles = profilesFromActor(actor);
   profiles[normalizeKey(key)] = {
     visageId: String(visageId),
     mode,
@@ -76,7 +99,8 @@ export async function setAppearanceProfile(actor, key, visageId, {
 
 export async function removeAppearanceProfile(actor, key) {
   if (!actor) throw new Error("Jarvis Appearance: Actor ausente.");
-  const profiles = getAppearanceProfiles(actor);
+  assertActorPermission(actor, "OWNER");
+  const profiles = profilesFromActor(actor);
   const normalized = normalizeKey(key);
   if (!Object.prototype.hasOwnProperty.call(profiles, normalized)) return false;
   delete profiles[normalized];
@@ -85,7 +109,7 @@ export async function removeAppearanceProfile(actor, key) {
 }
 
 function resolveProfile(actor, keyOrId, options = {}) {
-  const profiles = getAppearanceProfiles(actor);
+  const profiles = actor ? profilesFromActor(actor) : {};
   const stored = profiles[normalizeKey(keyOrId)];
   if (stored) return { ...stored };
 
@@ -96,9 +120,10 @@ function resolveProfile(actor, keyOrId, options = {}) {
 }
 
 export async function applyAppearance(tokenOrId, keyOrId, options = {}) {
-  const api = getVisageApi();
   const token = resolveToken(tokenOrId);
   if (!token) throw new Error("Jarvis Appearance: Token não encontrado no canvas atual.");
+  assertTokenPermission(token, "OWNER");
+  const api = getVisageApi();
 
   const profile = resolveProfile(token.actor, keyOrId, options);
   if (!profile.visageId) throw new Error("Jarvis Appearance: perfil/Visage vazio.");
@@ -121,10 +146,13 @@ export async function applyAppearance(tokenOrId, keyOrId, options = {}) {
 
 export async function applyAppearanceToActor(actor, keyOrId, options = {}) {
   if (!actor) throw new Error("Jarvis Appearance: Actor ausente.");
+  assertActorPermission(actor, "OWNER");
   const tokens = getActorTokens(actor);
   if (!tokens.length) {
     throw new Error(`Jarvis Appearance: ${actor.name} não possui Token ativo na cena atual.`);
   }
+
+  for (const token of tokens) assertTokenPermission(token, "OWNER");
 
   const results = [];
   for (const token of tokens) results.push(await applyAppearance(token, keyOrId, options));
@@ -132,47 +160,55 @@ export async function applyAppearanceToActor(actor, keyOrId, options = {}) {
 }
 
 export async function removeAppearance(tokenOrId, keyOrId) {
-  const api = getVisageApi();
   const token = resolveToken(tokenOrId);
   if (!token) throw new Error("Jarvis Appearance: Token não encontrado no canvas atual.");
+  assertTokenPermission(token, "OWNER");
+  const api = getVisageApi();
   const profile = resolveProfile(token.actor, keyOrId);
   return api.remove(token, profile.visageId);
 }
 
 export async function removeAppearanceFromActor(actor, keyOrId) {
   if (!actor) throw new Error("Jarvis Appearance: Actor ausente.");
+  assertActorPermission(actor, "OWNER");
   const tokens = getActorTokens(actor);
+  for (const token of tokens) assertTokenPermission(token, "OWNER");
   const results = [];
   for (const token of tokens) results.push(await removeAppearance(token, keyOrId));
   return results;
 }
 
 export async function revertAppearance(tokenOrId) {
-  const api = getVisageApi();
   const token = resolveToken(tokenOrId);
   if (!token) throw new Error("Jarvis Appearance: Token não encontrado no canvas atual.");
+  assertTokenPermission(token, "OWNER");
+  const api = getVisageApi();
   return api.revert(token);
 }
 
 export async function revertAppearanceForActor(actor) {
   if (!actor) throw new Error("Jarvis Appearance: Actor ausente.");
+  assertActorPermission(actor, "OWNER");
   const tokens = getActorTokens(actor);
+  for (const token of tokens) assertTokenPermission(token, "OWNER");
   const results = [];
   for (const token of tokens) results.push(await revertAppearance(token));
   return results;
 }
 
 export async function getAvailableAppearances(tokenOrId) {
-  const api = getVisageApi();
   const token = resolveToken(tokenOrId);
   if (!token) throw new Error("Jarvis Appearance: Token não encontrado no canvas atual.");
+  assertTokenPermission(token, "OBSERVER");
+  const api = getVisageApi();
   return api.getAvailable(token);
 }
 
 export async function isAppearanceActive(tokenOrId, keyOrId) {
-  const api = getVisageApi();
   const token = resolveToken(tokenOrId);
   if (!token) return false;
+  assertTokenPermission(token, "OBSERVER");
+  const api = getVisageApi();
   const profile = resolveProfile(token.actor, keyOrId);
   return api.isActive(token, profile.visageId);
 }
