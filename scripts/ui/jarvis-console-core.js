@@ -13,7 +13,7 @@ export function visibleJarvisTabs(access) {
   if (access?.gm) {
     return ["overview", "characters", "content", "maps", "appearances", "compendiums", "macros", "players", "diagnostics"];
   }
-  return ["overview", "characters", "appearances", "compendiums", "players"];
+  return ["overview", "characters", "appearances", "compendiums", "macros", "players"];
 }
 
 export function assertJarvisAccess(condition, message = "Jarvis: você não tem permissão para esta ação.") {

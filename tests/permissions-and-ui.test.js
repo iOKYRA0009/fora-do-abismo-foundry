@@ -90,12 +90,12 @@ test("trusted users can manage only owned Actors; ordinary players remain read-o
   assert.equal(trustedAccess.trusted, true);
   assert.equal(trustedAccess.canViewActor, true);
   assert.equal(trustedAccess.canManageActor, true);
-  assert.deepEqual(visibleJarvisTabs(trustedAccess), ["overview", "characters", "appearances", "compendiums", "players"]);
+  assert.deepEqual(visibleJarvisTabs(trustedAccess), ["overview", "characters", "appearances", "compendiums", "macros", "players"]);
 
   const playerAccess = getJarvisAccess(player, actor);
   assert.equal(playerAccess.canViewActor, false);
   assert.equal(playerAccess.canManageActor, false);
-  assert.deepEqual(visibleJarvisTabs(playerAccess), ["overview", "characters", "appearances", "compendiums", "players"]);
+  assert.deepEqual(visibleJarvisTabs(playerAccess), ["overview", "characters", "appearances", "compendiums", "macros", "players"]);
   assert.throws(() => assertJarvisAccess(playerAccess.canManageActor), /não tem permissão/);
 
   const unrelated = { testUserPermission: () => false, isOwner: true };

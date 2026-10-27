@@ -1,54 +1,63 @@
-# Jarvis 1.0.0 — Central no Foundry
+# Central Jarvis 1.1.0 — guia da candidata
 
-## Abrir
+## Abertura e navegação
 
-Ative o módulo em um mundo Foundry V14 com D&D5e 6.0.x. O botão **Jarvis — Fora do Abismo** aparece nos controles de **Tokens**. Ele abre a mesma janela para todos os papéis, com as ações permitidas para cada usuário.
+No Foundry V14 com D&D5e 6.0.x, ative o módulo e clique em **Jarvis — Fora do Abismo** nos controles de Tokens. A mesma janela atende Mestre, Trusted Player e Player. O menu lateral pode ser recolhido; setas, Home e End percorrem as abas. A busca global encontra ferramentas, fichas, Items acessíveis, cenas visíveis, macros autorizadas e índices de compêndios. Os índices só são carregados quando há uma busca; resultados e histórico pessoal têm limites para não congestionar o cliente.
 
-O Mestre também pode usar uma Macro Script:
+O atalho nativo de abertura continua válido:
 
 ```js
 game.modules.get("fora-do-abismo-foundry")?.api?.ui?.open()
 ```
 
-A aba **Macro** cria essa macro e a coloca no atalho escolhido da barra do Mestre.
+## Áreas da Central
 
-## Abas
-
-| Aba | Uso |
+| Área | Ações principais |
 | --- | --- |
-| Personagens | Abrir fichas, analisar e registrar proveniência/regras, sincronizar Jack, criar Actor e importar/comparar JSON V9. |
-| Itens e classes | Criar Item nativo D&D5e, importar Items V9 em ficha existente e abrir a ficha para configurar mecânicas. |
-| Mapas | Estúdio PNG/WEBP/UVTT, análise de paredes e iluminação, templates, skins, presets, luz ambiente, Scene Package JSON e manutenção de regiões. |
-| Aparências | Registrar, remover e aplicar perfis Visage e Metamorph; importar pacotes JSON de skins. |
-| Compêndios | Consultar índice de packs visíveis, abrir documentos e adicionar Items ao mundo ou personagem. |
-| Diagnóstico | Executar verificação somente leitura, self-test dos templates e listar módulos ativos. |
-| Jogadores | Ver papel, abrir a própria ficha e acessar compêndios. |
-| Macro | Instalar ou copiar o comando de abertura da Central. |
+| Visão geral | Estado do módulo, integrações, personagem ativo, favoritos e ferramentas recentes. |
+| Personagens e NPCs | Abrir ficha; criar com prévia nos modos simples ou avançado; importar/comparar JSON V9; revisar proveniência, regras, Jack e progressão. |
+| Itens e homebrew | Criar Item, classe, subclasse, magia e habilidade; importar Items V9; configurar Activities, Active Effects, cargas e progressão. |
+| Mapas e cenas | Estúdio, UVTT, templates, skins, presets, Scene Package, auditoria e edição de documentos da cena atual. |
+| Aparências e formas | Consultar, registrar, aplicar e reverter perfis Visage e Metamorph; importar pacote visual. |
+| Compêndios | Buscar nos packs visíveis, abrir e importar documentos conforme permissão. |
+| Macros e automações | Biblioteca de comandos gerenciados, atalhos, favoritos, histórico; revisão de scripts de Activities pelo Mestre. |
+| Jogadores | Abrir ficha, consultar PV, recursos e Items do personagem, acessar compêndios, macros e aparências permitidas. |
+| Diagnóstico | Verificações somente leitura, teste de templates e lista de módulos ativos. |
 
-Visage e Metamorph são opcionais. A Central indica quando estão inativos; as funções respectivas só executam com a integração ativa.
+## Criar personagens e homebrew
 
-## Permissões
+No **modo simples**, informe nome, tipo, atributos e, se necessário, PV, CA e história. Para um Item, escolha tipo, destino, descrição e cargas. A prévia mostra a adaptação para os campos nativos D&D5e antes da confirmação. A ficha nativa abre após a criação para concluir escolhas de classe, raça, equipamento e mecânicas que dependem do sistema.
 
-| Papel Foundry | Acesso |
-| --- | --- |
-| Mestre | Todas as abas e operações. |
-| Trusted Player | Fichas visíveis, consulta de compêndios, importação de Items oficiais D&D5e apenas em Actor próprio e edição de aparência/forma do próprio Actor. |
-| Player | Abrir fichas visíveis, consultar compêndios, ver perfis e acessar a aba Jogadores. |
+No **modo avançado**, use um objeto JSON com `data` e, opcionalmente, `effects` e `progression`. `data.jarvis` aceita a semântica do Importer V9; `data.system` aceita estrutura nativa D&D5e. Exemplo de classe:
 
-O painel verifica as permissões novamente ao executar cada ação. Ele não permite que um jogador crie Actors, Items globais ou Scenes. A importação de JSON V9 permanece exclusiva do Mestre.
+```json
+{
+  "data": { "jarvis": { "hitDie": "d8", "activities": [] } },
+  "effects": [{ "name": "Efeito de exemplo", "changes": [] }],
+  "progression": [{ "level": 2, "grants": [] }]
+}
+```
 
-## Fluxos recomendados
+Progressão Jarvis só é registrada em Items de classe. `Advancement` complexo e preparação de magias ainda exigem revisão na ficha nativa. Para conteúdo oficial, busque o Item no compêndio visível e importe para o personagem selecionado; o fluxo de homebrew fica na mesma Central.
 
-1. **Personagem existente:** selecione o Actor, abra a ficha e use origem/regras para revisar o conteúdo. O JSON V9 pode ser comparado com a ficha sem gravar nada.
-2. **Classe oficial:** busque no compêndio D&D5e, abra para revisar e adicione ao Actor escolhido. Itens são copiados como documentos nativos D&D5e.
-3. **Classe ou item homebrew:** crie na aba Itens e classes. A ficha nativa abre para configurar progressão, Activities, usos e efeitos. O Item recebe proveniência `homebrew`. Para acrescentar Items V9 com semântica Jarvis a uma ficha existente, use o importador JSON da mesma aba.
-4. **Mapa novo:** use o Estúdio para revisar sugestões de paredes, portas, luz e som antes da criação. Alternativamente, use template, preset ou Scene Package JSON. A Central confirma toda criação.
-5. **Mapa existente:** abra a cena e use **Analisar paredes e luz**; o relatório não altera o mapa. Ações de skin e ambiente pedem confirmação.
-6. **Skins:** registre o ID de um visual já existente ou importe um pacote JSON Visage na aba Aparências. A importação mostra a quantidade e pede confirmação antes de substituir nomes iguais.
+## Editar uma cena existente
 
-## Segurança e limites
+Abra a cena e use **Analisar paredes e luz** para uma auditoria somente leitura. Na seção de edição, escolha parede/porta, luz, som ou escuridão/cor da cena. Para alterar ou remover um documento, selecione-o na lista ou informe o ID nativo; **Carregar dados atuais** preenche os campos editáveis. A lista mostra os primeiros 500 documentos, e o ID aceita os restantes. Para adicionar, informe os dados JSON correspondentes; modelos de parede, porta, tocha e ambiente ajudam a começar. Coordenadas são pixels da cena, enquanto raios de luz usam a unidade nativa do Foundry.
 
-- Scene Packages novos guardam notas, puzzles e ações do Mestre em um JournalEntry privado; a Scene mantém apenas referência e resumo. Quando o Mestre abre o mundo, o Jarvis migra manifestos legados da Scene para esse armazenamento.
-- A auditoria de luz valida dados e alerta sobre escuridão sem fonte ativa. Ela não simula a visão de cada Token nem verifica visualmente se todos os caminhos estão iluminados.
-- O importador V9 cobre as semânticas implementadas no motor. Advancement complexo, preparação completa de magias e recursos além dos três slots nativos devem ser configurados na ficha D&D5e e testados no mundo.
-- O teste Node valida motores, permissões e regressões. Antes de usar a versão em sessão, confira no Foundry com uma cópia do mundo: criação/importação, papel Player/Trusted/GM, Visage/Metamorph, visão, áudio e combate.
+Use **Pré-visualizar alteração**. Para salvar, pressione **Salvar na cena** e confirme. Se os campos mudarem desde a prévia, a Central exige outra revisão. O editor valida coordenadas, dimensões e campos permitidos; possíveis aberturas entre pontas de paredes são heurísticas de revisão, não reconhecimento perfeito de mapa.
+
+Cada edição bem-sucedida entra em um Journal privado de histórico. **Ver histórico** mostra o ID da alteração; cole o ID e use **Desfazer alteração**. O desfazer é bloqueado se o mesmo documento mudou depois. Alterações antigas podem sair do histórico, que mantém as 30 mais recentes por cena. A aplicação de um preset de luz geral também entra nesse histórico. Arquivos de imagem e cenas completas não são excluídos por essa ferramenta.
+
+## Macros e Activities
+
+O Mestre pode criar, editar, duplicar, remover e importar descritores JSON de macros. Cada entrada usa um comando registrado (`open-console`, `open-actor`, `open-item`, `open-compendium`, `audit-scene`, `open-map-studio` ou `run-diagnostics`) e parâmetros validados. O Mestre escolhe visibilidade: Mestre, Trusted Player ou todos. Cada usuário pode executar macros visíveis, favoritar e instalar um atalho pessoal, sujeito à permissão nativa do Foundry para criar Macros. O histórico pessoal informa sucesso ou erro. A importação recebe JSON declarativo, até 100 entradas por vez.
+
+O arrastar de arquivos `.txt`/`.js` e o editor nativo do Foundry continuam disponíveis fora dessa biblioteca. A biblioteca gerenciada não executa texto JavaScript livre enviado por jogadores.
+
+Automações Jarvis em Activities precisam de aprovação explícita do Mestre ativo. Na aba Macros, selecione personagem, Item e Activity; **Inspecionar** mostra script e nomes dos Active Effects embutidos. Depois, **Aprovar** grava somente o resumo criptográfico do conteúdo revisado. Qualquer alteração de script ou Effect invalida a aprovação. **Revogar** remove a autorização. Consulte [a política de execução](activity-automation-approval.md): scripts Jarvis rodam apenas no cliente do Mestre ativo ao usar a Activity, mesmo que outro usuário tenha acesso à ficha.
+
+## Permissões e recuperação
+
+O Mestre ativo executa criação global, edição de cena, biblioteca de macros e aprovação de automações. Trusted Players podem alterar perfis de aparência de Actors próprios e importar Items oficiais D&D5e de compêndios para a própria ficha. Players comuns consultam fichas e documentos visíveis, recursos e macros autorizadas. Os serviços verificam permissão novamente ao receber uma ação; ocultar um botão não é a barreira de segurança.
+
+Migrações de manifestos de cenas antigas só ocorrem após prévia e confirmação do Mestre. Backups e relatórios ficam em Journals privados. Uploads de mapas interrompidos são registrados para revisão e não são apagados automaticamente. Consulte o [roteiro de validação](1.1.0-validacao-foundry.md) antes de usar a candidata em sessão.

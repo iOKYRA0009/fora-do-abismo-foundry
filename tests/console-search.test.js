@@ -55,3 +55,17 @@ test("search obeys result cap before querying compendiums", async () => {
   assert.equal(result.length, 1);
   assert.equal(reads, 0);
 });
+
+test("global search includes only accessible Items, scenes and managed macros", async () => {
+  globalThis.game = { user: { id: "player", isGM: false } };
+  const visible = { id: "item-visible", name: "Espada", type: "weapon",
+    testUserPermission: () => true };
+  const hidden = { id: "item-hidden", name: "Espada secreta", type: "weapon",
+    testUserPermission: () => false };
+  const results = await searchConsole("espada", { access: { gm: false },
+    items: [visible, hidden], scenes: [{ id: "secret", name: "Espada do Mestre",
+      testUserPermission: () => false, active: false }],
+    macros: [{ id: "macro-visible", name: "Espada rápida", category: "personagens", visibility: "all" },
+      { id: "macro-hidden", name: "Espada secreta", category: "personagens", visibility: "gm" }] });
+  assert.deepEqual(results.map(row => row.id), ["item-visible", "macro-visible"]);
+});

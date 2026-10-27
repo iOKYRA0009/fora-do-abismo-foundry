@@ -84,6 +84,16 @@ import { inspectSceneAssetLedger, listSceneAssetLedger, registerSceneAssetLedger
 import { convertUniversalVtt } from "./scenes/importers/universal-vtt.js";
 import { formatJarvisDiagnostics, runJarvisDiagnostics } from "./diagnostics/health-check.js";
 import { compareActorToPayload } from "./diagnostics/actor-equivalence.js";
+import { contentItemTypes, contentTemplates, createContent, previewContent } from "./content/content-wizard.js";
+import {
+  createManagedMacro, duplicateManagedMacro, executeManagedMacro, importManagedMacros,
+  installManagedMacroHotbar, listManagedMacros, managedMacroCommands, managedMacroFavorites,
+  managedMacroHistory, previewManagedMacroImport, registerManagedMacros, removeManagedMacro,
+  toggleManagedMacroFavorite, updateManagedMacro
+} from "./macros/managed-macros.js";
+import {
+  applySceneEdit, listSceneEditHistory, previewSceneEdit, sceneEditPresets, undoSceneEdit
+} from "./scenes/scene-editor.js";
 
 const MODULE_ID = "fora-do-abismo-foundry";
 
@@ -100,6 +110,7 @@ Hooks.once("init", () => {
   registerJackEngine();
   registerProgressionEngine();
   registerSceneAssetLedger();
+  registerManagedMacros();
 });
 
 Hooks.once("ready", () => {
@@ -127,6 +138,15 @@ Hooks.once("ready", () => {
   const api = {
     ui: { open: openJarvisConsole },
     importer: new JarvisImporterV9(),
+    content: { templates: contentTemplates, itemTypes: contentItemTypes,
+      preview: previewContent, create: createContent },
+    macros: {
+      commands: managedMacroCommands, list: listManagedMacros, history: managedMacroHistory,
+      favorites: managedMacroFavorites, toggleFavorite: toggleManagedMacroFavorite,
+      create: createManagedMacro, update: updateManagedMacro, duplicate: duplicateManagedMacro,
+      remove: removeManagedMacro, previewImport: previewManagedMacroImport,
+      import: importManagedMacros, execute: executeManagedMacro, installHotbar: installManagedMacroHotbar
+    },
     progression: { applyActor: applyActorProgressions },
     automation: {
       inspect: inspectActivityAutomation,
@@ -192,6 +212,10 @@ Hooks.once("ready", () => {
       formatReport: formatRulesProfileReport
     },
     scenes: {
+      editor: {
+        presets: sceneEditPresets, preview: previewSceneEdit, apply: applySceneEdit,
+        history: listSceneEditHistory, undo: undoSceneEdit
+      },
       openImporter: openUniversalVttImporter,
       openStudio: openMapStudio,
       suggestRasterWalls,

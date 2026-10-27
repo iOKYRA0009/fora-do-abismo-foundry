@@ -21,6 +21,21 @@ function visibleActor(actor, access) {
   return Boolean(access?.gm || actor?.testUserPermission?.(game.user, "OBSERVER"));
 }
 
+function visibleItem(item, access) {
+  return Boolean(access?.gm || item?.testUserPermission?.(game.user, "OBSERVER")
+    || item?.parent?.testUserPermission?.(game.user, "OBSERVER"));
+}
+
+function visibleScene(scene, access) {
+  return Boolean(access?.gm || scene?.testUserPermission?.(game.user, "OBSERVER")
+    || (scene?.active && scene?.navigation));
+}
+
+function visibleMacro(macro, access) {
+  return Boolean(access?.gm || macro?.visibility === "all"
+    || (access?.trusted && macro?.visibility === "trusted"));
+}
+
 function visiblePack(pack) {
   return pack?.visible !== false && ["Item", "Actor"].includes(pack?.documentName);
 }
@@ -40,7 +55,7 @@ async function packRows(pack) {
 }
 
 export async function searchConsole(query, {
-  access, actors = [], packs = [], tools = [], limit = 30, signal = null
+  access, actors = [], items = [], scenes = [], macros = [], packs = [], tools = [], limit = 30, signal = null
 } = {}) {
   const needle = plain(query).trim();
   if (!needle || signal?.aborted) return [];
@@ -62,7 +77,30 @@ export async function searchConsole(query, {
         label: actor.name, description: actor.type ?? "Ficha" });
     }
   }
-  if (results.length >= cap || needle.length < 2 || signal?.aborted) return results;
+  for (const item of list(items)) {
+    if (!visibleItem(item, access)) continue;
+    if (matches(`${item.name ?? ""} ${item.type ?? ""}`, needle)) {
+      add({ type: "item", id: item.uuid ?? item.id, itemId: item.id,
+        actorId: item.parent?.documentName === "Actor" ? item.parent.id : null,
+        label: item.name, description: item.type ?? "Item" });
+    }
+  }
+  for (const scene of list(scenes)) {
+    if (!visibleScene(scene, access)) continue;
+    if (matches(scene.name, needle)) {
+      add({ type: "scene", id: scene.id, sceneId: scene.id,
+        label: scene.name, description: "Cena" });
+    }
+  }
+  for (const macro of list(macros)) {
+    if (!visibleMacro(macro, access)) continue;
+    if (matches(`${macro.name ?? ""} ${macro.category ?? ""}`, needle)) {
+      add({ type: "macro", id: macro.id, macroId: macro.id,
+        label: macro.name, description: `Macro · ${macro.category ?? "geral"}` });
+    }
+  }
+  if (signal?.aborted) return [];
+  if (results.length >= cap || needle.length < 2) return results;
 
   const searchablePacks = list(packs).filter(visiblePack);
   let cursor = 0;

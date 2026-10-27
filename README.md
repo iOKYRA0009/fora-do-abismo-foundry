@@ -26,11 +26,13 @@ No Foundry VTT:
 
 O Foundry usa o mesmo Manifest URL para detectar atualizações futuras.
 
-## Jarvis 1.0.0 — Central no Foundry
+## Jarvis 1.1.0 — candidata em desenvolvimento
+
+A versão publicada pelo Manifest URL acima continua sendo **1.0.0**. A branch `feat/jarvis-1.1.0` contém uma candidata para validação; nenhuma release é criada ao enviar essa branch ao GitHub.
 
 Após ativar o módulo, clique em **Jarvis — Fora do Abismo** nos controles de **Tokens**. A janela única reúne personagens, itens e classes, mapas, aparências, compêndios, diagnóstico, jogadores e Macro. O Mestre vê todas as opções; jogadores e Trusted Players recebem ações compatíveis com suas permissões e com a propriedade do Actor.
 
-O Estúdio de Mapas revisa sugestões antes de criar paredes, portas, luzes e sons. A auditoria da cena ativa verifica geometria e dados de iluminação sem alterar o mapa. Itens e classes podem ser criados como documentos nativos do D&D5e ou copiados de compêndios visíveis. Consulte [o guia da Central](docs/jarvis-console.md) para fluxos, permissões e limites.
+O Estúdio de Mapas revisa sugestões antes de criar cenas. Na Central, o Mestre também pode analisar e editar paredes, portas, luzes, sons e escuridão de cenas existentes, com prévia e histórico de desfazer compatível. Itens, classes e personagens usam documentos nativos D&D5e com modos simples e avançado. A aba Macros oferece comandos gerenciados por categoria e execução com permissões. Consulte [o guia da Central](docs/jarvis-console.md) e [o roteiro de validação no Foundry](docs/1.1.0-validacao-foundry.md).
 
 Macro Script equivalente ao botão:
 
@@ -38,7 +40,7 @@ Macro Script equivalente ao botão:
 game.modules.get("fora-do-abismo-foundry")?.api?.ui?.open()
 ```
 
-> O pipeline de distribuição é estável. O Importer V9 mantém seu formato e as fichas/cenas da campanha ainda exigem validação dentro do mundo Foundry.
+> O Importer V9 mantém seu formato e as APIs anteriores. A candidata foi testada em Node com simulações do Foundry; fichas, cenas, áudio, visão e integrações opcionais ainda exigem validação em uma cópia do mundo no Foundry real.
 
 ## Publicação automática
 

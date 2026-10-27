@@ -22,8 +22,11 @@ const TOOL_CATALOG = Object.freeze([
   { id: "actor-create", label: "Criar personagem ou NPC", tab: "characters", gmOnly: true },
   { id: "actor-import", label: "Importar ficha V9", tab: "characters", gmOnly: true },
   { id: "item-create", label: "Criar Item ou homebrew", tab: "content", gmOnly: true },
+  { id: "actor-wizard-preview", label: "Prévia de personagem", tab: "characters", gmOnly: true },
+  { id: "item-wizard-preview", label: "Prévia de Item e classe", tab: "content", gmOnly: true },
   { id: "map-studio", label: "Estúdio de Mapas", tab: "maps", gmOnly: true },
   { id: "map-audit", label: "Analisar paredes e iluminação", tab: "maps", gmOnly: true },
+  { id: "scene-edit-preview", label: "Prévia de parede, luz ou som", tab: "maps", gmOnly: true },
   { id: "scene-package-preview", label: "Prévia de Scene Package", tab: "maps", gmOnly: true },
   { id: "scene-migration-preview", label: "Prévia de migração", tab: "maps", gmOnly: true },
   { id: "scene-assets-review", label: "Revisar arquivos de mapas", tab: "maps", gmOnly: true },
@@ -31,6 +34,7 @@ const TOOL_CATALOG = Object.freeze([
   { id: "form-picker", label: "Escolher forma", tab: "appearances", trustedOnly: true },
   { id: "pack-search", label: "Pesquisar compêndio", tab: "compendiums" },
   { id: "macro-install", label: "Instalar macro Jarvis", tab: "macros", gmOnly: true },
+  { id: "managed-macro-run", label: "Executar macro autorizada", tab: "macros" },
   { id: "diagnostics-run", label: "Executar diagnóstico", tab: "diagnostics", gmOnly: true }
 ]);
 const TOOL_BY_ID = new Map(TOOL_CATALOG.map(tool => [tool.id, tool]));
@@ -55,6 +59,13 @@ function values(collection) {
   if (Array.isArray(collection)) return collection;
   if (Array.isArray(collection.contents)) return collection.contents;
   return typeof collection.values === "function" ? Array.from(collection.values()) : [];
+}
+
+function activitiesOf(item) {
+  const collection = item?.system?.activities;
+  const listed = values(collection);
+  return listed.length ? listed : collection && typeof collection === "object"
+    ? Object.values(collection).filter(row => row && typeof row === "object") : [];
 }
 
 function options(entries, label = entry => entry.label ?? entry.name ?? entry.key, value = entry => entry.id ?? entry.key) {
@@ -98,6 +109,15 @@ function refreshDashboard(root, state) {
   const active = root.querySelector("[data-jarvis-active-actor]");
   if (active) active.textContent = actor && getJarvisAccess(game.user, actor).canViewActor
     ? `${actor.name} · ${actor.type}` : "Nenhum personagem selecionado";
+  const macroHost = root.querySelector("[data-jarvis-macro-favorites]");
+  if (macroHost) {
+    const jarvis = api();
+    const favoriteIds = new Set(jarvis.macros?.favorites?.() ?? []);
+    const rows = (jarvis.macros?.list?.() ?? []).filter(row => favoriteIds.has(row.id)).slice(0, 10);
+    macroHost.innerHTML = rows.length ? rows.map(row =>
+      `<button type="button" data-jarvis-macro-run="${escapeHtml(row.id)}" title="Executar macro autorizada">${escapeHtml(row.name)}</button>`).join("")
+      : "<p>Nenhuma macro favorita ainda.</p>";
+  }
 }
 
 function refreshActorOptions(root, actorId = null) {
@@ -110,9 +130,83 @@ function refreshActorOptions(root, actorId = null) {
   select.value = actors.some(actor => actor.id === previous) ? previous : "";
   const count = root.querySelector("[data-jarvis-actor-count]");
   if (count) count.textContent = `${actors.length} ficha(s) acessível(is)`;
+  refreshActorRelatedOptions(root);
+}
+
+function refreshActorRelatedOptions(root) {
+  const actor = game.actors?.get?.(fieldValue(root, "jarvis-actor"));
+  const visible = actor && getJarvisAccess(game.user, actor).canViewActor ? actor : null;
+  const playerItems = field(root, "player-item");
+  if (playerItems) {
+    const previous = playerItems.value;
+    const items = visible ? values(visible.items).slice(0, 500) : [];
+    playerItems.innerHTML = `<option value="">Selecione</option>${options(items,
+      item => `${item.name} · ${item.type}`, item => item.id)}`;
+    playerItems.value = items.some(item => item.id === previous) ? previous : "";
+  }
+  const automationItems = field(root, "automation-item");
+  if (automationItems) {
+    const previous = automationItems.value;
+    const items = visible ? values(visible.items).filter(item => activitiesOf(item).length).slice(0, 500) : [];
+    automationItems.innerHTML = `<option value="">Selecione</option>${options(items,
+      item => `${item.name} · ${item.id}`, item => item.id)}`;
+    automationItems.value = items.some(item => item.id === previous) ? previous : "";
+  }
+  refreshAutomationActivityOptions(root);
+}
+
+function refreshAutomationActivityOptions(root) {
+  const select = field(root, "automation-activity");
+  if (!select) return;
+  const actor = game.actors?.get?.(fieldValue(root, "jarvis-actor"));
+  const item = actor && getJarvisAccess(game.user, actor).canViewActor
+    ? actor.items?.get?.(fieldValue(root, "automation-item")) : null;
+  const rows = activitiesOf(item).slice(0, 100);
+  const previous = select.value;
+  select.innerHTML = `<option value="">Selecione</option>${options(rows,
+    row => `${row.name ?? "Activity"} · ${row.id ?? row._id}`, row => row.id ?? row._id)}`;
+  select.value = rows.some(row => (row.id ?? row._id) === previous) ? previous : "";
+}
+
+function refreshSceneDocumentOptions(root) {
+  const select = field(root, "scene-edit-existing");
+  if (!select) return;
+  const type = fieldValue(root, "scene-edit-type");
+  const name = { Wall: "walls", AmbientLight: "lights", AmbientSound: "sounds" }[type];
+  const rows = name ? values(canvas?.scene?.[name]).slice(0, 500) : [];
+  const previous = select.value;
+  select.innerHTML = `<option value="">Selecione ou informe o ID</option>${options(rows,
+    row => `${row.id} · ${type === "Wall" ? (row.c ?? []).join(", ") : `${row.x ?? ""}, ${row.y ?? ""}`}`,
+    row => row.id)}`;
+  select.value = rows.some(row => row.id === previous) ? previous : "";
+}
+
+function refreshManagedMacroOptions(root, selectedId = null) {
+  const select = field(root, "managed-macro");
+  if (!select) return;
+  const rows = api().macros?.list?.() ?? [];
+  const previous = selectedId ?? select.value;
+  select.innerHTML = `<option value="">Selecione</option>${options(rows,
+    row => `${row.name} · ${row.category}`, row => row.id)}`;
+  select.value = rows.some(row => row.id === previous) ? previous : "";
+}
+
+function populateManagedMacroForm(root) {
+  const row = api().macros?.list?.().find(entry => entry.id === fieldValue(root, "managed-macro"));
+  if (!row) return;
+  for (const [name, value] of Object.entries({
+    "managed-name": row.name, "managed-command": row.command, "managed-category": row.category,
+    "managed-visibility": row.visibility, "managed-description": row.description,
+    "managed-params": JSON.stringify(row.params, null, 2)
+  })) {
+    const control = field(root, name);
+    if (control) control.value = value;
+  }
 }
 
 function itemTypes() {
+  const supported = api().content?.itemTypes?.();
+  if (supported) return supported;
   const declared = game.documentTypes?.Item;
   const types = Array.isArray(declared) ? declared : (declared && typeof declared === "object" ? Object.keys(declared) : []);
   return types.length ? types : ["class", "subclass", "feat", "weapon", "equipment", "consumable", "spell", "loot", "tool"];
@@ -235,6 +329,10 @@ function renderContent() {
   const presets = access.gm ? jarvis.scenes.framework.presets() : [];
   const lighting = access.gm ? jarvis.scenes.lightingPresets() : [];
   const types = itemTypes();
+  const contentTemplates = access.gm ? jarvis.content?.templates?.().filter(row => row.spec.kind === "item") ?? [] : [];
+  const managedMacros = jarvis.macros?.list?.() ?? [];
+  const managedCommands = jarvis.macros?.commands?.() ?? [];
+  const sceneEditPresets = access.gm ? jarvis.scenes.editor?.presets?.() ?? [] : [];
   const nav = tabs.map((id, index) => `<button type="button" id="jarvis-tab-${id}" role="tab" aria-controls="jarvis-panel-${id}" tabindex="${index ? -1 : 0}" class="jarvis-console-tab ${index ? "" : "active"}" data-jarvis-tab="${id}" aria-selected="${index ? "false" : "true"}" title="${escapeHtml(TAB_LABELS[id])}"><i class="jarvis-console-tab-icon fa-solid ${TAB_ICONS[id]}" aria-hidden="true"></i><span class="jarvis-console-tab-label">${TAB_LABELS[id]}</span></button>`).join("");
   const gm = access.gm;
 
@@ -246,6 +344,7 @@ function renderContent() {
       <section class="jarvis-console-card"><h3>Personagem ativo</h3><p data-jarvis-active-actor>Nenhum personagem selecionado</p><p>${actors.length} ficha(s) e ${packs.length} compêndio(s) acessível(is).</p></section>
       <section class="jarvis-console-card"><h3>Acesso rápido</h3>${dashboardToolButtons(availableTools(access).slice(0, 5).map(tool => tool.id), preferences)}</section>
       <section class="jarvis-console-card"><h3>Favoritos</h3><div data-jarvis-favorites></div></section>
+      <section class="jarvis-console-card"><h3>Macros favoritas</h3><div class="jarvis-console-row" data-jarvis-macro-favorites></div></section>
       <section class="jarvis-console-card"><h3>Recentes</h3><div data-jarvis-recents></div></section>
       <section class="jarvis-console-card"><h3>Estado rápido</h3><p>${gm ? "Operações de mundo disponíveis para Mestre." : "Acesso limitado a fichas e ferramentas permitidas."}</p><p>${game.users?.activeGM ? "Mestre ativo conectado." : "Nenhum Mestre ativo detectado."}</p>${gm ? button("diagnostics-run", "Executar diagnóstico") : ""}</section>
     </div>
@@ -254,7 +353,13 @@ function renderContent() {
   const characters = panel("characters", `
     <h2>Personagens</h2><p>Abra uma ficha existente ou use o importador V9 para preservar recursos, atividades e efeitos.</p>
     <div class="jarvis-console-row">${button("actor-open", "Abrir ficha")}${button("actor-provenance", "Analisar origem")}${button("actor-rules", "Perfil de regras")}${button("actor-jack", "Estado de Jack")}</div>
-    ${gm ? `<hr><h3>Criar ficha</h3><div class="jarvis-console-row"><label>Nome<input name="actor-name" maxlength="120" placeholder="Nome do personagem"></label><label>Tipo<select name="actor-type"><option value="character">Personagem</option><option value="npc">NPC</option></select></label>${button("actor-create", "Criar e abrir")}</div>
+    ${gm ? `<hr><h3>Criar ficha · modo simples ou avançado</h3><div class="jarvis-console-grid"><label>Nome<input name="actor-name" maxlength="120" placeholder="Nome do personagem"></label><label>Tipo<select name="actor-type"><option value="character">Personagem</option><option value="npc">NPC</option></select></label>
+      <label>Modo<select name="actor-mode"><option value="simple">Simples</option><option value="advanced">Avançado</option></select></label><label>PV<input name="actor-hp" type="number" min="1" max="9999" placeholder="Opcional"></label><label>CA<input name="actor-ac" type="number" min="0" max="99" placeholder="Opcional"></label>
+      <label>FOR<input name="actor-str" type="number" min="1" max="30" value="10"></label><label>DES<input name="actor-dex" type="number" min="1" max="30" value="10"></label><label>CON<input name="actor-con" type="number" min="1" max="30" value="10"></label>
+      <label>INT<input name="actor-int" type="number" min="1" max="30" value="10"></label><label>SAB<input name="actor-wis" type="number" min="1" max="30" value="10"></label><label>CAR<input name="actor-cha" type="number" min="1" max="30" value="10"></label>
+      <label class="jarvis-console-span">História inicial<textarea name="actor-biography" rows="2" placeholder="Opcional"></textarea></label></div>
+      <p class="jarvis-console-hint">Modo avançado: cole um objeto JSON com <code>data</code> (Actor nativo ou campos Jarvis), <code>effects</code> e outras opções. A ficha nativa permite concluir classe, raça e equipamento.</p><textarea name="actor-advanced" rows="4" placeholder='{"data":{"jarvis":{"skills":{"prc":1}}},"effects":[]}'></textarea>
+      <div class="jarvis-console-row">${button("actor-wizard-preview", "Pré-visualizar ficha")}${button("actor-create", "Confirmar criação")}</div>
       <h3>Importar ficha Jarvis V9</h3><p>JSON com <code>schemaVersion: "9.0"</code>, Actor, Items e Effects. O importador valida antes de criar.</p>
       <input name="actor-json-file" type="file" accept=".json,application/json"><textarea name="actor-json" rows="5" placeholder='{"schemaVersion":"9.0","actor":{"name":"Novo personagem","type":"character"},"items":[]}'></textarea>
       <div class="jarvis-console-row">${button("actor-import", "Validar e importar")}${button("actor-progression", "Aplicar progressão da ficha")}${button("actor-compare", "Comparar JSON com a ficha")}</div>
@@ -264,10 +369,15 @@ function renderContent() {
 
   const content = gm ? panel("content", `
     <h2>Itens, classes e homebrew</h2><p>Cria um Item D&D5e e abre a ficha nativa para configurar Advancement, atividades, usos, magias e detalhes mecânicos.</p>
+    <div class="jarvis-console-row"><label>Modelo inicial<select name="item-template">${options(contentTemplates, row => row.label, row => row.key)}</select></label>${button("item-template-use", "Usar modelo")}</div>
     <div class="jarvis-console-grid"><label>Nome<input name="item-name" maxlength="120" placeholder="Nome do conteúdo"></label><label>Tipo<select name="item-type">${options(types, type => type, type => type)}</select></label>
     <label>Destino<select name="item-destination"><option value="world">Biblioteca do mundo</option><option value="actor">Personagem selecionado</option></select></label>
+    <label>Cargas máximas<input name="item-uses" type="number" min="0" max="9999" placeholder="Opcional"></label>
+    <label>Modo<select name="item-mode"><option value="simple">Simples</option><option value="advanced">Avançado</option></select></label>
     <label class="jarvis-console-span">Descrição inicial<textarea name="item-description" rows="3" placeholder="Descrição, custo, ação e limites da habilidade"></textarea></label></div>
-    <div class="jarvis-console-row">${button("item-create", "Criar homebrew")}</div>
+    <p class="jarvis-console-hint">Modo avançado: JSON com <code>data</code>, <code>effects</code> e <code>progression</code>. Activities podem ser informadas em <code>data.jarvis.activities</code>.</p>
+    <textarea name="item-advanced" rows="4" placeholder='{"data":{"jarvis":{"activities":[]}},"effects":[],"progression":[]}'></textarea>
+    <div class="jarvis-console-row">${button("item-wizard-preview", "Pré-visualizar")}${button("item-create", "Confirmar criação")}</div>
     <p class="jarvis-console-hint">Classes e subclasses são criadas como Items nativos do sistema. Configure progressão e níveis na ficha antes de usar em jogo.</p>
     <h3>Adicionar Items de um JSON V9 à ficha</h3><p>Selecione o personagem ativo. Aceita uma lista de Items ou um objeto com a chave <code>items</code>.</p>
     <input name="items-json-file" type="file" accept=".json,application/json"><textarea name="items-json" rows="4" placeholder='{"items":[{"name":"Novo item","type":"feat"}]}'></textarea>
@@ -282,6 +392,15 @@ function renderContent() {
     <div class="jarvis-console-row">${button("map-template-preview", "Prévia do template")}${button("map-template-create", "Criar cena")}${button("map-skin-apply", "Aplicar skin à cena atual")}</div>
     <h3>Presets prontos</h3><div class="jarvis-console-row"><label>Preset<select name="map-preset">${options(presets, item => item.name)}</select></label>${button("map-preset-preview", "Prévia")}${button("map-preset-create", "Criar preset")}</div>
     <h3>Luz da cena atual</h3><div class="jarvis-console-row"><label>Ambiente<select name="map-lighting">${options(lighting)}</select></label>${button("map-lighting-apply", "Aplicar ambiente")}</div>
+    <h3>Editar parede, luz ou som da cena atual</h3><p>Para alterar ou remover, informe o ID do documento nativo. A prévia mostra o estado anterior e os avisos geométricos; o histórico permite desfazer operações compatíveis.</p>
+    <div class="jarvis-console-grid"><label>Tipo<select name="scene-edit-type"><option value="Wall">Parede/porta</option><option value="AmbientLight">Luz ambiente</option><option value="AmbientSound">Som ambiente</option><option value="SceneEnvironment">Escuridão e cor da cena</option></select></label>
+    <label>Operação<select name="scene-edit-mode"><option value="create">Adicionar</option><option value="update">Modificar</option><option value="delete">Remover</option></select></label>
+    <label>Modelo<select name="scene-edit-preset"><option value="">Personalizado</option>${options(sceneEditPresets, row => row.label, row => row.key)}</select></label>
+    <label>Documento existente<select name="scene-edit-existing"><option value="">Selecione ou informe o ID</option></select></label>
+    <label>ID existente<input name="scene-edit-id" placeholder="Para modificar ou remover"></label>
+    <label class="jarvis-console-span">Dados JSON nativos<textarea name="scene-edit-json" rows="4" placeholder='{"c":[100,100,300,100],"door":0}'></textarea></label></div>
+    <div class="jarvis-console-row">${button("scene-edit-load", "Carregar dados atuais")}${button("scene-edit-preview", "Pré-visualizar alteração")}${button("scene-edit-apply", "Salvar na cena")}${button("scene-edit-history", "Ver histórico")}
+    <label>ID da alteração<input name="scene-undo-id" placeholder="Copie do histórico"></label>${button("scene-edit-undo", "Desfazer alteração")}</div>
     <h3>Scene Package JSON</h3><input name="scene-json-file" type="file" accept=".json,application/json"><textarea name="scene-json" rows="4" placeholder='{"schemaVersion":"1.0","id":"minha-cena","scene":{"name":"Minha cena","columns":30,"rows":20},"walls":[]}'></textarea>
     <div class="jarvis-console-row">${button("scene-package-preview", "Validar e pré-visualizar")}${button("scene-package-create", "Criar Scene Package")}</div>
     <h3>Manutenção da cena ativa</h3><div class="jarvis-console-row">${button("scene-package-inspect", "Inspecionar pacote")}${button("scene-package-repair", "Reparar regiões")}
@@ -321,17 +440,36 @@ function renderContent() {
   const userRows = values(game.users).filter(user => gm || user.id === game.user?.id).map(user =>
     `<li>${escapeHtml(user.name)} · ${escapeHtml(roleLabel(user))}${user.active ? " · online" : ""}</li>`).join("");
   const players = panel("players", `
-    <h2>Jogadores</h2><p>Ficha e leitura de compêndios ficam disponíveis aos jogadores. Ações que alteram o mundo exigem permissão.</p>
+    <h2>Jogadores</h2><p>Consulte ficha, recursos, itens, compêndios e macros permitidas. Ações que alteram o mundo exigem permissão.</p>
     <ul>${userRows || "<li>Nenhum usuário disponível.</li>"}</ul>
-    <div class="jarvis-console-row">${button("actor-open", "Abrir personagem selecionado")}${button("pack-focus", "Ir aos compêndios")}</div>
+    <div class="jarvis-console-row">${button("actor-open", "Abrir personagem selecionado")}${button("player-overview", "Ver recursos e itens")}${button("pack-focus", "Ir aos compêndios")}</div>
+    <div class="jarvis-console-row"><label>Item da ficha<select name="player-item"><option value="">Selecione um personagem</option></select></label>${button("player-item-open", "Abrir Item")}</div>
+    <p>As macros autorizadas estão na aba Macros; perfis e formas estão em Aparências.</p>
     ${gm ? `<p class="jarvis-console-hint">Jogador de confiança: papel Trusted Player do Foundry. Só altera fichas que possui; criação global de Actor, Item, mapa e diagnóstico completo continuam com o Mestre.</p>` : ""}
   `);
 
-  const macros = gm ? panel("macros", `
-    <h2>Macro do Jarvis</h2><p>O botão Jarvis fica nos controles de Tokens para todos os papéis. A macro abaixo abre esta mesma janela.</p>
-    <textarea readonly rows="2" name="macro-command">${escapeHtml(MACRO_COMMAND)}</textarea>
-    <div class="jarvis-console-row"><label>Atalho da barra (1–10)<input name="macro-slot" type="number" min="1" max="10" value="1"></label>${button("macro-install", "Criar e pôr na barra")}${button("macro-copy", "Copiar código")}</div>
-  `) : "";
+  const macros = panel("macros", `
+    <h2>Macros e automações</h2><p>Comandos gerenciados usam ações autorizadas do Jarvis. O editor nativo de Macros e o arrastar de arquivos .txt/.js continuam disponíveis no Foundry.</p>
+    <div class="jarvis-console-row"><label>Biblioteca<select name="managed-macro"><option value="">Selecione</option>${options(managedMacros, row => `${row.name} · ${row.category}`, row => row.id)}</select></label>
+    ${button("managed-macro-run", "Executar")}${button("managed-macro-favorite", "Favoritar")}${button("managed-macro-history", "Histórico")}</div>
+    <div class="jarvis-console-row"><label>Atalho pessoal (1–10)<input name="macro-slot" type="number" min="1" max="10" value="1"></label>${button("managed-macro-hotbar", "Pôr na barra")}</div>
+    ${gm ? `<h3>Gerenciar biblioteca</h3><div class="jarvis-console-grid"><label>Nome<input name="managed-name" maxlength="100" placeholder="Nome da macro"></label>
+    <label>Comando<select name="managed-command">${options(managedCommands, row => row.label, row => row.key)}</select></label>
+    <label>Categoria<select name="managed-category">${["geral","personagens","conteudo","habilidades","mapas","aparencias","transformacoes","efeitos","biblioteca","utilidades"].map(key => `<option value="${key}">${key}</option>`).join("")}</select></label>
+    <label>Visibilidade<select name="managed-visibility"><option value="gm">Mestre</option><option value="trusted">Jogador de confiança</option><option value="all">Todos</option></select></label>
+    <label class="jarvis-console-span">Descrição<input name="managed-description" maxlength="500" placeholder="Quando usar"></label>
+    <label class="jarvis-console-span">Parâmetros JSON<textarea name="managed-params" rows="2" placeholder='{"actorId":"..."}'></textarea></label></div>
+    <div class="jarvis-console-row">${button("managed-macro-create", "Criar")}${button("managed-macro-update", "Salvar edição")}${button("managed-macro-duplicate", "Duplicar")}${button("managed-macro-remove", "Excluir")}</div>
+    <h3>Importar comandos gerenciados</h3><p>Importe JSON declarativo. Arquivos JavaScript continuam no editor nativo e nunca entram nesta biblioteca.</p>
+    <input name="managed-import-file" type="file" accept=".json,application/json"><textarea name="managed-import-json" rows="3" placeholder='[{"name":"Abrir Central","command":"open-console","visibility":"all"}]'></textarea>
+    <div class="jarvis-console-row">${button("managed-macro-import-preview", "Prévia da importação")}${button("managed-macro-import", "Importar após revisão")}</div>
+    <h3>Atalho da Central</h3><textarea readonly rows="2" name="macro-command">${escapeHtml(MACRO_COMMAND)}</textarea>
+    <div class="jarvis-console-row">${button("macro-install", "Instalar atalho da Central")}${button("macro-copy", "Copiar código")}</div>
+    <h3>Scripts de Activities</h3><p>Automações com script devem ser inspecionadas e aprovadas pelo Mestre ativo.</p>
+    <div class="jarvis-console-row"><label>Item do personagem ativo<select name="automation-item"><option value="">Selecione</option></select></label><label>Activity<select name="automation-activity"><option value="">Selecione</option></select></label>
+    ${button("automation-inspect", "Inspecionar")}${button("automation-approve", "Aprovar")}${button("automation-revoke", "Revogar")}</div>
+    <label>Conteúdo completo para revisão<textarea readonly name="automation-source" rows="7" placeholder="Selecione uma Activity e clique em Inspecionar"></textarea></label>` : ""}
+  `);
 
   return element(`<div class="jarvis-console" data-sidebar-collapsed="${preferences.sidebarCollapsed}">
     <header class="jarvis-console-header"><strong>JARVIS <span>${escapeHtml(jarvis.version)}</span></strong><div class="jarvis-console-header-actions"><small>${escapeHtml(game.user?.name ?? "")}</small><button type="button" class="jarvis-console-toggle" data-jarvis-toggle-sidebar aria-label="Recolher ou expandir menu" aria-expanded="${!preferences.sidebarCollapsed}" title="Recolher ou expandir menu"><i class="fa-solid fa-bars" aria-hidden="true"></i></button></div></header>
@@ -367,6 +505,79 @@ async function confirmAction(title, content) {
   });
 }
 
+function contentSpec(root, kind) {
+  const actor = kind === "actor";
+  const mode = fieldValue(root, actor ? "actor-mode" : "item-mode") || "simple";
+  const name = fieldValue(root, actor ? "actor-name" : "item-name");
+  const type = fieldValue(root, actor ? "actor-type" : "item-type") || (actor ? "character" : "feat");
+  if (mode === "advanced") {
+    const source = fieldValue(root, actor ? "actor-advanced" : "item-advanced");
+    if (!source) throw new Error("Informe o JSON avançado com a chave data, ou escolha o modo simples.");
+    const parsed = JSON.parse(source);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || !parsed.data) {
+      throw new Error("O JSON avançado precisa de um objeto data.");
+    }
+    return { ...parsed, kind, mode, name: name || parsed.data.name, type,
+      destinationActorId: !actor && fieldValue(root, "item-destination") === "actor"
+        ? selectedActor(root, { manage: true }).id : null };
+  }
+  if (actor) {
+    const abilities = Object.fromEntries(["str", "dex", "con", "int", "wis", "cha"].map(key =>
+      [key, fieldValue(root, `actor-${key}`) || "10"]));
+    return { kind, mode, name, type, hp: fieldValue(root, "actor-hp"),
+      ac: fieldValue(root, "actor-ac"), biography: fieldValue(root, "actor-biography"), abilities };
+  }
+  return { kind, mode, name, type, description: fieldValue(root, "item-description"),
+    usesMax: fieldValue(root, "item-uses"),
+    destinationActorId: fieldValue(root, "item-destination") === "actor"
+      ? selectedActor(root, { manage: true }).id : null };
+}
+
+function sceneEditInput(root, jarvis) {
+  const scene = canvas?.scene;
+  if (!scene) throw new Error("Abra uma cena antes de editar parede, luz ou som.");
+  const selectedMode = fieldValue(root, "scene-edit-mode");
+  const presetKey = fieldValue(root, "scene-edit-preset");
+  const preset = jarvis.scenes.editor.presets().find(row => row.key === presetKey);
+  const type = preset?.type ?? fieldValue(root, "scene-edit-type");
+  const mode = type === "SceneEnvironment" ? "update" : selectedMode;
+  const text = fieldValue(root, "scene-edit-json");
+  let data = {};
+  if (mode !== "delete") {
+    if (text) {
+      data = JSON.parse(text);
+      if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("Dados da cena devem ser um objeto JSON.");
+    }
+    data = { ...(preset?.data ?? {}), ...data };
+  }
+  return { scene, input: { type, mode, documentId: fieldValue(root, "scene-edit-id") || null, data } };
+}
+
+function selectedManagedMacro(root) {
+  const entry = api().macros.list().find(row => row.id === fieldValue(root, "managed-macro"));
+  if (!entry) throw new Error("Selecione uma macro autorizada da biblioteca.");
+  return entry;
+}
+
+function managedMacroSpec(root) {
+  const source = fieldValue(root, "managed-params");
+  return { name: fieldValue(root, "managed-name"), command: fieldValue(root, "managed-command"),
+    category: fieldValue(root, "managed-category"), visibility: fieldValue(root, "managed-visibility"),
+    description: fieldValue(root, "managed-description"), params: source ? JSON.parse(source) : {} };
+}
+
+function selectedAutomation(root) {
+  const actor = selectedActor(root);
+  const item = actor.items?.get?.(fieldValue(root, "automation-item"));
+  if (!item) throw new Error("Selecione um Item do personagem ativo.");
+  const activityId = fieldValue(root, "automation-activity");
+  const activity = item.system?.activities?.get?.(activityId)
+    ?? activitiesOf(item).find(row => row.id === activityId || row._id === activityId)
+    ?? item.system?.activities?.[activityId];
+  if (!activity) throw new Error("Activity não encontrada neste Item. Confira o ID na ficha nativa.");
+  return { actor, item, activity };
+}
+
 function templateSpec(root) {
   const name = fieldValue(root, "map-name");
   const columns = Number(fieldValue(root, "map-columns"));
@@ -391,6 +602,14 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
   }
   if (action === "actor-create") {
     requireGM();
+    if (jarvis.content?.create) {
+      const spec = contentSpec(root, "actor");
+      const preview = jarvis.content.preview(spec);
+      if (!await confirmAction("Criar personagem", `Criar ${preview.name} (${preview.type})? ${JSON.stringify(preview.actor ?? {})}`)) return;
+      const { document: actor } = await jarvis.content.create(spec);
+      refreshActorOptions(root, actor.id);
+      return setOutput(root, "Personagem criado", { name: actor.name, type: actor.type, preview });
+    }
     const name = fieldValue(root, "actor-name");
     const type = fieldValue(root, "actor-type");
     if (!name || !["character", "npc"].includes(type)) throw new Error("Informe um nome e tipo válidos.");
@@ -399,6 +618,10 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
     actor.sheet?.render(true);
     refreshActorOptions(root, actor.id);
     return setOutput(root, "Personagem criado", `${actor.name} · ${actor.type}.`);
+  }
+  if (action === "actor-wizard-preview") {
+    requireGM();
+    return setOutput(root, "Prévia do personagem", jarvis.content.preview(contentSpec(root, "actor")));
   }
   if (action === "actor-import") {
     requireGM();
@@ -453,8 +676,25 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
     return setOutput(root, `Almas de Jack · ${actor.name}`, await jarvis.jack.syncActor(actor, { notify: true }));
   }
 
+  if (action === "item-template-use") {
+    requireGM();
+    const template = jarvis.content.templates().find(row => row.key === fieldValue(root, "item-template"));
+    if (!template || template.spec.kind !== "item") throw new Error("Modelo de Item indisponível.");
+    const typeField = field(root, "item-type");
+    if (typeField) typeField.value = template.spec.type;
+    const modeField = field(root, "item-mode");
+    if (modeField) modeField.value = template.spec.mode;
+    return setOutput(root, "Modelo selecionado", `${template.label}: complete o nome e os detalhes antes de criar.`);
+  }
   if (action === "item-create") {
     requireGM();
+    if (jarvis.content?.create) {
+      const spec = contentSpec(root, "item");
+      const preview = jarvis.content.preview(spec);
+      if (!await confirmAction("Criar conteúdo", `Criar ${preview.name} (${preview.type}) em ${typeof preview.destination === "string" ? "biblioteca do mundo" : "personagem selecionado"}? ${preview.effects} efeito(s), ${preview.activities} Activity(ies).`)) return;
+      const { document: item } = await jarvis.content.create(spec);
+      return setOutput(root, "Conteúdo criado", { name: item.name, type: item.type, preview });
+    }
     const name = fieldValue(root, "item-name");
     const type = fieldValue(root, "item-type");
     if (!name || !itemTypes().includes(type)) throw new Error("Informe nome e tipo de Item válidos.");
@@ -475,6 +715,10 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
     item.sheet?.render(true);
     return setOutput(root, "Homebrew criado", `${item.name} (${item.type}). Configure e valide a mecânica na ficha nativa.`);
   }
+  if (action === "item-wizard-preview") {
+    requireGM();
+    return setOutput(root, "Prévia de Item ou classe", jarvis.content.preview(contentSpec(root, "item")));
+  }
   if (action === "items-import") {
     requireGM();
     const actor = selectedActor(root, { manage: true });
@@ -493,6 +737,64 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
   if (action === "map-audit") {
     requireGM();
     return setOutput(root, "Auditoria da cena ativa", jarvis.scenes.audit(canvas?.scene));
+  }
+  if (action === "scene-edit-load") {
+    requireGM();
+    const scene = canvas?.scene;
+    if (!scene) throw new Error("Abra uma cena para carregar os dados atuais.");
+    const type = fieldValue(root, "scene-edit-type");
+    let data;
+    if (type === "SceneEnvironment") {
+      const source = scene.toObject?.() ?? scene;
+      data = { environment: { darknessLevel: source.environment?.darknessLevel },
+        backgroundColor: source.backgroundColor };
+    } else {
+      const name = { Wall: "walls", AmbientLight: "lights", AmbientSound: "sounds" }[type];
+      const id = fieldValue(root, "scene-edit-id") || fieldValue(root, "scene-edit-existing");
+      const document = values(scene[name]).find(row => row.id === id);
+      if (!document) throw new Error("Selecione um documento da cena para carregar.");
+      const source = document.toObject();
+      const keys = { Wall: ["c", "door", "ds", "move", "sight", "light", "sound", "dir", "threshold"],
+        AmbientLight: ["x", "y", "config", "hidden"],
+        AmbientSound: ["x", "y", "path", "radius", "volume", "repeat", "easing", "hidden"] }[type];
+      data = Object.fromEntries(keys.filter(key => source[key] !== undefined).map(key => [key, source[key]]));
+    }
+    const textarea = field(root, "scene-edit-json");
+    if (textarea) textarea.value = JSON.stringify(data, null, 2);
+    const mode = field(root, "scene-edit-mode");
+    if (mode) mode.value = "update";
+    return setOutput(root, "Dados atuais carregados", data);
+  }
+  if (["scene-edit-preview", "scene-edit-apply", "scene-edit-history", "scene-edit-undo"].includes(action)) {
+    requireGM();
+    const editor = jarvis.scenes.editor;
+    if (action === "scene-edit-history") return setOutput(root, "Histórico da cena atual", editor.history(canvas?.scene));
+    if (action === "scene-edit-undo") {
+      const scene = canvas?.scene;
+      const transactionId = fieldValue(root, "scene-undo-id");
+      const entry = editor.history(scene).find(row => row.id === transactionId);
+      if (!entry || entry.status !== "committed") throw new Error("Selecione no histórico uma alteração disponível para desfazer.");
+      if (!await confirmAction("Desfazer edição", `Desfazer ${entry.mode} de ${entry.type} na cena '${scene.name}'? Mudanças posteriores no mesmo documento bloquearão a operação.`)) return;
+      const result = await editor.undo(scene, transactionId, { confirmed: true });
+      refreshSceneDocumentOptions(root);
+      return setOutput(root, "Alteração desfeita", result);
+    }
+    const { scene, input } = sceneEditInput(root, jarvis);
+    const preview = editor.preview(scene, input);
+    if (action === "scene-edit-preview") {
+      state.sceneEditPreview = { sceneId: scene.id, signature: JSON.stringify(input), before: preview.before };
+      return setOutput(root, "Prévia de edição da cena", preview);
+    }
+    if (state.sceneEditPreview?.sceneId !== scene.id || state.sceneEditPreview.signature !== JSON.stringify(input)) {
+      state.sceneEditPreview = { sceneId: scene.id, signature: JSON.stringify(input), before: preview.before };
+      return setOutput(root, "Revise a prévia antes de salvar", preview);
+    }
+    if (!await confirmAction("Salvar edição da cena", `${input.mode} ${input.type} em '${scene.name}'? ${preview.warnings.length} aviso(s) geométrico(s).`)) return;
+    const report = await editor.apply(scene, input,
+      { confirmed: true, expectedBefore: state.sceneEditPreview.before });
+    state.sceneEditPreview = null;
+    refreshSceneDocumentOptions(root);
+    return setOutput(root, "Cena atualizada", report);
   }
   if (action === "map-template-preview") {
     requireGM();
@@ -530,9 +832,14 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
     const key = fieldValue(root, "map-lighting");
     const preset = jarvis.scenes.applyLightingPreset({ scene: {} }, key).scene;
     if (!await confirmAction("Aplicar ambiente", `Definir a escuridão e a cor de fundo de '${scene.name}' como ${key}?`)) return;
-    await scene.update({ "environment.darknessLevel": preset.environment.darknessLevel,
-      backgroundColor: preset.backgroundColor });
-    return setOutput(root, "Ambiente aplicado", `${scene.name}: ${key}. Luzes existentes não foram modificadas.`);
+    const input = { type: "SceneEnvironment", mode: "update",
+      data: { environment: { darknessLevel: preset.environment.darknessLevel },
+        backgroundColor: preset.backgroundColor } };
+    const preview = jarvis.scenes.editor.preview(scene, input);
+    const result = await jarvis.scenes.editor.apply(scene, input,
+      { confirmed: true, expectedBefore: preview.before });
+    return setOutput(root, "Ambiente aplicado", { scene: scene.name, preset: key, transactionId: result.transactionId,
+      note: "Luzes existentes não foram modificadas. Use o histórico desta cena para desfazer." });
   }
   if (action === "scene-package-preview" || action === "scene-package-create") {
     requireGM();
@@ -655,6 +962,24 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
     return jarvis.transformation.openPicker(await selectedTransformationToken(actor, state));
   }
 
+  if (action === "player-overview") {
+    const actor = selectedActor(root);
+    const source = actor.system ?? {};
+    return setOutput(root, `Recursos e Items · ${actor.name}`, {
+      hp: source.attributes?.hp ?? null, resources: source.resources ?? null,
+      items: values(actor.items).slice(0, 100).map(item => ({ id: item.id, name: item.name,
+        type: item.type, uses: item.system?.uses ?? null })),
+      note: values(actor.items).length > 100 ? "Lista limitada aos primeiros 100 Items." : undefined
+    });
+  }
+  if (action === "player-item-open") {
+    const actor = selectedActor(root);
+    const item = actor.items?.get?.(fieldValue(root, "player-item"));
+    if (!item) throw new Error("Selecione um Item do personagem ativo.");
+    item.sheet?.render(true);
+    return setOutput(root, "Item aberto", `${item.name} · ${item.type}`);
+  }
+
   if (action === "pack-search") {
     const pack = visiblePacks().find(candidate => candidate.collection === fieldValue(root, "pack"));
     if (!pack) throw new Error("Selecione um compêndio visível.");
@@ -717,6 +1042,98 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
     return setOutput(root, "Módulos ativos", values(game.modules).filter(module => module.active)
       .map(module => ({ id: module.id, title: module.title, version: module.version })));
   }
+  if (["managed-macro-run", "managed-macro-favorite", "managed-macro-history", "managed-macro-hotbar",
+    "managed-macro-create", "managed-macro-update", "managed-macro-duplicate", "managed-macro-remove",
+    "managed-macro-import-preview", "managed-macro-import"].includes(action)) {
+    const library = jarvis.macros;
+    if (action === "managed-macro-history") return setOutput(root, "Histórico pessoal de macros", library.history());
+    if (action === "managed-macro-import-preview" || action === "managed-macro-import") {
+      requireGM();
+      const source = await fileOrText(root, "managed-import-file", "managed-import-json", 256 * 1024);
+      const preview = library.previewImport(source);
+      if (action === "managed-macro-import-preview") {
+        state.macroImportPreview = source;
+        return setOutput(root, "Prévia da biblioteca", preview);
+      }
+      if (state.macroImportPreview !== source) {
+        state.macroImportPreview = source;
+        return setOutput(root, "Revise a importação antes de confirmar", preview);
+      }
+      if (!await confirmAction("Importar macros", `Adicionar ${preview.count} comando(s) autorizado(s) à biblioteca?`)) return;
+      const result = await library.import(source);
+      state.macroImportPreview = null;
+      refreshManagedMacroOptions(root);
+      return setOutput(root, "Macros importadas", result);
+    }
+    if (action === "managed-macro-create") {
+      requireGM();
+      const spec = managedMacroSpec(root);
+      if (!await confirmAction("Criar macro", `Criar '${spec.name}' com o comando ${spec.command}?`)) return;
+      const entry = await library.create(spec);
+      refreshManagedMacroOptions(root, entry.id);
+      return setOutput(root, "Macro criada", entry);
+    }
+    const entry = selectedManagedMacro(root);
+    if (action === "managed-macro-run") return setOutput(root, `Macro · ${entry.name}`, await library.execute(entry.id));
+    if (action === "managed-macro-favorite") {
+      const favorites = await library.toggleFavorite(entry.id);
+      refreshDashboard(root, state);
+      return setOutput(root, "Macros favoritas", favorites);
+    }
+    if (action === "managed-macro-hotbar") {
+      const slot = Number(fieldValue(root, "macro-slot"));
+      if (game.user.hotbar?.[slot] && !await confirmAction("Substituir atalho",
+        `O atalho ${slot} já está ocupado. Substituí-lo por '${entry.name}'?`)) return;
+      return setOutput(root, "Atalho instalado", await library.installHotbar(entry.id, slot));
+    }
+    requireGM();
+    if (action === "managed-macro-update") {
+      const spec = managedMacroSpec(root);
+      if (!await confirmAction("Editar macro", `Salvar mudanças em '${entry.name}'?`)) return;
+      const updated = await library.update(entry.id, spec);
+      refreshManagedMacroOptions(root, updated.id);
+      return setOutput(root, "Macro atualizada", updated);
+    }
+    if (action === "managed-macro-duplicate") {
+      const copied = await library.duplicate(entry.id);
+      refreshManagedMacroOptions(root, copied.id);
+      return setOutput(root, "Macro duplicada", copied);
+    }
+    if (!await confirmAction("Excluir macro", `Excluir '${entry.name}' da biblioteca? Atalhos já instalados deixarão de funcionar.`)) return;
+    const removed = await library.remove(entry.id);
+    refreshManagedMacroOptions(root);
+    return setOutput(root, "Macro removida", removed);
+  }
+  if (["automation-inspect", "automation-approve", "automation-revoke"].includes(action)) {
+    requireGM();
+    const { item, activity } = selectedAutomation(root);
+    const inspection = jarvis.automation.inspect(activity);
+    const automation = activity.flags?.[MODULE_ID]?.automation ?? null;
+    const embeddedEffects = values(item.effects).map(effect => effect.toObject?.() ?? effect);
+    const fullSource = JSON.stringify({ automation, embeddedEffects }, null, 2);
+    const sourceField = field(root, "automation-source");
+    if (action === "automation-inspect") {
+      if (sourceField) sourceField.value = fullSource;
+      state.automationPreview = { uuid: activity.uuid, source: fullSource };
+      return setOutput(root, `Automação · ${item.name}`, { inspection, automation,
+        embeddedEffects: embeddedEffects.map(effect => effect.name) });
+    }
+    if (action === "automation-approve") {
+      if (state.automationPreview?.uuid !== activity.uuid
+        || state.automationPreview?.source !== fullSource) {
+        if (sourceField) sourceField.value = fullSource;
+        state.automationPreview = { uuid: activity.uuid, source: fullSource };
+        return setOutput(root, "Revise a automação antes de aprovar", { inspection, automation,
+          embeddedEffects: embeddedEffects.map(effect => effect.name) });
+      }
+      if (!await confirmAction("Aprovar automação", `Aprovar script e efeitos de '${item.name}' / '${activity.name}'? Qualquer mudança posterior revoga esta aprovação.`)) return;
+      state.automationPreview = null;
+      return setOutput(root, "Automação aprovada", await jarvis.automation.approve(activity));
+    }
+    if (!await confirmAction("Revogar automação", `Revogar a aprovação de '${item.name}' / '${activity.name}'?`)) return;
+    state.automationPreview = null;
+    return setOutput(root, "Aprovação revogada", await jarvis.automation.revoke(activity));
+  }
   if (action === "macro-copy") {
     requireGM();
     if (!globalThis.navigator?.clipboard?.writeText) throw new Error("Área de transferência indisponível; copie o código exibido.");
@@ -772,6 +1189,24 @@ async function openSearchResult(root, state, index) {
     if (!actor || !getJarvisAccess(game.user, actor).canViewActor) throw new Error("Ficha não disponível.");
     refreshActorOptions(root, actor.id);
     selectTab(root, "characters");
+  } else if (row.type === "item") {
+    const actor = row.actorId ? game.actors?.get?.(row.actorId) : null;
+    const item = actor ? actor.items?.get?.(row.itemId) : game.items?.get?.(row.itemId);
+    const permitted = game.user?.isGM || item?.testUserPermission?.(game.user, "OBSERVER")
+      || actor?.testUserPermission?.(game.user, "OBSERVER");
+    if (!item || !permitted) throw new Error("Item não disponível.");
+    item.sheet?.render(true);
+  } else if (row.type === "scene") {
+    const scene = game.scenes?.get?.(row.sceneId);
+    if (!scene || !(game.user?.isGM || scene.testUserPermission?.(game.user, "OBSERVER")
+      || (scene.active && scene.navigation))) throw new Error("Cena não disponível.");
+    await scene.view();
+    if (game.user?.isGM) selectTab(root, "maps");
+  } else if (row.type === "macro") {
+    const entry = api().macros?.list?.().find(candidate => candidate.id === row.macroId);
+    if (!entry) throw new Error("Macro não disponível.");
+    refreshManagedMacroOptions(root, entry.id);
+    selectTab(root, "macros");
   } else if (row.type === "compendium") {
     const pack = visiblePacks().find(entry => entry.collection === row.packId);
     if (!pack) throw new Error("Compêndio não disponível.");
@@ -804,7 +1239,10 @@ function queueGlobalSearch(root, state) {
     if (status) status.textContent = "Buscando…";
     try {
       const rows = await searchConsole(query, { access: getJarvisAccess(game.user),
-        actors: visibleActors(), packs: visiblePacks(), tools: TOOL_CATALOG,
+        actors: visibleActors(),
+        items: [...values(game.items), ...visibleActors().flatMap(actor => values(actor.items))],
+        scenes: values(game.scenes), macros: api().macros?.list?.() ?? [],
+        packs: visiblePacks(), tools: TOOL_CATALOG,
         limit: 30, signal: controller.signal });
       if (controller.signal.aborted) return;
       state.searchRows = rows;
@@ -833,6 +1271,15 @@ async function handleNavigationClick(event, root, state) {
     refreshDashboard(root, state);
     return true;
   }
+  const macro = event.target.closest("[data-jarvis-macro-run]");
+  if (macro) {
+    const entry = api().macros?.list?.().find(row => row.id === macro.dataset.jarvisMacroRun);
+    if (!entry) throw new Error("Macro favorita não está mais disponível.");
+    macro.disabled = true;
+    try { setOutput(root, `Macro · ${entry.name}`, await api().macros.execute(entry.id)); }
+    finally { macro.disabled = false; }
+    return true;
+  }
   const jump = event.target.closest("[data-jarvis-jump]");
   if (jump) {
     const tool = availableTools().find(entry => entry.id === jump.dataset.jarvisJump);
@@ -852,6 +1299,8 @@ function bindDialog(dialog, state) {
   if (!root || root.dataset.jarvisBound) return;
   root.dataset.jarvisBound = "true";
   refreshDashboard(root, state);
+  refreshActorRelatedOptions(root);
+  refreshSceneDocumentOptions(root);
   root.addEventListener("click", async event => {
     try { if (await handleNavigationClick(event, root, state)) return; }
     catch (error) {
@@ -886,7 +1335,17 @@ function bindDialog(dialog, state) {
     } finally { control.disabled = false; control.removeAttribute?.("aria-busy"); }
   });
   root.addEventListener("change", event => {
-    if (event.target?.matches?.('[name="jarvis-actor"]')) refreshDashboard(root, state);
+    if (event.target?.matches?.('[name="jarvis-actor"]')) {
+      refreshDashboard(root, state);
+      refreshActorRelatedOptions(root);
+    }
+    if (event.target?.matches?.('[name="managed-macro"]')) populateManagedMacroForm(root);
+    if (event.target?.matches?.('[name="automation-item"]')) refreshAutomationActivityOptions(root);
+    if (event.target?.matches?.('[name="scene-edit-type"]')) refreshSceneDocumentOptions(root);
+    if (event.target?.matches?.('[name="scene-edit-existing"]')) {
+      const id = field(root, "scene-edit-id");
+      if (id) id.value = event.target.value;
+    }
   });
   root.addEventListener("input", event => {
     if (event.target?.matches?.("[data-jarvis-global-search]")) queueGlobalSearch(root, state);
