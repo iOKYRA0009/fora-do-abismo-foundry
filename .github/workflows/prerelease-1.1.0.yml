@@ -24,7 +24,7 @@ jobs:
           set -euo pipefail
           test "$GITHUB_REF_NAME" = "feat/jarvis-1.1.0"
           test "$(jq -r '.id' module.json)" = "fora-do-abismo-foundry"
-          test "$(jq -r '.version' module.json)" = "1.1.0-rc.1"
+          test "$(jq -r '.version' module.json)" = "1.1.0-rc.2"
           jq -e '.compatibility and .esmodules and .styles' module.json >/dev/null
           find scripts -name '*.js' -print0 | xargs -0 -n1 node --check
           node --test tests/*.test.js
@@ -35,7 +35,7 @@ jobs:
         run: |
           set -euo pipefail
           MODULE_ID="fora-do-abismo-foundry"
-          VERSION="1.1.0-rc.1"
+          VERSION="1.1.0-rc.2"
           TAG="v$VERSION"
           BASE_URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG"
           mkdir -p release-tree
@@ -84,7 +84,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          TAG="v1.1.0-rc.1"
+          TAG="v1.1.0-rc.2"
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Release $TAG already exists. Refusing to overwrite it."
             exit 1
@@ -92,7 +92,7 @@ jobs:
           gh release create "$TAG" \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "Fora do Abismo — Jarvis Tools 1.1.0 RC1" \
+            --title "Fora do Abismo — Jarvis Tools 1.1.0 RC2" \
             --prerelease \
             --notes "Candidata de teste, sem validacao no Foundry real. Nao instalar no mundo principal. releases/latest continua em 1.0.0." \
             "release-tree/module.json" \
