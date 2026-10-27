@@ -66,8 +66,16 @@ export class JarvisImporterV9 {
         payload.actor?.jarvis?.rulesProfile ?? DEFAULT_RULES_PROFILE
       );
     } catch (error) {
-      console.error("fora-do-abismo-foundry | Falha durante criação de documentos embutidos", error);
-      ui.notifications?.error(`Actor ${actor.name} foi criado, mas itens/efeitos/progressão/proveniência/perfil de regras falharam. Veja o console.`);
+      console.error(`${MODULE_ID} | Falha ao finalizar importação de ${actor.name}`, error);
+      try {
+        await actor.delete();
+      } catch (rollbackError) {
+        console.error(`${MODULE_ID} | Falha ao remover Actor incompleto ${actor.name}`, rollbackError);
+        const message = `Jarvis: a importação de ${actor.name} falhou e o Actor incompleto não pôde ser removido. Remova-o manualmente; detalhes no console.`;
+        ui.notifications?.error(message);
+        throw new AggregateError([error, rollbackError], message);
+      }
+      ui.notifications?.error(`Jarvis: a importação de ${actor.name} falhou. O Actor recém-criado foi removido; detalhes no console.`);
       throw error;
     }
 
@@ -102,8 +110,24 @@ export class JarvisImporterV9 {
     this.#applyItemSemanticMetadata(itemData, resolvedItems);
     this.#applyItemImages(itemData);
 
-    const created = await this.#createItems(actor, itemData);
-    await stampActorProvenance(actor);
+    const existingIds = new Set(Array.from(actor.items ?? [], item => item.id));
+    let created;
+    try {
+      created = await this.#createItems(actor, itemData);
+      await stampActorProvenance(actor);
+    } catch (error) {
+      const newIds = Array.from(actor.items ?? [], item => item.id).filter(id => id && !existingIds.has(id));
+      if (newIds.length) {
+        try {
+          await actor.deleteEmbeddedDocuments("Item", newIds);
+        } catch (rollbackError) {
+          const message = `Jarvis: a importação de Items em ${actor.name} falhou e ${newIds.length} Item(s) incompleto(s) não puderam ser removidos. Revise a ficha.`;
+          ui.notifications?.error(message);
+          throw new AggregateError([error, rollbackError], message);
+        }
+      }
+      throw error;
+    }
 
     const hydrated = report.filter(entry => entry.status === "rehydrated").length;
     if (hydrated) {
