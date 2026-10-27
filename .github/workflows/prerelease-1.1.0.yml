@@ -1,0 +1,99 @@
+name: Publish Jarvis 1.1.0 Release Candidate
+
+on:
+  push:
+    branches:
+      - feat/jarvis-1.1.0
+    paths:
+      - module.json
+
+permissions:
+  contents: write
+
+jobs:
+  rc:
+    name: Validate and package RC
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout candidate branch
+        uses: actions/checkout@v4
+
+      - name: Validate release candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "feat/jarvis-1.1.0"
+          test "$(jq -r '.id' module.json)" = "fora-do-abismo-foundry"
+          test "$(jq -r '.version' module.json)" = "1.1.0-rc.1"
+          jq -e '.compatibility and .esmodules and .styles' module.json >/dev/null
+          find scripts -name '*.js' -print0 | xargs -0 -n1 node --check
+          node --test tests/*.test.js
+          for schema in schemas/*.json; do jq -e . "$schema" >/dev/null; done
+
+      - name: Prepare complete installable package
+        shell: bash
+        run: |
+          set -euo pipefail
+          MODULE_ID="fora-do-abismo-foundry"
+          VERSION="1.1.0-rc.1"
+          TAG="v$VERSION"
+          BASE_URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG"
+          mkdir -p release-tree
+          cp module.json release-tree/module.json
+          cp -r scripts styles schemas release-tree/
+          cp README.md release-tree/README.md
+          for dir in assets docs lang templates packs; do
+            if [[ -d "$dir" ]]; then cp -r "$dir" release-tree/; fi
+          done
+
+          # Match the normal release workflow: rasterize the Forjas SVGs.
+          if compgen -G "release-tree/assets/maps/forjas-*.svg" >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends librsvg2-bin webp
+            for svg in release-tree/assets/maps/forjas-*.svg; do
+              png="$(dirname "$svg")/$(basename "$svg" .svg).png"
+              webp="$(dirname "$svg")/$(basename "$svg" .svg).webp"
+              rsvg-convert "$svg" -o "$png"
+              cwebp -quiet -q 88 "$png" -o "$webp"
+              rm -f "$png"
+              test -s "$webp"
+            done
+          fi
+          for required in forjas-01.webp forjas-02.webp forjas-03.webp; do
+            test -s "release-tree/assets/maps/$required"
+          done
+
+          # Pin both URLs to this RC; leave releases/latest untouched.
+          jq \
+            --arg version "$VERSION" \
+            --arg manifest "$BASE_URL/module.json" \
+            --arg download "$BASE_URL/$MODULE_ID.zip" \
+            '.version = $version | .manifest = $manifest | .download = $download' \
+            release-tree/module.json > release-tree/module.new.json
+          mv release-tree/module.new.json release-tree/module.json
+          jq -e --arg version "$VERSION" --arg base "$BASE_URL" \
+            '.version == $version and (.manifest | startswith($base)) and (.download | startswith($base))' \
+            release-tree/module.json >/dev/null
+          (cd release-tree && zip -qr "../$MODULE_ID.zip" .)
+          unzip -t "$MODULE_ID.zip" >/dev/null
+          sha256sum "$MODULE_ID.zip"
+
+      - name: Publish isolated GitHub prerelease
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="v1.1.0-rc.1"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG already exists. Refusing to overwrite it."
+            exit 1
+          fi
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Fora do Abismo — Jarvis Tools 1.1.0 RC1" \
+            --prerelease \
+            --notes "Candidata de teste, sem validacao no Foundry real. Nao instalar no mundo principal. releases/latest continua em 1.0.0." \
+            "release-tree/module.json" \
+            "fora-do-abismo-foundry.zip"
