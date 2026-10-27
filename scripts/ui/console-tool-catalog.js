@@ -1,0 +1,20 @@
+export const TOOL_CATALOG = Object.freeze([
+  { id: "actor-open", label: "Abrir ficha", tab: "characters", description: "Abre a ficha do personagem selecionado." },
+  { id: "actor-create", label: "Criar personagem ou NPC", tab: "characters", gmOnly: true },
+  { id: "actor-import", label: "Importar ficha V9", tab: "characters", gmOnly: true },
+  { id: "item-create", label: "Criar Item ou homebrew", tab: "content", gmOnly: true },
+  { id: "actor-wizard-preview", label: "Prévia de personagem", tab: "characters", gmOnly: true },
+  { id: "item-wizard-preview", label: "Prévia de Item e classe", tab: "content", gmOnly: true },
+  { id: "map-studio", label: "Estúdio de Mapas", tab: "maps", gmOnly: true },
+  { id: "map-audit", label: "Analisar paredes e iluminação", tab: "maps", gmOnly: true },
+  { id: "scene-edit-preview", label: "Prévia de parede, luz ou som", tab: "maps", gmOnly: true },
+  { id: "scene-package-preview", label: "Prévia de Scene Package", tab: "maps", gmOnly: true },
+  { id: "scene-migration-preview", label: "Prévia de migração", tab: "maps", gmOnly: true },
+  { id: "scene-assets-review", label: "Revisar arquivos de mapas", tab: "maps", gmOnly: true },
+  { id: "appearance-list", label: "Ver aparências e formas", tab: "appearances" },
+  { id: "form-picker", label: "Escolher forma", tab: "appearances", trustedOnly: true },
+  { id: "pack-search", label: "Pesquisar compêndio", tab: "compendiums" },
+  { id: "macro-install", label: "Instalar macro Jarvis", tab: "macros", gmOnly: true },
+  { id: "managed-macro-run", label: "Executar macro autorizada", tab: "macros" },
+  { id: "diagnostics-run", label: "Executar diagnóstico", tab: "diagnostics", gmOnly: true }
+]);
