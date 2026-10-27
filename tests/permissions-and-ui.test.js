@@ -70,7 +70,7 @@ test("Jarvis console exposes the complete tab set only to a GM", () => {
   assert.equal(access.trusted, false);
   assert.equal(access.canManageActor, true);
   assert.deepEqual(visibleJarvisTabs(access), [
-    "characters", "content", "maps", "appearances", "compendiums", "diagnostics", "players", "macros"
+    "overview", "characters", "content", "maps", "appearances", "compendiums", "macros", "players", "diagnostics"
   ]);
 });
 
@@ -90,12 +90,12 @@ test("trusted users can manage only owned Actors; ordinary players remain read-o
   assert.equal(trustedAccess.trusted, true);
   assert.equal(trustedAccess.canViewActor, true);
   assert.equal(trustedAccess.canManageActor, true);
-  assert.deepEqual(visibleJarvisTabs(trustedAccess), ["characters", "appearances", "compendiums", "players"]);
+  assert.deepEqual(visibleJarvisTabs(trustedAccess), ["overview", "characters", "appearances", "compendiums", "players"]);
 
   const playerAccess = getJarvisAccess(player, actor);
   assert.equal(playerAccess.canViewActor, false);
   assert.equal(playerAccess.canManageActor, false);
-  assert.deepEqual(visibleJarvisTabs(playerAccess), ["characters", "appearances", "compendiums", "players"]);
+  assert.deepEqual(visibleJarvisTabs(playerAccess), ["overview", "characters", "appearances", "compendiums", "players"]);
   assert.throws(() => assertJarvisAccess(playerAccess.canManageActor), /não tem permissão/);
 
   const unrelated = { testUserPermission: () => false, isOwner: true };

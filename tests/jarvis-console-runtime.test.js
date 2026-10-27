@@ -66,6 +66,9 @@ test("DialogV2 installs console listeners after its first render", async () => {
   const dialog = openJarvisConsole();
   assert.ok(dialog instanceof DialogV2);
   assert.match(dialog.config.content.innerHTML, /data-jarvis-tab="compendiums"/);
+  assert.match(dialog.config.content.innerHTML, /data-jarvis-tab="overview"/);
+  assert.match(dialog.config.content.innerHTML, /role="tab"/);
+  assert.match(dialog.config.content.innerHTML, /data-jarvis-global-search/);
   assert.equal(listeners.has("click"), false, "the DOM is not available until render finishes");
 
   await dialog.renderPromise;
@@ -78,6 +81,14 @@ test("DialogV2 installs console listeners after its first render", async () => {
   assert.equal(panels[0].hidden, true);
   assert.equal(panels[1].hidden, false);
   assert.equal(tabs[1].attributes["aria-selected"], "true");
+
+  let prevented = false;
+  listeners.get("keydown")({ key: "Home", preventDefault() { prevented = true; },
+    target: { closest(selector) { return selector === "[data-jarvis-tab]" ? tabs[1] : null; } } });
+  assert.equal(prevented, true);
+  assert.equal(tabs[0].attributes["aria-selected"], "true");
+  assert.equal(tabs[0].attributes.tabindex, "0");
+  assert.equal(panels[0].hidden, false);
 
   await listeners.get("click")({ target: {
     closest(selector) { return selector === "[data-jarvis-action]" ? {

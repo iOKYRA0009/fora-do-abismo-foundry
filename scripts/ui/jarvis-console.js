@@ -1,11 +1,39 @@
 import { getJarvisAccess, visibleJarvisTabs, assertJarvisAccess } from "./jarvis-console-core.js";
+import { searchConsole } from "./console-search.js";
+import {
+  loadConsolePreferences, recordConsoleRecent, setConsoleSidebarCollapsed,
+  toggleConsoleFavorite
+} from "./console-preferences.js";
 
 const MODULE_ID = "fora-do-abismo-foundry";
 const MACRO_COMMAND = `game.modules.get("${MODULE_ID}")?.api?.ui?.open()`;
 const TAB_LABELS = Object.freeze({
-  characters: "Personagens", content: "Itens e classes", maps: "Mapas", appearances: "Aparências",
-  compendiums: "Compêndios", diagnostics: "Diagnóstico", players: "Jogadores", macros: "Macro"
+  overview: "Visão geral", characters: "Personagens e NPCs", content: "Itens e homebrew",
+  maps: "Mapas e cenas", appearances: "Aparências e formas", compendiums: "Compêndios",
+  macros: "Macros e automações", players: "Jogadores", diagnostics: "Diagnóstico e ajustes"
 });
+const TAB_ICONS = Object.freeze({
+  overview: "fa-gauge-high", characters: "fa-users", content: "fa-book-open",
+  maps: "fa-map", appearances: "fa-masks-theater", compendiums: "fa-layer-group",
+  macros: "fa-wand-magic-sparkles", players: "fa-user-group", diagnostics: "fa-stethoscope"
+});
+const TOOL_CATALOG = Object.freeze([
+  { id: "actor-open", label: "Abrir ficha", tab: "characters", description: "Abre a ficha do personagem selecionado." },
+  { id: "actor-create", label: "Criar personagem ou NPC", tab: "characters", gmOnly: true },
+  { id: "actor-import", label: "Importar ficha V9", tab: "characters", gmOnly: true },
+  { id: "item-create", label: "Criar Item ou homebrew", tab: "content", gmOnly: true },
+  { id: "map-studio", label: "Estúdio de Mapas", tab: "maps", gmOnly: true },
+  { id: "map-audit", label: "Analisar paredes e iluminação", tab: "maps", gmOnly: true },
+  { id: "scene-package-preview", label: "Prévia de Scene Package", tab: "maps", gmOnly: true },
+  { id: "scene-migration-preview", label: "Prévia de migração", tab: "maps", gmOnly: true },
+  { id: "scene-assets-review", label: "Revisar arquivos de mapas", tab: "maps", gmOnly: true },
+  { id: "appearance-list", label: "Ver aparências e formas", tab: "appearances" },
+  { id: "form-picker", label: "Escolher forma", tab: "appearances", trustedOnly: true },
+  { id: "pack-search", label: "Pesquisar compêndio", tab: "compendiums" },
+  { id: "macro-install", label: "Instalar macro Jarvis", tab: "macros", gmOnly: true },
+  { id: "diagnostics-run", label: "Executar diagnóstico", tab: "diagnostics", gmOnly: true }
+]);
+const TOOL_BY_ID = new Map(TOOL_CATALOG.map(tool => [tool.id, tool]));
 
 let currentDialog = null;
 let openingPromise = null;
@@ -39,6 +67,49 @@ function visibleActors() {
 
 function visiblePacks() {
   return values(game.packs).filter(pack => pack.visible !== false && ["Item", "Actor"].includes(pack.documentName));
+}
+
+function availableTools(access = getJarvisAccess(game.user)) {
+  return TOOL_CATALOG.filter(tool => !tool.gmOnly || access.gm)
+    .filter(tool => !tool.trustedOnly || access.gm || access.trusted);
+}
+
+function dashboardToolButtons(ids, preferences) {
+  return ids.map(id => TOOL_BY_ID.get(id)).filter(Boolean).map(tool => {
+    const favorite = preferences.favorites.includes(tool.id);
+    return `<div class="jarvis-console-shortcut"><button type="button" data-jarvis-jump="${escapeHtml(tool.id)}" title="${escapeHtml(tool.description ?? tool.label)}">${escapeHtml(tool.label)}</button>` +
+      `<button type="button" data-jarvis-favorite="${escapeHtml(tool.id)}" aria-label="${favorite ? "Remover dos" : "Adicionar aos"} favoritos: ${escapeHtml(tool.label)}" aria-pressed="${favorite}">${favorite ? "★" : "☆"}</button></div>`;
+  }).join("");
+}
+
+function refreshDashboard(root, state) {
+  const access = getJarvisAccess(game.user);
+  const allowed = new Set(availableTools(access).map(tool => tool.id));
+  const preferences = state.preferences ?? loadConsolePreferences();
+  for (const [selector, ids] of [
+    ["[data-jarvis-favorites]", preferences.favorites.filter(id => allowed.has(id))],
+    ["[data-jarvis-recents]", preferences.recents.filter(id => allowed.has(id))]
+  ]) {
+    const host = root.querySelector(selector);
+    if (host) host.innerHTML = ids.length ? dashboardToolButtons(ids, preferences)
+      : `<p class="jarvis-console-hint">${selector.includes("favorites") ? "Nenhum favorito ainda." : "Nenhuma ação recente."}</p>`;
+  }
+  const actor = game.actors?.get?.(fieldValue(root, "jarvis-actor"));
+  const active = root.querySelector("[data-jarvis-active-actor]");
+  if (active) active.textContent = actor && getJarvisAccess(game.user, actor).canViewActor
+    ? `${actor.name} · ${actor.type}` : "Nenhum personagem selecionado";
+}
+
+function refreshActorOptions(root, actorId = null) {
+  const select = field(root, "jarvis-actor");
+  if (!select) return;
+  const previous = actorId ?? select.value;
+  const actors = visibleActors();
+  select.innerHTML = `<option value="">Selecione</option>${options(actors,
+    actor => `${actor.name} · ${actor.type}`, actor => actor.id)}`;
+  select.value = actors.some(actor => actor.id === previous) ? previous : "";
+  const count = root.querySelector("[data-jarvis-actor-count]");
+  if (count) count.textContent = `${actors.length} ficha(s) acessível(is)`;
 }
 
 function itemTypes() {
@@ -88,26 +159,39 @@ async function selectedTransformationToken(actor, state) {
 
 function requireGM() { assertJarvisAccess(game.user?.isGM, "Jarvis: esta ação exige um Mestre."); }
 
+function summarizeOutput(value, state = { nodes: 0, seen: new WeakSet() }, depth = 0) {
+  if (typeof value === "string") return value.slice(0, 4000);
+  if (typeof value === "bigint") return String(value);
+  if (value === null || typeof value !== "object") return value;
+  if (value.documentName && value.id) return { type: value.documentName, id: value.id, name: value.name };
+  if (state.seen.has(value)) return "[referência repetida]";
+  if (depth >= 6 || state.nodes++ >= 500) return "[resumo limitado]";
+  state.seen.add(value);
+  if (Array.isArray(value)) {
+    const entries = value.slice(0, 80).map(entry => summarizeOutput(entry, state, depth + 1));
+    if (value.length > 80) entries.push(`[mais ${value.length - 80} registros]`);
+    return entries;
+  }
+  const result = {};
+  const keys = Object.keys(value);
+  for (const key of keys.slice(0, 80)) {
+    try { result[key] = summarizeOutput(value[key], state, depth + 1); }
+    catch { result[key] = "[indisponível]"; }
+  }
+  if (keys.length > 80) result.more = `${keys.length - 80} campos omitidos`;
+  return result;
+}
+
 function setOutput(root, title, result) {
   const heading = root.querySelector(".jarvis-console-result-title");
   const content = root.querySelector(".jarvis-console-result-content");
   if (!heading || !content) return;
   heading.textContent = title;
-  let rendered;
-  if (typeof result === "string") rendered = result;
-  else {
-    const seen = new WeakSet();
-    rendered = JSON.stringify(result, (_key, value) => {
-      if (value && typeof value === "object") {
-        if (seen.has(value)) return "[referência repetida]";
-        seen.add(value);
-        if (value.documentName && value.id) return { type: value.documentName, id: value.id, name: value.name };
-      }
-      return value;
-    }, 2);
-  }
+  const rendered = typeof result === "string" ? result.slice(0, 50000)
+    : JSON.stringify(summarizeOutput(result), null, 2);
   content.textContent = String(rendered ?? "Sem resultado.").slice(0, 50000);
   content.closest(".jarvis-console-result")?.removeAttribute("hidden");
+  if (root.dataset) root.dataset.jarvisOutputRevision = String(Number(root.dataset.jarvisOutputRevision ?? 0) + 1);
 }
 
 function clearOutput(root) { root.querySelector(".jarvis-console-result")?.setAttribute("hidden", ""); }
@@ -129,28 +213,43 @@ function element(markup) {
 }
 
 function panel(id, body) {
-  return `<section class="jarvis-console-panel" data-jarvis-panel="${id}" ${id === "characters" ? "" : "hidden"}>${body}</section>`;
+  return `<section class="jarvis-console-panel" id="jarvis-panel-${id}" role="tabpanel" aria-labelledby="jarvis-tab-${id}" data-jarvis-panel="${id}" ${id === "overview" ? "" : "hidden"}>${body}</section>`;
 }
 
 function button(action, label, { className = "", title = "" } = {}) {
-  return `<button type="button" data-jarvis-action="${action}" class="${escapeHtml(className)}" ${title ? `title="${escapeHtml(title)}"` : ""}>${escapeHtml(label)}</button>`;
+  const tooltip = title || TOOL_BY_ID.get(action)?.description || label;
+  return `<button type="button" data-jarvis-action="${action}" class="${escapeHtml(className)}" title="${escapeHtml(tooltip)}">${escapeHtml(label)}</button>`;
 }
 
 function renderContent() {
   const access = getJarvisAccess(game.user);
   const tabs = visibleJarvisTabs(access);
   const jarvis = api();
+  const preferences = loadConsolePreferences();
   const actors = visibleActors();
   const packs = visiblePacks();
   const actorOptions = options(actors, actor => `${actor.name} · ${actor.type}`, actor => actor.id);
   const packOptions = options(packs, pack => `${pack.title ?? pack.metadata?.label ?? pack.collection} · ${pack.documentName}`, pack => pack.collection);
-  const templates = jarvis.scenes.framework.templates();
-  const skins = jarvis.scenes.framework.skins();
-  const presets = jarvis.scenes.framework.presets();
-  const lighting = jarvis.scenes.lightingPresets();
+  const templates = access.gm ? jarvis.scenes.framework.templates() : [];
+  const skins = access.gm ? jarvis.scenes.framework.skins() : [];
+  const presets = access.gm ? jarvis.scenes.framework.presets() : [];
+  const lighting = access.gm ? jarvis.scenes.lightingPresets() : [];
   const types = itemTypes();
-  const nav = tabs.map((id, index) => `<button type="button" class="jarvis-console-tab ${index ? "" : "active"}" data-jarvis-tab="${id}" aria-selected="${index ? "false" : "true"}">${TAB_LABELS[id]}</button>`).join("");
+  const nav = tabs.map((id, index) => `<button type="button" id="jarvis-tab-${id}" role="tab" aria-controls="jarvis-panel-${id}" tabindex="${index ? -1 : 0}" class="jarvis-console-tab ${index ? "" : "active"}" data-jarvis-tab="${id}" aria-selected="${index ? "false" : "true"}" title="${escapeHtml(TAB_LABELS[id])}"><i class="jarvis-console-tab-icon fa-solid ${TAB_ICONS[id]}" aria-hidden="true"></i><span class="jarvis-console-tab-label">${TAB_LABELS[id]}</span></button>`).join("");
   const gm = access.gm;
+
+  const overview = panel("overview", `
+    <h2>Central Jarvis</h2><p>Ferramentas da campanha em um só lugar. Escolha uma área à esquerda ou use a busca.</p>
+    <div class="jarvis-console-dashboard">
+      <section class="jarvis-console-card"><h3>Estado do módulo</h3><p>Jarvis ${escapeHtml(jarvis.version)}<br>Foundry ${escapeHtml(game.release?.version ?? game.version ?? "V14")} · D&D5e ${escapeHtml(game.system?.version ?? "não identificado")}</p>
+      <p>Visage: ${jarvis.appearance.status().active ? "ativo" : "inativo"}<br>Metamorph: ${jarvis.transformation.status().active ? "ativo" : "inativo"}</p></section>
+      <section class="jarvis-console-card"><h3>Personagem ativo</h3><p data-jarvis-active-actor>Nenhum personagem selecionado</p><p>${actors.length} ficha(s) e ${packs.length} compêndio(s) acessível(is).</p></section>
+      <section class="jarvis-console-card"><h3>Acesso rápido</h3>${dashboardToolButtons(availableTools(access).slice(0, 5).map(tool => tool.id), preferences)}</section>
+      <section class="jarvis-console-card"><h3>Favoritos</h3><div data-jarvis-favorites></div></section>
+      <section class="jarvis-console-card"><h3>Recentes</h3><div data-jarvis-recents></div></section>
+      <section class="jarvis-console-card"><h3>Estado rápido</h3><p>${gm ? "Operações de mundo disponíveis para Mestre." : "Acesso limitado a fichas e ferramentas permitidas."}</p><p>${game.users?.activeGM ? "Mestre ativo conectado." : "Nenhum Mestre ativo detectado."}</p>${gm ? button("diagnostics-run", "Executar diagnóstico") : ""}</section>
+    </div>
+  `);
 
   const characters = panel("characters", `
     <h2>Personagens</h2><p>Abra uma ficha existente ou use o importador V9 para preservar recursos, atividades e efeitos.</p>
@@ -234,11 +333,12 @@ function renderContent() {
     <div class="jarvis-console-row"><label>Atalho da barra (1–10)<input name="macro-slot" type="number" min="1" max="10" value="1"></label>${button("macro-install", "Criar e pôr na barra")}${button("macro-copy", "Copiar código")}</div>
   `) : "";
 
-  return element(`<div class="jarvis-console">
-    <header class="jarvis-console-header"><strong>JARVIS <span>${escapeHtml(jarvis.version)}</span></strong><small>${escapeHtml(game.user?.name ?? "")}</small></header>
-    <nav class="jarvis-console-nav" role="tablist" aria-label="Ferramentas do Jarvis">${nav}</nav>
-    <div class="jarvis-console-actor"><label>Personagem ativo <select name="jarvis-actor"><option value="">Selecione</option>${actorOptions}</select></label><span>${actors.length} ficha(s) acessível(is)</span></div>
-    <div class="jarvis-console-body">${characters}${content}${maps}${appearances}${compendiums}${diagnostics}${players}${macros}</div>
+  return element(`<div class="jarvis-console" data-sidebar-collapsed="${preferences.sidebarCollapsed}">
+    <header class="jarvis-console-header"><strong>JARVIS <span>${escapeHtml(jarvis.version)}</span></strong><div class="jarvis-console-header-actions"><small>${escapeHtml(game.user?.name ?? "")}</small><button type="button" class="jarvis-console-toggle" data-jarvis-toggle-sidebar aria-label="Recolher ou expandir menu" aria-expanded="${!preferences.sidebarCollapsed}" title="Recolher ou expandir menu"><i class="fa-solid fa-bars" aria-hidden="true"></i></button></div></header>
+    <div class="jarvis-console-layout"><nav class="jarvis-console-nav" role="tablist" aria-orientation="vertical" aria-label="Ferramentas do Jarvis">${nav}</nav>
+    <main class="jarvis-console-main"><div class="jarvis-console-actor"><label>Personagem ativo <select name="jarvis-actor"><option value="">Selecione</option>${actorOptions}</select></label><span data-jarvis-actor-count>${actors.length} ficha(s) acessível(is)</span></div>
+    <div class="jarvis-console-search"><label>Busca global<input data-jarvis-global-search type="search" maxlength="100" autocomplete="off" aria-controls="jarvis-global-results" aria-autocomplete="list" placeholder="Ferramentas, personagens e compêndios"></label><div id="jarvis-global-results" class="jarvis-console-search-results" data-jarvis-search-results role="listbox" aria-live="polite"></div></div>
+    <div class="jarvis-console-body">${overview}${characters}${content}${maps}${appearances}${compendiums}${macros}${players}${diagnostics}</div><div class="jarvis-console-status" data-jarvis-status role="status" aria-live="polite"></div></main></div>
     <aside class="jarvis-console-result" hidden><div class="jarvis-console-result-head"><strong class="jarvis-console-result-title"></strong>${button("clear-output", "Limpar")}</div><pre class="jarvis-console-result-content"></pre></aside>
   </div>`);
 }
@@ -297,13 +397,15 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
     const actor = await Actor.create({ name, type });
     if (!actor) throw new Error("O Foundry não criou o Actor.");
     actor.sheet?.render(true);
-    return setOutput(root, "Personagem criado", `${actor.name} · ${actor.type}. Reabra o Jarvis para atualizar a lista.`);
+    refreshActorOptions(root, actor.id);
+    return setOutput(root, "Personagem criado", `${actor.name} · ${actor.type}.`);
   }
   if (action === "actor-import") {
     requireGM();
     const json = await fileOrText(root, "actor-json-file", "actor-json");
     const actor = await jarvis.importer.importFromJson(json, { renderSheet: true });
-    return setOutput(root, "Importação concluída", `${actor.name} foi criado. Reabra o Jarvis para atualizar a lista.`);
+    refreshActorOptions(root, actor.id);
+    return setOutput(root, "Importação concluída", `${actor.name} foi criado.`);
   }
   if (action === "actor-compare") {
     requireGM();
@@ -637,36 +739,171 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
   throw new Error(`Ação Jarvis desconhecida: ${action}.`);
 }
 
-function selectTab(root, id) {
+function selectTab(root, id, { focus = false } = {}) {
   if (!visibleJarvisTabs(getJarvisAccess(game.user)).includes(id)) return;
   for (const tab of root.querySelectorAll("[data-jarvis-tab]")) {
     const active = tab.dataset.jarvisTab === id;
     tab.classList.toggle("active", active);
     tab.setAttribute("aria-selected", String(active));
+    tab.setAttribute("tabindex", active ? "0" : "-1");
+    if (active && focus) tab.focus?.();
   }
   for (const panel of root.querySelectorAll("[data-jarvis-panel]")) panel.hidden = panel.dataset.jarvisPanel !== id;
+}
+
+function renderSearchResults(root, rows) {
+  const host = root.querySelector("[data-jarvis-search-results]");
+  if (!host) return;
+  host.innerHTML = rows.length ? rows.map((row, index) =>
+    `<button type="button" role="option" data-jarvis-search-index="${index}"><strong>${escapeHtml(row.label)}</strong><small>${escapeHtml(row.description ?? row.type)}</small></button>`
+  ).join("") : "";
+}
+
+async function openSearchResult(root, state, index) {
+  const row = state.searchRows?.[index];
+  if (!row) return;
+  if (row.type === "tool") {
+    const tool = availableTools().find(entry => entry.id === row.action);
+    if (!tool) throw new Error("Ferramenta não disponível para este usuário.");
+    selectTab(root, tool.tab);
+    root.querySelector(`[data-jarvis-action="${tool.id}"]`)?.focus?.();
+  } else if (row.type === "actor") {
+    const actor = game.actors?.get?.(row.actorId);
+    if (!actor || !getJarvisAccess(game.user, actor).canViewActor) throw new Error("Ficha não disponível.");
+    refreshActorOptions(root, actor.id);
+    selectTab(root, "characters");
+  } else if (row.type === "compendium") {
+    const pack = visiblePacks().find(entry => entry.collection === row.packId);
+    if (!pack) throw new Error("Compêndio não disponível.");
+    const select = field(root, "pack");
+    const query = field(root, "pack-query");
+    if (select) select.value = pack.collection;
+    if (query) query.value = row.label;
+    selectTab(root, "compendiums");
+    await executeJarvisConsoleAction("pack-search", root, state);
+  }
+  const input = root.querySelector("[data-jarvis-global-search]");
+  if (input) input.value = "";
+  state.searchRows = [];
+  renderSearchResults(root, []);
+}
+
+function queueGlobalSearch(root, state) {
+  clearTimeout(state.searchTimer);
+  state.searchAbort?.abort();
+  const query = root.querySelector("[data-jarvis-global-search]")?.value ?? "";
+  if (!query.trim()) {
+    state.searchRows = [];
+    renderSearchResults(root, []);
+    return;
+  }
+  const controller = new AbortController();
+  state.searchAbort = controller;
+  state.searchTimer = setTimeout(async () => {
+    const status = root.querySelector("[data-jarvis-status]");
+    if (status) status.textContent = "Buscando…";
+    try {
+      const rows = await searchConsole(query, { access: getJarvisAccess(game.user),
+        actors: visibleActors(), packs: visiblePacks(), tools: TOOL_CATALOG,
+        limit: 30, signal: controller.signal });
+      if (controller.signal.aborted) return;
+      state.searchRows = rows;
+      renderSearchResults(root, rows);
+      if (status) status.textContent = `${rows.length} resultado(s).`;
+    } catch (error) {
+      if (!controller.signal.aborted && status) status.textContent = `Busca falhou: ${error.message}`;
+    }
+  }, 180);
+}
+
+async function handleNavigationClick(event, root, state) {
+  const tab = event.target.closest("[data-jarvis-tab]");
+  if (tab) { selectTab(root, tab.dataset.jarvisTab); return true; }
+  const toggle = event.target.closest("[data-jarvis-toggle-sidebar]");
+  if (toggle) {
+    const collapsed = root.dataset.sidebarCollapsed !== "true";
+    state.preferences = await setConsoleSidebarCollapsed(collapsed);
+    root.dataset.sidebarCollapsed = String(collapsed);
+    toggle.setAttribute("aria-expanded", String(!collapsed));
+    return true;
+  }
+  const favorite = event.target.closest("[data-jarvis-favorite]");
+  if (favorite) {
+    state.preferences = await toggleConsoleFavorite(favorite.dataset.jarvisFavorite);
+    refreshDashboard(root, state);
+    return true;
+  }
+  const jump = event.target.closest("[data-jarvis-jump]");
+  if (jump) {
+    const tool = availableTools().find(entry => entry.id === jump.dataset.jarvisJump);
+    if (tool) { selectTab(root, tool.tab); root.querySelector(`[data-jarvis-action="${tool.id}"]`)?.focus?.(); }
+    return true;
+  }
+  const searchResult = event.target.closest("[data-jarvis-search-index]");
+  if (searchResult) {
+    await openSearchResult(root, state, Number(searchResult.dataset.jarvisSearchIndex));
+    return true;
+  }
+  return false;
 }
 
 function bindDialog(dialog, state) {
   const root = dialog.element?.querySelector(".jarvis-console");
   if (!root || root.dataset.jarvisBound) return;
   root.dataset.jarvisBound = "true";
+  refreshDashboard(root, state);
   root.addEventListener("click", async event => {
-    const tab = event.target.closest("[data-jarvis-tab]");
-    if (tab) { selectTab(root, tab.dataset.jarvisTab); return; }
+    try { if (await handleNavigationClick(event, root, state)) return; }
+    catch (error) {
+      setOutput(root, "Erro", error?.message ?? String(error));
+      ui.notifications?.error(`Jarvis: ${error?.message ?? error}`);
+      return;
+    }
     const control = event.target.closest("[data-jarvis-action]");
     if (!control) return;
     const action = control.dataset.jarvisAction;
     if (control.disabled) return;
     control.disabled = true;
+    control.setAttribute?.("aria-busy", "true");
+    const status = root.querySelector("[data-jarvis-status]");
+    if (status) status.textContent = "Executando…";
     state.actionIndex = control.dataset.jarvisIndex;
-    try { await executeJarvisConsoleAction(action, root, state); }
+    const previousOutput = Number(root.dataset.jarvisOutputRevision ?? 0);
+    try {
+      await executeJarvisConsoleAction(action, root, state);
+      if (TOOL_BY_ID.has(action) && Number(root.dataset.jarvisOutputRevision ?? 0) > previousOutput) {
+        state.preferences = await recordConsoleRecent(action);
+        refreshDashboard(root, state);
+      }
+      if (status) status.textContent = "Pronto.";
+    }
     catch (error) {
       const detail = Array.isArray(error?.details) ? `\n${error.details.join("\n")}` : "";
       setOutput(root, "Erro", `${error?.message ?? error}${detail}`);
       ui.notifications?.error(`Jarvis: ${error?.message ?? error}`);
       console.error(`${MODULE_ID} | Ação ${action} falhou`, error);
-    } finally { control.disabled = false; }
+      if (status) status.textContent = "Ação não concluída.";
+    } finally { control.disabled = false; control.removeAttribute?.("aria-busy"); }
+  });
+  root.addEventListener("change", event => {
+    if (event.target?.matches?.('[name="jarvis-actor"]')) refreshDashboard(root, state);
+  });
+  root.addEventListener("input", event => {
+    if (event.target?.matches?.("[data-jarvis-global-search]")) queueGlobalSearch(root, state);
+  });
+  root.addEventListener("keydown", event => {
+    const tab = event.target?.closest?.("[data-jarvis-tab]");
+    if (!tab) return;
+    const tabs = Array.from(root.querySelectorAll("[data-jarvis-tab]"));
+    const index = tabs.indexOf(tab);
+    let next = index;
+    if (["ArrowDown", "ArrowRight"].includes(event.key)) next = (index + 1) % tabs.length;
+    else if (["ArrowUp", "ArrowLeft"].includes(event.key)) next = (index - 1 + tabs.length) % tabs.length;
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = tabs.length - 1;
+    else return;
+    event.preventDefault();
+    selectTab(root, tabs[next].dataset.jarvisTab, { focus: true });
   });
 }
 
@@ -675,11 +912,13 @@ export function openJarvisConsole() {
     if (currentDialog.rendered) currentDialog.bringToFront();
     return currentDialog;
   }
-  const state = { packRows: [], actionIndex: null, transformationTokenId: null };
+  const state = { packRows: [], actionIndex: null, transformationTokenId: null,
+    preferences: loadConsolePreferences(), searchRows: [], searchAbort: null, searchTimer: null };
   const Dialog = foundry.applications.api.DialogV2;
   const dialog = new Dialog({
     window: { title: "Jarvis — Fora do Abismo", resizable: true },
-    position: { width: 980, height: 720 },
+    position: { width: Math.min(1080, Math.max(640, (globalThis.innerWidth ?? 1160) - 80)),
+      height: Math.min(720, Math.max(540, (globalThis.innerHeight ?? 800) - 80)) },
     modal: false,
     content: renderContent(),
     buttons: [{ action: "close", label: "Fechar" }]
