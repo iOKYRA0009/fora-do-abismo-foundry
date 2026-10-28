@@ -61,7 +61,7 @@ test("an invalid V9 payload must be rejected before a portrait is uploaded", asy
   const image = new File(["abc"], "sentinela.webp", { type: "image/webp" });
   await assert.rejects(importJarvisActorWithImage(JSON.stringify({ actor: payload.actor }), {
     imageFile: image, importer, picker
-  }), /schemaVersion/);
+  }), error => error.name === "PayloadValidationError" && error.details.some(x => /schemaVersion/.test(x)));
   assert.deepEqual(actions, []);
 });
 
