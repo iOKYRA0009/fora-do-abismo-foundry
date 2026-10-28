@@ -243,3 +243,8 @@ Por padrão, Actors marcados com `optional: true` ficam apenas no manifesto e **
 ## Mosaico de mapas HD — v1.3.0
 
 O Macro Executor agora pode importar até quatro imagens WEBP/PNG/JPG como **setores independentes de fundo em uma Scene com grid único**, com prévia para ajustar paredes, portas e luzes usando zoom e modo de movimentação. Leia [o guia de pacote e limites](docs/MULTI-MAP-ATLAS.md) antes de preparar mapas grandes. Tokens/NPCs podem ser adicionados depois.
+
+
+## Qualidade de cenas — v1.4.0
+
+Três recursos originais para o Mestre: **Registro de Produção** (export JSON somente leitura e comparação por documento), **Inspetor HD** (grid, foco individual dos setores e alertas de qualidade na prévia do Executor) e **Diretor de Atmosfera** (três estados cinematográficos, com prévia e restauração da escuridão/cor). Não há dependências novas. Consulte [o guia completo](docs/QUALITY-1.4.0.md) e teste numa cópia do mundo antes de usar em sessão.
