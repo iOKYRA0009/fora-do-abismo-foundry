@@ -226,7 +226,7 @@ export async function runJarvisExecution(plan, api) {
         addedItems.push({ actor, items });
       }
       for (const blueprint of resolved.scenes ?? []) {
-        const result = await api.scenes.builder.build(blueprint, {
+        const result = await api.scenes.build(blueprint, {
           replaceExisting: false, activate: false, view: false, allowMissingActors: false
         });
         const scene = result?.scene ?? result;
