@@ -11,14 +11,14 @@ permissions:
   contents: write
 
 jobs:
-  rc:
-    name: Validate and package RC
+  release:
+    name: Validate and publish 1.1.0
     runs-on: ubuntu-latest
     steps:
       - name: Checkout candidate branch
         uses: actions/checkout@v4
 
-      - name: Validate release candidate
+      - name: Validate stable release
         shell: bash
         run: |
           set -euo pipefail
@@ -39,6 +39,7 @@ jobs:
           VERSION="1.1.0"
           TAG="v$VERSION"
           BASE_URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG"
+          LATEST_URL="https://github.com/$GITHUB_REPOSITORY/releases/latest/download/module.json"
           mkdir -p release-tree
           cp module.json release-tree/module.json
           cp -r scripts styles schemas release-tree/
@@ -67,13 +68,13 @@ jobs:
           # Pin both URLs to this RC; leave releases/latest untouched.
           jq \
             --arg version "$VERSION" \
-            --arg manifest "$BASE_URL/module.json" \
+            --arg manifest "$LATEST_URL" \
             --arg download "$BASE_URL/$MODULE_ID.zip" \
             '.version = $version | .manifest = $manifest | .download = $download' \
             release-tree/module.json > release-tree/module.new.json
           mv release-tree/module.new.json release-tree/module.json
           jq -e --arg version "$VERSION" --arg base "$BASE_URL" \
-            '.version == $version and (.manifest | startswith($base)) and (.download | startswith($base))' \
+            '.version == $version and (.manifest | contains("/releases/latest/download/module.json")) and (.download | startswith($base))' \
             release-tree/module.json >/dev/null
           (cd release-tree && zip -qr "../$MODULE_ID.zip" .)
           unzip -t "$MODULE_ID.zip" >/dev/null
@@ -93,7 +94,8 @@ jobs:
           gh release create "$TAG" \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "Fora do Abismo — Jarvis Tools 1.1.0 Stable" \
+            --title "Fora do Abismo — Jarvis Tools 1.1.0" \
+            --latest \
             --notes "Jarvis Macro Executor: JS, pacotes JSON, NPCs V9, itens, Activities, imagens, cenas, paredes, luzes e tokens. 183 testes automatizados. Para validação real, use um mundo de teste e mantenha backup." \
             "release-tree/module.json" \
             "fora-do-abismo-foundry.zip"
