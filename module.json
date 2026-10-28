@@ -2,7 +2,7 @@
   "id": "fora-do-abismo-foundry",
   "type": "module",
   "title": "Fora do Abismo — Jarvis Tools",
-  "description": "Central Jarvis para Fora do Abismo no Foundry V14: personagens, itens, classes, mapas, aparências, compêndios, automações e diagnóstico com permissões por papel.",
+  "description": "Central Jarvis para Foundry V14: personagens, itens, classes, mapas, aparências, compêndios, automações e diagnóstico com captura de erros (candidata de teste).",
   "version": "1.1.0-rc.3",
   "authors": [
     {
