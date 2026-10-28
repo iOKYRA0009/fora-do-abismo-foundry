@@ -4,6 +4,7 @@ import { TOOL_CATALOG } from "./console-tool-catalog.js";
 import { JarvisInputError } from "./console-input-error.js";
 import { importJarvisActorWithImage } from "./actor-import-with-image.js";
 import { moveExecutorMapElement } from "./executor-map-edit.js";
+import { inspectMosaicQuality } from "../scenes/package/mosaic-quality.js";
 import {
   loadConsolePreferences, recordConsoleRecent, setConsoleSidebarCollapsed,
   toggleConsoleFavorite
@@ -452,6 +453,24 @@ function sceneOverlayMarkup(scene, plan, state, sceneIndex) {
     : src ? `<img class="jarvis-map-sector" src="${escapeHtml(src)}" alt="Mapa de ${escapeHtml(scene.name)}"
         style="left:0;top:0;width:100%;height:100%"/>`
     : `<div class="jarvis-executor-map-missing">Sem imagem incorporada. Use os indicadores por coordenadas.</div>`;
+  const qa = inspectMosaicQuality(sourceScene);
+  const showGrid = state.executorMapGridVisible === true;
+  const gridLayer = `<defs><pattern id="jarvis-grid-${sceneIndex}" width="${gridSize}" height="${gridSize}" patternUnits="userSpaceOnUse">
+      <path d="M ${gridSize} 0 L 0 0 0 ${gridSize}" fill="none" stroke="#e4e0a5" stroke-opacity="0.45" stroke-width="2"/></pattern></defs>
+    <rect data-jarvis-map-grid-layer width="${width}" height="${height}" fill="url(#jarvis-grid-${sceneIndex})"
+      style="display:${showGrid ? "block" : "none"};pointer-events:none"/> `;
+  const sectorBorders = qa.sectors.map(sector => {
+    const [x,y,w,h] = sector.rect;
+    return `<g pointer-events="none">
+      <rect x="${toX(x)}" y="${toY(y)}" width="${toX(w)}" height="${toY(h)}"
+        fill="none" stroke="#8ed8e8" stroke-opacity=".8" stroke-width="${Math.max(3,gridSize*.045)}"/>
+      <text x="${toX(x)+gridSize*.35}" y="${toY(y)+gridSize*.5}"
+        font-size="${Math.max(23,gridSize*.37)}" font-weight="bold"
+        stroke="#111820" stroke-width="4" paint-order="stroke" fill="#9ce6f3">${escapeHtml(sector.name)} · ${sector.pixelsPerCell}px/célula</text>
+      </g>`;
+  }).join("");
+  const qaList = qa.issues.length ? `<ul>${qa.issues.map(issue => `<li>${escapeHtml(issue.severity)}: ${escapeHtml(issue.detail)}</li>`).join("")}</ul>`
+    : `<p class="jarvis-console-hint">Sem avisos heurísticos. Verifique ainda a visão de jogador no Foundry.</p>`;
   const zoom = Math.max(1, Math.min(6, Number(state.executorMapZoom ?? 1)));
   const panning = state.executorMapPanEnabled === true;
   return `<details class="jarvis-executor-map-preview" open><summary>Ajustar mapa antes de criar (${tiles.length || (src ? 1 : 0)} setor(es))</summary>
@@ -461,6 +480,7 @@ function sceneOverlayMarkup(scene, plan, state, sceneIndex) {
       <button type="button" data-jarvis-map-zoom="1" data-jarvis-scene-index="${sceneIndex}">+ Zoom</button>
       <button type="button" data-jarvis-map-zoom="fit" data-jarvis-scene-index="${sceneIndex}">Encaixar</button>
       <button type="button" data-jarvis-map-pan-toggle aria-pressed="${panning}">${panning ? "✓ Mover tela" : "Mover tela"}</button>
+      <button type="button" data-jarvis-map-grid-toggle aria-pressed="${showGrid}">${showGrid ? "✓ Grid" : "Mostrar grid"}</button>
       <span data-jarvis-map-zoom-label>${Math.round(zoom*100)}%</span>
     </div>
     <div class="jarvis-executor-map-viewport" data-jarvis-map-viewport data-jarvis-scene-index="${sceneIndex}"
@@ -468,7 +488,7 @@ function sceneOverlayMarkup(scene, plan, state, sceneIndex) {
       <div class="jarvis-executor-map-frame" data-jarvis-map-stage style="width:${zoom*100}%;aspect-ratio:${width}/${height}">
         ${source}
         <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" data-jarvis-map-svg aria-label="Mapa editável com paredes, portas, luzes e tokens">
-          ${baseWalls}${structures}${lights}${tokens}
+          ${gridLayer}${sectorBorders}${baseWalls}${structures}${lights}${tokens}
         </svg>
       </div>
     </div>
@@ -476,7 +496,8 @@ function sceneOverlayMarkup(scene, plan, state, sceneIndex) {
       <button type="button" data-jarvis-map-undo>Desfazer ajuste</button>
       <button type="button" data-jarvis-map-export>Baixar pacote ajustado</button>
     </div>
-    <p class="jarvis-console-hint">Laranja: paredes · azul: portas · amarelo: luzes · verde: tokens. A prévia permite examinar a geometria, mas não simula a visão de um jogador dentro do Foundry.</p>
+    <p class="jarvis-console-hint">Laranja: paredes · azul: portas · amarelo: luzes · verde: tokens. A prévia não simula a visão real do jogador.</p>
+    <details><summary>Inspeção HD: ${qa.sectors.length} setores, ${qa.issues.length} avisos</summary>${qaList}</details>
     ${scene.calibration ? `<p class="jarvis-console-hint">Atlas: ${scene.calibration.source.width}×${scene.calibration.source.height} → cena ${width}×${height} pixels.</p>` : ""}
   </details>`;
 }
@@ -1657,6 +1678,17 @@ async function handleNavigationClick(event, root, state) {
     viewport.scrollTop = (viewport.scrollTop + viewport.clientHeight / 2) * after / before - viewport.clientHeight / 2;
     panel.querySelector("[data-jarvis-map-zoom-label]").textContent = Math.round(after * 100) + "%";
     (state.executorMapScroll ??= {})[viewport.dataset.jarvisSceneIndex] = { left: viewport.scrollLeft, top: viewport.scrollTop };
+    return true;
+  }
+  if (event.target?.closest?.("[data-jarvis-map-grid-toggle]")) {
+    state.executorMapGridVisible = !state.executorMapGridVisible;
+    for (const layer of root.querySelectorAll("[data-jarvis-map-grid-layer]")) {
+      layer.style.display = state.executorMapGridVisible ? "block" : "none";
+    }
+    for (const control of root.querySelectorAll("[data-jarvis-map-grid-toggle]")) {
+      control.textContent = state.executorMapGridVisible ? "✓ Grid" : "Mostrar grid";
+      control.setAttribute("aria-pressed", String(state.executorMapGridVisible));
+    }
     return true;
   }
   if (event.target?.closest?.("[data-jarvis-map-pan-toggle]")) {
