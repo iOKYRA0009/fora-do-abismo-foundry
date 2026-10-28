@@ -290,3 +290,22 @@
 @media (prefers-reduced-motion: no-preference) {
   .jarvis-console .jarvis-console-tab, .jarvis-console button[data-jarvis-action] { transition: background 130ms ease, border-color 130ms ease; }
 }
+
+/* Macro Executor: drop zone scoped to Jarvis Central, no native Foundry overrides. */
+.jarvis-console .jarvis-executor-drop {
+  border: 2px dashed #88785e;
+  border-radius: 8px;
+  background: rgba(27, 33, 45, 0.72);
+  padding: 0.85rem;
+  margin: 0.65rem 0;
+}
+.jarvis-console .jarvis-executor-drop p { margin: 0.3rem 0; }
+.jarvis-console .jarvis-executor-drop:focus-within,
+.jarvis-console .jarvis-executor-drop:hover { border-color: #cfab67; }
+.jarvis-console [name="executor-source"] {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  min-height: 180px;
+  white-space: pre;
+  tab-size: 2;
+}
+.jarvis-console [data-jarvis-executor-files] { overflow-wrap: anywhere; }
