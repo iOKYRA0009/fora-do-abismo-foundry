@@ -188,7 +188,11 @@ function assetFileName(asset) {
   return name;
 }
 function validBase64(value, id) {
-  if (typeof value !== "string" || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)) {
+  // Never repeat a capturing/noncapturing group across a multi-megabyte image.
+  // V8's regexp engine can overflow its call stack on `(?:....)*` even for valid base64.
+  // The flat character-class scan is linear and avoids per-quartet recursion.
+  if (typeof value !== "string" || value.length === 0 || value.length % 4 !== 0
+    || !/^[A-Za-z0-9+/]*={0,2}$/.test(value)) {
     throw new Error(`Jarvis Executor: base64 inválido na imagem '${id}'.`);
   }
   try { return decodeBase64(value); }
