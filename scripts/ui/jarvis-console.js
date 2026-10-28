@@ -321,7 +321,7 @@ function clearExecutorObjectUrls(state) {
 
 function executorImageSource(image, plan, state) {
   const asset = plan.data?.assets?.find(row => row.id === image.id);
-  if (asset?.dataBase64 && /^image\\/(?:png|jpeg|webp|gif)$/.test(asset.mimeType)) {
+  if (asset?.dataBase64 && ["image/png", "image/jpeg", "image/webp", "image/gif"].includes(asset.mimeType)) {
     // Blob URLs avoid megabytes of repeated base64 in preview HTML attributes.
     const cached = state.executorAssetPreviewUrls?.get(asset.id);
     if (cached) return cached;
