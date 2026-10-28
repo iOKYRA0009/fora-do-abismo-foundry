@@ -70,7 +70,7 @@ test("Jarvis console exposes the complete tab set only to a GM", () => {
   assert.equal(access.trusted, false);
   assert.equal(access.canManageActor, true);
   assert.deepEqual(visibleJarvisTabs(access), [
-    "overview", "characters", "content", "maps", "appearances", "compendiums", "macros", "players", "diagnostics"
+    "executor", "library", "characters", "scenes", "appearances", "system"
   ]);
 });
 
@@ -90,12 +90,12 @@ test("trusted users can manage only owned Actors; ordinary players remain read-o
   assert.equal(trustedAccess.trusted, true);
   assert.equal(trustedAccess.canViewActor, true);
   assert.equal(trustedAccess.canManageActor, true);
-  assert.deepEqual(visibleJarvisTabs(trustedAccess), ["overview", "characters", "appearances", "compendiums", "macros", "players"]);
+  assert.deepEqual(visibleJarvisTabs(trustedAccess), ["library", "characters", "appearances"]);
 
   const playerAccess = getJarvisAccess(player, actor);
   assert.equal(playerAccess.canViewActor, false);
   assert.equal(playerAccess.canManageActor, false);
-  assert.deepEqual(visibleJarvisTabs(playerAccess), ["overview", "characters", "appearances", "compendiums", "macros", "players"]);
+  assert.deepEqual(visibleJarvisTabs(playerAccess), ["library", "characters", "appearances"]);
   assert.throws(() => assertJarvisAccess(playerAccess.canManageActor), /não tem permissão/);
 
   const unrelated = { testUserPermission: () => false, isOwner: true };
@@ -123,7 +123,7 @@ test("direct console calls cannot bypass GM actions hidden from the player UI", 
     "scene-package-repair", "scene-package-action", "scene-migration-preview",
     "scene-migration-run", "scene-assets-review",
     "diagnostics-run", "diagnostics-capture-start", "diagnostics-capture-stop",
-    "diagnostics-export", "macro-install"]) {
+    "diagnostics-export", "macro-install", "executor-preview", "executor-run", "executor-history", "executor-rollback"]) {
     await assert.rejects(executeJarvisConsoleAction(action, root), /Mestre/, action);
   }
 });

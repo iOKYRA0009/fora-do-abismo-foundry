@@ -15,10 +15,10 @@ function makeTab(id) {
 }
 
 test("DialogV2 installs console listeners after its first render", async () => {
-  const tabs = [makeTab("characters"), makeTab("compendiums")];
+  const tabs = [makeTab("executor"), makeTab("library")];
   const panels = [
-    { dataset: { jarvisPanel: "characters" }, hidden: false },
-    { dataset: { jarvisPanel: "compendiums" }, hidden: true }
+    { dataset: { jarvisPanel: "executor" }, hidden: false },
+    { dataset: { jarvisPanel: "library" }, hidden: true }
   ];
   const result = { hidden: false, setAttribute(name) { if (name === "hidden") this.hidden = true; } };
   const body = { scrollTop: 360 };
@@ -67,8 +67,9 @@ test("DialogV2 installs console listeners after its first render", async () => {
 
   const dialog = openJarvisConsole();
   assert.ok(dialog instanceof DialogV2);
-  assert.match(dialog.config.content.innerHTML, /data-jarvis-tab="compendiums"/);
-  assert.match(dialog.config.content.innerHTML, /data-jarvis-tab="overview"/);
+  assert.match(dialog.config.content.innerHTML, /data-jarvis-tab="library"/);
+  assert.match(dialog.config.content.innerHTML, /data-jarvis-tab="executor"/);
+  assert.doesNotMatch(dialog.config.content.innerHTML, /data-jarvis-tab="overview"/);
   assert.match(dialog.config.content.innerHTML, /role="tab"/);
   assert.match(dialog.config.content.innerHTML, /data-jarvis-global-search/);
   assert.match(dialog.config.content.innerHTML, /data-jarvis-action="diagnostics-capture-start"/);
@@ -84,7 +85,7 @@ test("DialogV2 installs console listeners after its first render", async () => {
   assert.equal(typeof listeners.get("click"), "function");
 
   await listeners.get("click")({ target: {
-    closest(selector) { return selector === "[data-jarvis-tab]" ? { dataset: { jarvisTab: "compendiums" } } : null; }
+    closest(selector) { return selector === "[data-jarvis-tab]" ? { dataset: { jarvisTab: "library" } } : null; }
   } });
   assert.equal(panels[0].hidden, true);
   assert.equal(panels[1].hidden, false);

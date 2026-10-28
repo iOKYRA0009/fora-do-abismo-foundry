@@ -6,7 +6,7 @@ import { listSceneAssetLedger, registerSceneAssetLedger } from "../scripts/scene
 
 const MODULE_ID = "fora-do-abismo-foundry";
 
-function setup({ uploadFails = false, buildFails = false } = {}) {
+function setup({ uploadFails = false, buildFails = false, wrongUploadPath = false } = {}) {
   const settings = new Map();
   const journals = [];
   let uploads = 0;
@@ -15,7 +15,7 @@ function setup({ uploadFails = false, buildFails = false } = {}) {
   const collection = () => ({ contents: [], size: 0, filter: () => [] });
   const scene = {
     id: "built-scene", name: "Mapa novo", documentName: "Scene", grid: { size: 100 },
-    background: { src: "worlds/test/maps/upload.webp" },
+    background: { src: "" },
     regions: collection(), drawings: collection(), tiles: collection(),
     walls: collection(), lights: collection(), sounds: collection(), tokens: collection(),
     getFlag(_module, key) { return sceneFlags.get(key); },
@@ -53,10 +53,10 @@ function setup({ uploadFails = false, buildFails = false } = {}) {
   globalThis.FilePicker = class {
     static async createDirectory() {}
     static async browse() {}
-    static async upload() {
+    static async upload(_source, target, file) {
       uploads += 1;
       if (uploadFails) throw new Error("upload failed");
-      return { path: "worlds/test/maps/upload.webp" };
+      return { path: wrongUploadPath ? "worlds/other/maps/wrong.png" : `${target}/${file.name}` };
     }
   };
   registerSceneAssetLedger();
@@ -71,7 +71,7 @@ function setup({ uploadFails = false, buildFails = false } = {}) {
   } });
   const payload = {
     schemaVersion: "1.0", scene: { name: scene.name, columns: 5, rows: 5 },
-    visual: { backgroundBase64: "data:image/png;base64,AA==", mimeType: "image/png" }
+    visual: { backgroundBase64: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jR90AAAAASUVORK5CYII=", mimeType: "image/png" }
   };
   return { builder, payload, get uploads() { return uploads; }, get builds() { return builds; } };
 }
@@ -96,8 +96,43 @@ test("failed scene build leaves uploaded file in review ledger", async () => {
 test("completed scene build links the uploaded image to its scene", async () => {
   const fixture = setup();
   const result = await fixture.builder.build(fixture.payload, { view: false });
-  assert.equal(result.backgroundSrc, "worlds/test/maps/upload.webp");
+  assert.match(result.backgroundSrc, /^worlds\/test\/assets\/fora-do-abismo\/maps\/jarvis-scene-.*\.png$/);
   const [record] = listSceneAssetLedger();
   assert.equal(record.status, "linked");
   assert.equal(record.sceneId, result.scene.id);
+  assert.equal(record.path, result.backgroundSrc);
+});
+
+test("invalid image signature is blocked before scene creation or upload", async () => {
+  const fixture = setup();
+  fixture.payload.visual.backgroundBase64 = "AA==";
+  await assert.rejects(fixture.builder.build(fixture.payload), /Base64 inválida|assinatura da imagem/);
+  assert.equal(fixture.uploads, 0);
+  assert.equal(fixture.builds, 0);
+});
+
+test("undecodable image is blocked before upload when browser decoder is available", async () => {
+  const fixture = setup();
+  globalThis.createImageBitmap = async () => { throw new Error("decode failed"); };
+  try {
+    await assert.rejects(fixture.builder.build(fixture.payload), /não pode ser decodificada/);
+    assert.equal(fixture.uploads, 0);
+    assert.equal(fixture.builds, 0);
+  } finally {
+    delete globalThis.createImageBitmap;
+  }
+});
+
+test("unconfirmed upload path is recorded for review and scene is not built", async () => {
+  const fixture = setup({ wrongUploadPath: true });
+  await assert.rejects(fixture.builder.build(fixture.payload), /upload não confirmado/);
+  assert.equal(fixture.builds, 0);
+  assert.equal(listSceneAssetLedger()[0].status, "review");
+});
+
+test("invalid Scene Builder blueprint is rejected before uploading image", async () => {
+  const fixture = setup();
+  fixture.builder.builder.validate = () => { throw new Error("invalid blueprint"); };
+  await assert.rejects(fixture.builder.build(fixture.payload), /invalid blueprint/);
+  assert.equal(fixture.uploads, 0);
 });

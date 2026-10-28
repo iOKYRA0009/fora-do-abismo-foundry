@@ -11,14 +11,12 @@ import {
 const MODULE_ID = "fora-do-abismo-foundry";
 const MACRO_COMMAND = `game.modules.get("${MODULE_ID}")?.api?.ui?.open()`;
 const TAB_LABELS = Object.freeze({
-  overview: "Visão geral", characters: "Personagens e NPCs", content: "Itens e homebrew",
-  maps: "Mapas e cenas", appearances: "Aparências e formas", compendiums: "Compêndios",
-  macros: "Macros e automações", players: "Jogadores", diagnostics: "Diagnóstico e ajustes"
+  executor: "Executor", library: "Biblioteca", characters: "Personagens",
+  scenes: "Cenas", appearances: "Aparências", system: "Sistema"
 });
 const TAB_ICONS = Object.freeze({
-  overview: "fa-gauge-high", characters: "fa-users", content: "fa-book-open",
-  maps: "fa-map", appearances: "fa-masks-theater", compendiums: "fa-layer-group",
-  macros: "fa-wand-magic-sparkles", players: "fa-user-group", diagnostics: "fa-stethoscope"
+  executor: "fa-bolt", library: "fa-book-open", characters: "fa-users",
+  scenes: "fa-map", appearances: "fa-masks-theater", system: "fa-gear"
 });
 const TOOL_BY_ID = new Map(TOOL_CATALOG.map(tool => [tool.id, tool]));
 
@@ -301,8 +299,111 @@ function element(markup) {
   return node;
 }
 
-function panel(id, body) {
-  return `<section class="jarvis-console-panel" id="jarvis-panel-${id}" role="tabpanel" aria-labelledby="jarvis-tab-${id}" data-jarvis-panel="${id}" ${id === "overview" ? "" : "hidden"}>${body}</section>`;
+function panel(id, body, initial = false) {
+  return `<section class="jarvis-console-panel" id="jarvis-panel-${id}" role="tabpanel" aria-labelledby="jarvis-tab-${id}" data-jarvis-panel="${id}" ${initial ? "" : "hidden"}>${body}</section>`;
+}
+
+function section(id, body) {
+  return `<section class="jarvis-console-section" data-jarvis-section="${id}">${body}</section>`;
+}
+
+function advanced(title, body, open = false) {
+  if (!body) return "";
+  return `<details class="jarvis-console-advanced" ${open ? "open" : ""}><summary>${escapeHtml(title)}</summary>${body}</details>`;
+}
+
+function clearExecutorObjectUrls(state) {
+  for (const url of state.executorObjectUrls ?? []) globalThis.URL?.revokeObjectURL?.(url);
+  state.executorObjectUrls = [];
+}
+
+function executorImageSource(image, plan, state) {
+  const asset = plan.data?.assets?.find(row => row.id === image.id);
+  if (asset?.dataBase64 && /^image\/(?:png|jpeg|webp|gif)$/.test(asset.mimeType)) {
+    return `data:${asset.mimeType};base64,${asset.dataBase64}`;
+  }
+  const file = plan.files?.find(row => row.name === image.fileName);
+  if (file && globalThis.URL?.createObjectURL) {
+    const url = URL.createObjectURL(file);
+    state.executorObjectUrls.push(url);
+    return url;
+  }
+  return "";
+}
+
+function scenePositionMarkup(scene) {
+  const positions = scene.positions;
+  if (!positions) return "";
+  const rows = [
+    ...(positions.walls ?? []).map(row => `Parede ${Number(row.index) + 1}: ${row.a?.join(", ")} → ${row.b?.join(", ")} px`),
+    ...(positions.lights ?? []).map(row => `Luz ${Number(row.index) + 1}: ${row.x}, ${row.y} px`),
+    ...(positions.sounds ?? []).map(row => `Som ${Number(row.index) + 1}: ${row.x}, ${row.y} px · raio ${row.radius}`),
+    ...(positions.tokens ?? []).map(row => `Token ${Number(row.index) + 1} (${row.actor}): ${row.x}, ${row.y} px · ${row.width} × ${row.height}`)
+  ];
+  const size = scene.pixels ? `${scene.pixels.width} × ${scene.pixels.height} px; grade ${scene.pixels.gridSize} px` : "";
+  return `<details class="jarvis-executor-positions"><summary>Coordenadas de ${escapeHtml(scene.name)}</summary>
+    ${size ? `<p>${escapeHtml(size)}</p>` : ""}<ul>${rows.slice(0, 24).map(row => `<li>${escapeHtml(row)}</li>`).join("")}</ul>
+    ${rows.length > 24 ? `<p class="jarvis-console-hint">Mais ${rows.length - 24} posição(ões) no pacote.</p>` : ""}</details>`;
+}
+
+function renderExecutorPreview(root, state) {
+  const host = root.querySelector("[data-jarvis-executor-preview]");
+  if (!host) return;
+  clearExecutorObjectUrls(state);
+  const plan = state.executorPreview?.plan;
+  const consent = root.querySelector(".jarvis-executor-consent");
+  if (consent) consent.hidden = plan?.kind !== "javascript";
+  if (!plan) {
+    host.innerHTML = "<p>Importe um arquivo ou cole código para começar.</p>";
+    return;
+  }
+  const review = plan.review ?? {};
+  const warnings = [review.warning, ...(review.warnings ?? [])].filter(Boolean);
+  const errors = review.errors ?? [];
+  const issueRows = [
+    ...errors.map(message => `<li class="jarvis-executor-error">${escapeHtml(message)}</li>`),
+    ...warnings.map(message => `<li class="jarvis-executor-warning">${escapeHtml(message)}</li>`)
+  ].join("");
+  const issues = issueRows ? `<ul class="jarvis-executor-issues">${issueRows}</ul>` : "";
+  if (plan.kind === "javascript") {
+    host.innerHTML = `<h3>Prévia do JavaScript</h3><p class="jarvis-executor-success">Código pronto para revisão.</p>
+      <div class="jarvis-executor-counts"><span>${Number(review.lines ?? 0)} linha(s)</span><span>${Number(review.characters ?? 0)} caractere(s)</span></div>
+      ${issues}<p class="jarvis-console-hint">Revise o editor acima. JavaScript arbitrário não oferece simulação ou desfazer automático.</p>`;
+    return;
+  }
+  const actors = review.actors ?? [];
+  const scenes = review.scenes ?? [];
+  const additions = review.itemAdditions ?? [];
+  const images = review.images ?? [];
+  const counts = review.counts ?? {};
+  const counter = (label, value) => `<span><strong>${Number(value ?? 0)}</strong> ${escapeHtml(label)}</span>`;
+  const imageRows = images.slice(0, 8).map(image => {
+    const source = executorImageSource(image, plan, state);
+    return `<li>${source ? `<img src="${escapeHtml(source)}" alt="Prévia de ${escapeHtml(image.fileName ?? image.id)}" loading="lazy">` : `<span class="jarvis-executor-image-placeholder" aria-hidden="true">▧</span>`}
+      <span>${escapeHtml(image.fileName ?? image.id)}<small>${escapeHtml(image.id)}</small></span></li>`;
+  }).join("");
+  host.innerHTML = `<h3>Prévia de ${escapeHtml(review.name ?? "pacote Jarvis")}</h3>
+    <p class="jarvis-executor-success">Pacote validado. Confira o conteúdo antes de executar.</p>
+    <div class="jarvis-executor-counts">${counter("personagem(ns)", actors.length)}${counter("cena(s)", scenes.length)}${counter("adição(ões) de itens", additions.length)}${counter("imagem(ns)", images.length)}${counter("parede(s)", counts.walls ?? scenes.reduce((sum, scene) => sum + Number(scene.walls ?? 0), 0))}${counter("token(s)", counts.tokens ?? scenes.reduce((sum, scene) => sum + Number(scene.tokens ?? 0), 0))}</div>
+    ${actors.length ? `<h4>Personagens</h4><ul>${actors.map(actor => `<li>${escapeHtml(actor.name)} · ${Number(actor.items ?? 0)} item(ns), ${Number(actor.activities ?? 0)} atividade(s)</li>`).join("")}</ul>` : ""}
+    ${scenes.length ? `<h4>Cenas e posições</h4><ul>${scenes.map(scene => `<li>${escapeHtml(scene.name)} · ${Number(scene.walls ?? 0)} parede(s), ${Number(scene.lights ?? 0)} luz(es), ${Number(scene.sounds ?? 0)} som(ns), ${Number(scene.tokens ?? 0)} token(s)${scenePositionMarkup(scene)}</li>`).join("")}</ul>` : ""}
+    ${additions.length ? `<h4>Itens em fichas</h4><ul>${additions.map(row => `<li>${escapeHtml(row.actor)} · ${Number(row.items ?? 0)} item(ns)</li>`).join("")}</ul>` : ""}
+    ${images.length ? `<h4>Imagens</h4><ul class="jarvis-executor-images">${imageRows}</ul>${images.length > 8 ? `<p class="jarvis-console-hint">Mais ${images.length - 8} imagem(ns) no pacote.</p>` : ""}` : ""}
+    ${issues}`;
+}
+
+function renderExecutorHistory(root, rows) {
+  const host = root.querySelector("[data-jarvis-executor-history]");
+  if (!host) return;
+  host.innerHTML = rows.length ? `<ol>${rows.map(row => {
+    const id = row.id ?? row.executionId;
+    const status = { running: "Em andamento", success: "Concluída", failed: "Falhou",
+      rolled_back: "Revertida", rollback_incomplete: "Reversão incompleta" }[row.status] ?? row.status ?? "";
+    const at = Number.isFinite(Number(row.at)) ? new Date(Number(row.at)).toLocaleString("pt-BR") : "";
+    return `<li><span>${escapeHtml(row.name ?? row.kind ?? "Execução")} <small>${escapeHtml(status)} · ${escapeHtml(at)} · ${escapeHtml(id ?? "sem ID")}</small>
+      ${row.message ? `<small>${escapeHtml(row.message)}</small>` : ""}</span>
+      ${id && row.kind === "package" && row.status !== "rolled_back" ? `<button type="button" data-jarvis-execution-id="${escapeHtml(id)}">Selecionar</button>` : ""}</li>`;
+  }).join("")}</ol>` : "<p class=\"jarvis-console-hint\">Nenhuma execução registrada.</p>";
 }
 
 function button(action, label, { className = "", title = "" } = {}) {
@@ -331,7 +432,7 @@ function renderContent() {
   const nav = tabs.map((id, index) => `<button type="button" id="jarvis-tab-${id}" role="tab" aria-controls="jarvis-panel-${id}" tabindex="${index ? -1 : 0}" class="jarvis-console-tab ${index ? "" : "active"}" data-jarvis-tab="${id}" aria-selected="${index ? "false" : "true"}" title="${escapeHtml(TAB_LABELS[id])}"><i class="jarvis-console-tab-icon fa-solid ${TAB_ICONS[id]}" aria-hidden="true"></i><span class="jarvis-console-tab-label">${TAB_LABELS[id]}</span></button>`).join("");
   const gm = access.gm;
 
-  const overview = panel("overview", `
+  const overview = section("overview", `
     <h2>Central Jarvis</h2><p>Ferramentas da campanha em um só lugar. Escolha uma área à esquerda ou use a busca.</p>
     <div class="jarvis-console-dashboard">
       <section class="jarvis-console-card"><h3>Estado do módulo</h3><p>Jarvis ${escapeHtml(jarvis.version)}<br>Foundry ${escapeHtml(game.release?.version ?? game.version ?? "V14")} · D&D5e ${escapeHtml(game.system?.version ?? "não identificado")}</p>
@@ -345,9 +446,8 @@ function renderContent() {
     </div>
   `);
 
-  const characters = panel("characters", `
+  const characters = section("characters", `
     <h2>Personagens</h2><p>Abra uma ficha existente ou use o importador V9 para preservar recursos, atividades e efeitos.</p>
-    <div class="jarvis-console-row">${button("actor-open", "Abrir ficha")}${button("actor-provenance", "Analisar origem")}${button("actor-rules", "Perfil de regras")}${button("actor-jack", "Estado de Jack")}</div>
     ${gm ? `<hr><h3>Criar ficha · modo simples ou avançado</h3><div class="jarvis-console-grid"><label>Nome<input name="actor-name" maxlength="120" placeholder="Nome do personagem"></label><label>Tipo<select name="actor-type"><option value="character">Personagem</option><option value="npc">NPC</option></select></label>
       <label>Modo<select name="actor-mode"><option value="simple">Simples</option><option value="advanced">Avançado</option></select></label><label>PV<input name="actor-hp" type="number" min="1" max="9999" placeholder="Opcional"></label><label>CA<input name="actor-ac" type="number" min="0" max="99" placeholder="Opcional"></label>
       <label>FOR<input name="actor-str" type="number" min="1" max="30" value="10"></label><label>DES<input name="actor-dex" type="number" min="1" max="30" value="10"></label><label>CON<input name="actor-con" type="number" min="1" max="30" value="10"></label>
@@ -364,7 +464,7 @@ function renderContent() {
       ${button("actor-rules-set", "Salvar perfil de regras")}${button("actor-provenance-stamp", "Registrar origem dos Items")}${button("actor-jack-sync", "Sincronizar almas de Jack")}</div>` : ""}
   `);
 
-  const content = gm ? panel("content", `
+  const content = gm ? section("content", `
     <h2>Itens, classes e homebrew</h2><p>Cria um Item D&D5e e abre a ficha nativa para configurar Advancement, atividades, usos, magias e detalhes mecânicos.</p>
     <div class="jarvis-console-row"><label>Modelo inicial<select name="item-template">${options(contentTemplates, row => row.label, row => row.key)}</select></label>${button("item-template-use", "Usar modelo")}</div>
     <div class="jarvis-console-grid"><label>Nome<input name="item-name" maxlength="120" placeholder="Nome do conteúdo"></label><label>Tipo<select name="item-type">${options(types, type => type, type => type)}</select></label>
@@ -381,9 +481,8 @@ function renderContent() {
     <div class="jarvis-console-row">${button("items-import", "Importar Items na ficha")}</div>
   `) : "";
 
-  const maps = gm ? panel("maps", `
+  const maps = gm ? section("maps", `
     <h2>Mapas, paredes e iluminação</h2><p>O Estúdio revisa cada sugestão antes de criar a cena. A auditoria inspeciona a cena atual sem modificá-la.</p>
-    <div class="jarvis-console-row">${button("map-studio", "Abrir Estúdio de Mapas")}${button("map-uvtt", "Importar Universal VTT")}${button("map-audit", "Analisar paredes e luz")}</div>
     <h3>Cena por template</h3><div class="jarvis-console-grid"><label>Template<select name="map-template">${options(templates, item => item.label)}</select></label><label>Skin<select name="map-skin">${options(skins, item => item.label)}</select></label>
     <label>Nome da cena<input name="map-name" maxlength="120" placeholder="Nova cena"></label><label>Colunas<input name="map-columns" type="number" min="5" max="200" value="30"></label><label>Linhas<input name="map-rows" type="number" min="5" max="200" value="22"></label></div>
     <div class="jarvis-console-row">${button("map-template-preview", "Prévia do template")}${button("map-template-create", "Criar cena")}${button("map-skin-apply", "Aplicar skin à cena atual")}</div>
@@ -405,10 +504,9 @@ function renderContent() {
     <h3>Recuperação de mapas</h3><div class="jarvis-console-row">${button("scene-migration-preview", "Prévia de migração")}${button("scene-migration-run", "Migrar após revisão")}${button("scene-assets-review", "Revisar arquivos enviados")}</div>
   `) : "";
 
-  const appearances = panel("appearances", `
+  const appearances = section("appearances", `
     <h2>Aparências e formas</h2><p>Visage muda o visual do Token. Metamorph troca sua forma mecânica. Ambos são integrações opcionais.</p>
     <p class="jarvis-console-hint">Visage: ${jarvis.appearance.status().active ? "ativo" : "inativo"} · Metamorph: ${jarvis.transformation.status().active ? "ativo" : "inativo"}</p>
-    <div class="jarvis-console-row">${button("appearance-list", "Ver perfis do personagem")}${button("appearance-available", "Ver skins do Token")}</div>
     <h3>Skin Visage</h3><div class="jarvis-console-grid"><label>Chave do perfil<input name="appearance-key" placeholder="ex.: traje-de-combate"></label><label>ID Visage<input name="appearance-id" placeholder="ID da skin no Visage"></label>
     <label>Modo<select name="appearance-mode"><option value="identity">Identidade</option><option value="overlay">Sobreposição</option></select></label></div>
     ${access.gm || access.trusted ? `<div class="jarvis-console-row">${button("appearance-save", "Registrar perfil")}${button("appearance-remove-profile", "Remover perfil")}${button("appearance-apply", "Aplicar ao Token")}${button("appearance-remove", "Remover skin")}${button("appearance-revert", "Reverter visual")}</div>` : ""}
@@ -421,16 +519,15 @@ function renderContent() {
     <p class="jarvis-console-hint">Alterações de perfil e Token exigem Mestre ou jogador de confiança proprietário do personagem.</p>
   `);
 
-  const compendiums = panel("compendiums", `
+  const compendiums = section("compendiums", `
     <h2>Compêndios e módulos</h2><p>Consulte conteúdo de módulos ativos sem carregar documentos inteiros até abrir ou importar um resultado.</p>
     <div class="jarvis-console-row"><label>Compêndio<select name="pack"><option value="">Selecione</option>${packOptions}</select></label><label>Buscar<input name="pack-query" maxlength="100" placeholder="Nome ou tipo"></label>${button("pack-search", "Buscar")}</div>
     <div class="jarvis-console-results" data-jarvis-pack-results aria-live="polite"></div>
     <p class="jarvis-console-hint">Mestres podem importar Items para o mundo ou personagem. Jogadores de confiança podem adicionar Items oficiais D&D5e ao próprio personagem.</p>
   `);
 
-  const diagnostics = gm ? panel("diagnostics", `
+  const diagnostics = gm ? section("diagnostics", `
     <h2>Diagnóstico</h2><p>Verificação somente leitura do módulo, sistema, importador, cenas e fichas.</p>
-    <div class="jarvis-console-row">${button("diagnostics-run", "Executar diagnóstico")}${button("framework-test", "Testar templates e skins")}${button("modules-list", "Listar módulos ativos")}</div>
     <h3>Erros da sessão</h3><p>Inicie a captura antes de testar as ações. Os registros ficam neste navegador até serem limpos ou a página ser fechada.</p>
     <div class="jarvis-console-row">${button("diagnostics-capture-start", "Iniciar captura")}${button("diagnostics-capture-stop", "Parar captura")}${button("diagnostics-export", "Exportar relatório JSON")}</div>
     <p class="jarvis-console-hint" data-jarvis-capture-status aria-live="polite"></p>
@@ -439,7 +536,7 @@ function renderContent() {
 
   const userRows = values(game.users).filter(user => gm || user.id === game.user?.id).map(user =>
     `<li>${escapeHtml(user.name)} · ${escapeHtml(roleLabel(user))}${user.active ? " · online" : ""}</li>`).join("");
-  const players = panel("players", `
+  const players = section("players", `
     <h2>Jogadores</h2><p>Consulte ficha, recursos, itens, compêndios e macros permitidas. Ações que alteram o mundo exigem permissão.</p>
     <ul>${userRows || "<li>Nenhum usuário disponível.</li>"}</ul>
     <div class="jarvis-console-row">${button("actor-open", "Abrir personagem selecionado")}${button("player-overview", "Ver recursos e itens")}${button("pack-focus", "Ir aos compêndios")}</div>
@@ -448,25 +545,12 @@ function renderContent() {
     ${gm ? `<p class="jarvis-console-hint">Jogador de confiança: papel Trusted Player do Foundry. Só altera fichas que possui; criação global de Actor, Item, mapa e diagnóstico completo continuam com o Mestre.</p>` : ""}
   `);
 
-  const macros = panel("macros", `
-    ${gm ? `<section class="jarvis-console-card">
-      <h2>Jarvis Macro Executor</h2>
-      <p>Cole código JavaScript do ChatGPT ou um pacote JSON Jarvis com NPCs, itens, habilidades, imagens, paredes, luzes e tokens. Prévia obrigatória antes de executar.</p>
-      <label>Formato <select name="executor-mode"><option value="auto">Detecção automática</option><option value="package">Pacote Jarvis JSON</option><option value="javascript">Macro JavaScript</option></select></label>
-      <label>Código ou pacote<textarea name="executor-source" rows="11" spellcheck="false" placeholder="Cole aqui o macro ou o JSON do pacote Jarvis"></textarea></label>
-      <div class="jarvis-console-card jarvis-executor-drop" data-jarvis-executor-drop role="group" aria-label="Importar macro e imagens">
-        <p><strong>Arraste arquivos aqui</strong> ou selecione: .json, .js, .txt e imagens .png, .jpg, .webp, .gif.</p>
-        <input name="executor-files" type="file" multiple accept=".json,.js,.txt,.png,.jpg,.jpeg,.webp,.gif,application/json,text/plain,image/png,image/jpeg,image/webp,image/gif">
-        <p class="jarvis-console-hint" data-jarvis-executor-files>Sem arquivos selecionados.</p>
-      </div>
-      <div class="jarvis-console-row">${button("executor-preview", "Analisar e pré-visualizar")}${button("executor-run", "Confirmar e executar")}</div>
-      <p class="jarvis-console-hint">JavaScript tem os mesmos poderes de uma macro Script do Mestre. Só execute código confiável. Pacotes JSON permitem validação estruturada e reversão de documentos recém-criados.</p>
-    </section>` : ""}
+  const macros = section("macros", `
     <h2>Macros e automações</h2><p>Comandos gerenciados usam ações autorizadas do Jarvis. O editor nativo de Macros e o arrastar de arquivos .txt/.js continuam disponíveis no Foundry.</p>
     <div class="jarvis-console-row"><label>Biblioteca<select name="managed-macro"><option value="">Selecione</option>${options(managedMacros, row => `${row.name} · ${row.category}`, row => row.id)}</select></label>
     ${button("managed-macro-run", "Executar")}${button("managed-macro-favorite", "Favoritar")}${button("managed-macro-history", "Histórico")}</div>
     <div class="jarvis-console-row"><label>Atalho pessoal (1–10)<input name="macro-slot" type="number" min="1" max="10" value="1"></label>${button("managed-macro-hotbar", "Pôr na barra")}</div>
-    ${gm ? `<h3>Gerenciar biblioteca</h3><div class="jarvis-console-grid"><label>Nome<input name="managed-name" maxlength="100" placeholder="Nome da macro"></label>
+    ${gm ? `<details class="jarvis-console-advanced"><summary>Gerenciar biblioteca</summary><div class="jarvis-console-grid"><label>Nome<input name="managed-name" maxlength="100" placeholder="Nome da macro"></label>
     <label>Comando<select name="managed-command">${options(managedCommands, row => row.label, row => row.key)}</select></label>
     <label>Categoria<select name="managed-category">${["geral","personagens","conteudo","habilidades","mapas","aparencias","transformacoes","efeitos","biblioteca","utilidades"].map(key => `<option value="${key}">${key}</option>`).join("")}</select></label>
     <label>Visibilidade<select name="managed-visibility"><option value="gm">Mestre</option><option value="trusted">Jogador de confiança</option><option value="all">Todos</option></select></label>
@@ -475,21 +559,71 @@ function renderContent() {
     <div class="jarvis-console-row">${button("managed-macro-create", "Criar")}${button("managed-macro-update", "Salvar edição")}${button("managed-macro-duplicate", "Duplicar")}${button("managed-macro-remove", "Excluir")}</div>
     <h3>Importar comandos gerenciados</h3><p>Importe JSON declarativo. Arquivos JavaScript continuam no editor nativo e nunca entram nesta biblioteca.</p>
     <input name="managed-import-file" type="file" accept=".json,application/json"><textarea name="managed-import-json" rows="3" placeholder='[{"name":"Abrir Central","command":"open-console","visibility":"all"}]'></textarea>
-    <div class="jarvis-console-row">${button("managed-macro-import-preview", "Prévia da importação")}${button("managed-macro-import", "Importar após revisão")}</div>
+    <div class="jarvis-console-row">${button("managed-macro-import-preview", "Prévia da importação")}${button("managed-macro-import", "Importar após revisão")}</div></details>` : ""}
+  `);
+
+  const systemTools = gm ? section("system-tools", `
     <h3>Atalho da Central</h3><textarea readonly rows="2" name="macro-command">${escapeHtml(MACRO_COMMAND)}</textarea>
     <div class="jarvis-console-row">${button("macro-install", "Instalar atalho da Central")}${button("macro-copy", "Copiar código")}</div>
     <h3>Scripts de Activities</h3><p>Automações com script devem ser inspecionadas e aprovadas pelo Mestre ativo.</p>
     <div class="jarvis-console-row"><label>Item do personagem ativo<select name="automation-item"><option value="">Selecione</option></select></label><label>Activity<select name="automation-activity"><option value="">Selecione</option></select></label>
     ${button("automation-inspect", "Inspecionar")}${button("automation-approve", "Aprovar")}${button("automation-revoke", "Revogar")}</div>
-    <label>Conteúdo completo para revisão<textarea readonly name="automation-source" rows="7" placeholder="Selecione uma Activity e clique em Inspecionar"></textarea></label>` : ""}
+    <label>Conteúdo completo para revisão<textarea readonly name="automation-source" rows="7" placeholder="Selecione uma Activity e clique em Inspecionar"></textarea></label>
+  `) : "";
+
+  const executorPage = gm ? panel("executor", `
+    <h2>Executor</h2><p>Importe, confira e execute macros ou pacotes Jarvis.</p>
+    <ol class="jarvis-executor-steps" aria-label="Etapas da execução"><li>Importar</li><li>Validar</li><li>Visualizar</li><li>Confirmar</li><li>Executar</li><li>Conferir</li></ol>
+    <div class="jarvis-executor-editor">
+      <label>Formato <select name="executor-mode"><option value="auto">Detectar formato</option><option value="package">Pacote Jarvis JSON</option><option value="javascript">Macro JavaScript</option></select></label>
+      <label>Código ou pacote<textarea name="executor-source" rows="12" spellcheck="false" autocomplete="off" aria-describedby="jarvis-executor-code-hint" placeholder="Cole aqui o JavaScript ou o JSON do pacote Jarvis"></textarea></label>
+      <p id="jarvis-executor-code-hint" class="jarvis-console-hint">JavaScript roda com as permissões do Mestre. Revise o código antes de confirmar.</p>
+      <div class="jarvis-executor-drop" data-jarvis-executor-drop role="group" aria-label="Importar código e imagens">
+        <strong>Arraste arquivos aqui ou selecione abaixo</strong>
+        <label>Arquivo .js, .txt ou .json e imagens<input name="executor-files" type="file" multiple accept=".json,.js,.txt,.png,.jpg,.jpeg,.webp,.gif,application/json,text/plain,image/png,image/jpeg,image/webp,image/gif"></label>
+        <p class="jarvis-console-hint" data-jarvis-executor-files>Sem arquivos selecionados.</p>
+      </div>
+      <div class="jarvis-console-row jarvis-executor-primary">${button("executor-preview", "Validar e visualizar", { className: "jarvis-primary" })}${button("executor-run", "Confirmar e executar", { className: "jarvis-primary", title: "Executar somente após revisar a prévia" })}</div>
+      <label class="jarvis-executor-consent" hidden><input name="executor-js-consent" type="checkbox"> Entendo que JavaScript executa com todas as permissões do Mestre e não possui desfazer automático.</label>
+    </div>
+    <section class="jarvis-executor-preview" data-jarvis-executor-preview aria-live="polite"><p>Importe um arquivo ou cole código para começar.</p></section>
+    <details class="jarvis-console-advanced"><summary>Histórico e recuperação</summary>
+      <p>Consulte execuções anteriores. A reversão de pacotes remove apenas documentos que o Executor criou; arquivos de imagem enviados podem permanecer.</p>
+      <div class="jarvis-console-row">${button("executor-history", "Ver histórico")}${button("executor-rollback", "Reverter pacote")}</div>
+      <label>ID da execução<input name="executor-rollback-id" placeholder="Selecione uma execução do histórico"></label>
+      <div data-jarvis-executor-history class="jarvis-console-results"></div>
+    </details>
+  `, true) : "";
+
+  const libraryPage = panel("library", `
+    <h2>Biblioteca</h2><p>Macros salvas, favoritos, histórico, itens e compêndios.</p>
+    ${advanced("Favoritos e ações recentes", overview, true)}
+    ${advanced("Macros salvas", macros, true)}
+    ${advanced("Itens, classes e homebrew", content)}
+    ${advanced("Compêndios", compendiums, true)}
+  `, !gm);
+  const charactersPage = panel("characters", `
+    <h2>Personagens</h2><p>Fichas, NPCs e habilidades.</p>
+    <div class="jarvis-console-row">${button("actor-open", "Abrir ficha")}${button("actor-provenance", "Analisar origem")}${button("actor-rules", "Perfil de regras")}${button("actor-jack", "Estado de Jack")}</div>
+    ${advanced("Criar, importar e manter fichas", characters)}
+    ${advanced("Área dos jogadores", players)}
   `);
+  const scenesPage = gm ? panel("scenes", `<h2>Cenas</h2><p>Mapas, paredes, luzes, sons e tokens.</p>
+    <div class="jarvis-console-row">${button("map-studio", "Abrir Estúdio de Mapas")}${button("map-uvtt", "Importar Universal VTT")}${button("map-audit", "Analisar paredes e luz")}</div>
+    ${advanced("Scene Builder e ferramentas de mapas", maps)}`) : "";
+  const appearancesPage = panel("appearances", `<h2>Aparências</h2><p>Skins e transformações.</p>
+    <div class="jarvis-console-row">${button("appearance-list", "Ver perfis")}${button("appearance-available", "Ver skins do Token")}</div>
+    ${advanced("Visage e Metamorph", appearances)}`);
+  const systemPage = gm ? panel("system", `<h2>Sistema</h2><p>Diagnósticos, compatibilidade e ferramentas avançadas.</p>
+    <div class="jarvis-console-row">${button("diagnostics-run", "Executar diagnóstico")}${button("modules-list", "Listar módulos ativos")}</div>
+    ${advanced("Diagnóstico detalhado", diagnostics)}${advanced("Atalhos e automações", systemTools)}`) : "";
 
   return element(`<div class="jarvis-console" data-sidebar-collapsed="${preferences.sidebarCollapsed}">
     <header class="jarvis-console-header"><strong>JARVIS <span>${escapeHtml(jarvis.version)}</span></strong><div class="jarvis-console-header-actions"><small>${escapeHtml(game.user?.name ?? "")}</small><button type="button" class="jarvis-console-toggle" data-jarvis-toggle-sidebar aria-label="Recolher ou expandir menu" aria-expanded="${!preferences.sidebarCollapsed}" title="Recolher ou expandir menu"><i class="fa-solid fa-bars" aria-hidden="true"></i></button></div></header>
     <div class="jarvis-console-layout"><nav class="jarvis-console-nav" role="tablist" aria-orientation="vertical" aria-label="Ferramentas do Jarvis">${nav}</nav>
     <main class="jarvis-console-main"><div class="jarvis-console-actor"><label>Personagem ativo <select name="jarvis-actor"><option value="">Selecione</option>${actorOptions}</select></label><span data-jarvis-actor-count>${actors.length} ficha(s) acessível(is)</span></div>
     <div class="jarvis-console-search"><label>Busca global<input data-jarvis-global-search type="search" maxlength="100" autocomplete="off" aria-controls="jarvis-global-results" aria-autocomplete="list" placeholder="Ferramentas, personagens e compêndios"></label><div id="jarvis-global-results" class="jarvis-console-search-results" data-jarvis-search-results role="listbox" aria-live="polite"></div></div>
-    <div class="jarvis-console-body">${overview}${characters}${content}${maps}${appearances}${compendiums}${macros}${players}${diagnostics}</div><div class="jarvis-console-status" data-jarvis-status role="status" aria-live="polite"></div></main></div>
+    <div class="jarvis-console-body">${executorPage}${libraryPage}${charactersPage}${scenesPage}${appearancesPage}${systemPage}</div><div class="jarvis-console-status" data-jarvis-status role="status" aria-live="polite"></div></main></div>
     <aside class="jarvis-console-result" hidden><div class="jarvis-console-result-head"><strong class="jarvis-console-result-title"></strong>${button("clear-output", "Limpar")}</div><pre class="jarvis-console-result-content"></pre></aside>
   </div>`);
 }
@@ -608,7 +742,7 @@ function templateSpec(root) {
 export async function executeJarvisConsoleAction(action, root, state = {}) {
   const jarvis = api();
   if (action === "clear-output") return clearOutput(root);
-  if (action === "pack-focus") return selectTab(root, "compendiums");
+  if (action === "pack-focus") return selectTab(root, "library");
 
   if (action === "actor-open") {
     const actor = selectedActor(root);
@@ -1186,6 +1320,7 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
     if (action === "executor-preview") {
       const plan = jarvis.executor.preview(source, { mode, files });
       state.executorPreview = { fingerprint, plan };
+      renderExecutorPreview(root, state);
       return setOutput(root, "Prévia do Macro Executor", plan.review);
     }
     if (!state.executorPreview || state.executorPreview.fingerprint !== fingerprint) {
@@ -1193,14 +1328,44 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
       throw new JarvisInputError("Prévia desatualizada. Clique em Analisar e pré-visualizar antes de executar.");
     }
     const { plan } = state.executorPreview;
+    if (plan.kind === "javascript" && !field(root, "executor-js-consent")?.checked) {
+      throw new JarvisInputError("Marque a confirmação de risco do JavaScript antes de executar.");
+    }
     const warning = plan.kind === "javascript"
       ? "O código JavaScript poderá alterar qualquer documento permitido ao Mestre, sem desfazer automático."
       : "O pacote criará NPCs, itens, cenas e enviará imagens. Alterações serão registradas; arquivos enviados poderão permanecer.";
     if (!await confirmAction("Executar macro ou pacote Jarvis", warning)) return;
     state.executorPreview = null; // Never execute the same reviewed plan twice by accident.
+    const consent = field(root, "executor-js-consent");
+    if (consent) consent.checked = false;
+    renderExecutorPreview(root, state);
     const result = await jarvis.executor.run(plan);
+    state.executorLastExecutionId = result?.executionId ?? result?.id ?? null;
+    const history = jarvis.executor.history?.();
+    if (Array.isArray(history)) renderExecutorHistory(root, history);
     refreshActorOptions(root);
     return setOutput(root, "Macro Executor: execução concluída", result);
+  }
+  if (action === "executor-history") {
+    requireGM();
+    const history = jarvis.executor.history?.();
+    if (!Array.isArray(history)) throw new Error("Histórico do Executor indisponível nesta versão do Jarvis.");
+    renderExecutorHistory(root, history);
+    return setOutput(root, "Histórico do Executor", history);
+  }
+  if (action === "executor-rollback") {
+    requireGM();
+    const id = fieldValue(root, "executor-rollback-id");
+    if (!id) throw new JarvisInputError("Selecione uma execução do histórico para reverter.");
+    const history = jarvis.executor.history?.();
+    const record = Array.isArray(history) ? history.find(row => (row.id ?? row.executionId) === id) : null;
+    if (!record || record.kind !== "package") throw new Error("Somente pacotes registrados pelo Executor podem ser revertidos.");
+    if (!await confirmAction("Reverter pacote Jarvis", `Reverter os documentos novos da execução '${record.name ?? id}'? Imagens enviadas podem permanecer.`)) return;
+    const result = await jarvis.executor.rollback(id);
+    const updated = jarvis.executor.history?.();
+    if (Array.isArray(updated)) renderExecutorHistory(root, updated);
+    refreshActorOptions(root);
+    return setOutput(root, "Reversão do pacote", result);
   }
   if (action === "macro-copy") {
     requireGM();
@@ -1271,12 +1436,12 @@ async function openSearchResult(root, state, index) {
     if (!scene || !(game.user?.isGM || scene.testUserPermission?.(game.user, "OBSERVER")
       || (scene.active && scene.navigation))) throw new Error("Cena não disponível.");
     await scene.view();
-    if (game.user?.isGM) selectTab(root, "maps");
+    if (game.user?.isGM) selectTab(root, "scenes");
   } else if (row.type === "macro") {
     const entry = api().macros?.list?.().find(candidate => candidate.id === row.macroId);
     if (!entry) throw new Error("Macro não disponível.");
     refreshManagedMacroOptions(root, entry.id);
-    selectTab(root, "macros");
+    selectTab(root, "library");
   } else if (row.type === "compendium") {
     const pack = visiblePacks().find(entry => entry.collection === row.packId);
     if (!pack) throw new Error("Compêndio não disponível.");
@@ -1284,7 +1449,7 @@ async function openSearchResult(root, state, index) {
     const query = field(root, "pack-query");
     if (select) select.value = pack.collection;
     if (query) query.value = row.label;
-    selectTab(root, "compendiums");
+    selectTab(root, "library");
     await executeJarvisConsoleAction("pack-search", root, state);
   }
   const input = root.querySelector("[data-jarvis-global-search]");
@@ -1329,6 +1494,12 @@ function queueGlobalSearch(root, state) {
 async function handleNavigationClick(event, root, state) {
   const tab = event.target.closest("[data-jarvis-tab]");
   if (tab) { selectTab(root, tab.dataset.jarvisTab); return true; }
+  const execution = event.target.closest("[data-jarvis-execution-id]");
+  if (execution) {
+    const input = field(root, "executor-rollback-id");
+    if (input) input.value = execution.dataset.jarvisExecutionId;
+    return true;
+  }
   const toggle = event.target.closest("[data-jarvis-toggle-sidebar]");
   if (toggle) {
     const collapsed = root.dataset.sidebarCollapsed !== "true";
@@ -1355,7 +1526,12 @@ async function handleNavigationClick(event, root, state) {
   const jump = event.target.closest("[data-jarvis-jump]");
   if (jump) {
     const tool = availableTools().find(entry => entry.id === jump.dataset.jarvisJump);
-    if (tool) { selectTab(root, tool.tab); root.querySelector(`[data-jarvis-action="${tool.id}"]`)?.focus?.(); }
+    if (tool) {
+      selectTab(root, tool.tab);
+      const target = root.querySelector(`[data-jarvis-action="${tool.id}"]`);
+      for (let details = target?.closest?.("details"); details; details = details.parentElement?.closest?.("details")) details.open = true;
+      target?.focus?.();
+    }
     return true;
   }
   const searchResult = event.target.closest("[data-jarvis-search-index]");
@@ -1367,18 +1543,23 @@ async function handleNavigationClick(event, root, state) {
 }
 
 async function setExecutorFiles(root, state, files) {
-  if (!Array.isArray(files) || files.length > 45) throw new Error("Escolha até 45 arquivos por pacote.");
-  state.executorFiles = files;
+  state.executorFiles = [];
   state.executorPreview = null;
-  const scripts = files.filter(file => /\\.(json|js|txt)$/i.test(file.name));
+  renderExecutorPreview(root, state);
+  if (!Array.isArray(files) || files.length > 45) throw new Error("Escolha até 45 arquivos por pacote.");
+  const scripts = files.filter(file => /\.(json|js|txt)$/i.test(file.name));
   if (scripts.length > 1) throw new Error("Selecione apenas um arquivo de código e as imagens.");
+  const unsupported = files.find(file => !/\.(json|js|txt|png|jpg|jpeg|webp|gif)$/i.test(file.name));
+  if (unsupported) throw new Error(`Formato de arquivo não aceito: ${unsupported.name}.`);
+  if (scripts[0]?.size > 12 * 1024 * 1024) throw new Error("O macro ultrapassa 12 MB.");
+  const source = scripts.length ? await scripts[0].text() : null;
+  state.executorFiles = files;
   if (scripts.length) {
-    if (scripts[0].size > 12 * 1024 * 1024) throw new Error("O macro ultrapassa 12 MB.");
     const sourceField = field(root, "executor-source");
-    if (sourceField) sourceField.value = await scripts[0].text();
+    if (sourceField) sourceField.value = source;
     const modeField = field(root, "executor-mode");
-    if (modeField) modeField.value = /\\.js$/i.test(scripts[0].name) ? "javascript"
-      : /\\.json$/i.test(scripts[0].name) ? "package" : "auto";
+    if (modeField) modeField.value = /\.js$/i.test(scripts[0].name) ? "javascript"
+      : /\.json$/i.test(scripts[0].name) ? "package" : "auto";
   }
   const display = root.querySelector("[data-jarvis-executor-files]");
   if (display) display.textContent = files.length ? files.map(f => f.name).join(" · ") : "Sem arquivos selecionados.";
@@ -1456,6 +1637,10 @@ function bindDialog(dialog, state) {
       void setExecutorFiles(root, state, Array.from(event.target.files ?? [])).catch(error =>
         ui.notifications?.error?.(`Jarvis Executor: ${error.message}`));
     }
+    if (event.target?.matches?.('[name="executor-mode"]')) {
+      state.executorPreview = null;
+      renderExecutorPreview(root, state);
+    }
     if (event.target?.matches?.('[name="jarvis-actor"]')) {
       refreshDashboard(root, state);
       refreshActorRelatedOptions(root);
@@ -1470,6 +1655,10 @@ function bindDialog(dialog, state) {
   });
   root.addEventListener("input", event => {
     if (event.target?.matches?.("[data-jarvis-global-search]")) queueGlobalSearch(root, state);
+    if (event.target?.matches?.('[name="executor-source"]')) {
+      state.executorPreview = null;
+      renderExecutorPreview(root, state);
+    }
   });
   root.addEventListener("keydown", event => {
     const tab = event.target?.closest?.("[data-jarvis-tab]");
@@ -1497,13 +1686,21 @@ export function openJarvisConsole() {
   const Dialog = foundry.applications.api.DialogV2;
   const dialog = new Dialog({
     window: { title: "Jarvis — Fora do Abismo", resizable: true },
-    position: { width: Math.min(1080, Math.max(640, (globalThis.innerWidth ?? 1160) - 80)),
-      height: Math.min(720, Math.max(540, (globalThis.innerHeight ?? 800) - 80)) },
+    position: { width: Math.min(1080, Math.max(280, (globalThis.innerWidth ?? 1160) - 40)),
+      height: Math.min(720, Math.max(280, (globalThis.innerHeight ?? 800) - 70)) },
     modal: false,
     content: renderContent(),
     buttons: [{ action: "close", label: "Fechar" }]
   });
   currentDialog = dialog;
+  if (typeof dialog.close === "function") {
+    const close = dialog.close.bind(dialog);
+    dialog.close = (...args) => {
+      clearExecutorObjectUrls(state);
+      if (currentDialog === dialog) currentDialog = null;
+      return close(...args);
+    };
+  }
   openingPromise = Promise.resolve().then(() => dialog.render({ force: true }))
     .then(() => bindDialog(dialog, state))
     .catch(error => {

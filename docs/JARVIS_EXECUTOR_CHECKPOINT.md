@@ -8,12 +8,18 @@
 - Antes das alterações, 183 testes Node passaram. Isto não valida a interface real do Foundry.
 - Backup inicial fora do repositório e dos mundos: `%USERPROFILE%\Documents\JarvisBackups\Executor-20261028-035055-ae67c781`. Contém `jarvis-v1.1.0-source.zip` e `repository-before-work.bundle`; o bundle foi verificado com `git bundle verify`.
 
+## Etapas concluídas após a base
+
+- Central reorganizada em seis áreas; Executor inicial para Mestre, Biblioteca para jogadores. As ferramentas anteriores permanecem em seções avançadas. Prévia visual, confirmação explícita de JavaScript e acesso ao histórico/reversão foram ligados na interface. Testes de interface focados: 42/42 passaram.
+- Prévia de cenas valida coordenadas em células, limites e conversão para pixels. O Scene Package valida imagens e geometria antes de criar documentos, sem sobrescrever nomes existentes. Testes focados de cena/imagem: 18/18 passaram.
+- Cópia isolada do Foundry V14 Build 369, com D&D5e 6.0.6 e mundo `jarvis-executor-audit`, preparada fora dos mundos ativos. O servidor de teste iniciou com `--dataPath` apontando para essa cópia. Ainda não há aprovação dos cenários A–E no Foundry real.
+
 ## Etapa em andamento
 
-Revisar o Executor JSON/JavaScript, simplificar a navegação da Central e reforçar cenas/imagens preservando Importer V9, Scene Builder, Map Studio e integrações. Nenhum mundo oficial será alterado nos testes.
+Concluir núcleo do Executor, suíte completa e ensaios no mundo isolado. Nenhum mundo oficial foi alterado nos testes.
 
 ## Pendente
 
-- Integrar as três frentes de implementação, rodar a suíte completa e revisar a compatibilidade.
+- Integrar o núcleo do Executor e rodar a suíte completa; verificar compatibilidade e registro/reversão de documentos.
 - Validar em uma cópia isolada do mundo no Foundry V14/D&D5e 6.0.6; registrar como **NÃO TESTADO** qualquer cenário sem evidência real.
 - Criar commits de cada etapa, gerar/verificar um novo bundle da branch e decidir a próxima versão apenas após os critérios de aceitação.

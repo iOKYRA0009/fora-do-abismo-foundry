@@ -1,5 +1,6 @@
 import { inspectWallGeometry } from "../scene-geometry.js";
 import { beginSceneAssetUpload, updateSceneAssetUpload } from "./asset-ledger.js";
+import { inspectExecutorSceneGeometry } from "./executor-scene-geometry.js";
 
 const MODULE_ID = "fora-do-abismo-foundry";
 const PACKAGE_VERSION = "1.0";
@@ -46,7 +47,16 @@ function px(value, gridSize) {
 }
 
 function finite(value) {
+  if (value === null || value === undefined || typeof value === "boolean"
+    || (typeof value === "string" && !value.trim())) return false;
   return Number.isFinite(Number(value));
+}
+
+function withinScene(x, y, scene, { allowEdge = false } = {}) {
+  const columns = Number(scene?.columns);
+  const rows = Number(scene?.rows);
+  return finite(x) && finite(y) && Number.isFinite(columns) && Number.isFinite(rows)
+    && x >= 0 && y >= 0 && (allowEdge ? x <= columns && y <= rows : x < columns && y < rows);
 }
 
 function requireRect(rect, path, errors) {
@@ -113,8 +123,29 @@ async function ensureDirectory(source, path) {
 }
 
 function base64ToFile(base64, fileName, mimeType) {
-  const clean = String(base64 ?? "").replace(/^data:[^;]+;base64,/, "");
+  const input = String(base64 ?? "").trim();
+  const dataUri = /^data:([^;,]+);base64,/i.exec(input);
+  if (dataUri && dataUri[1].toLowerCase() !== mimeType) {
+    throw new Error("Scene Package: MIME da imagem não corresponde ao data URI.");
+  }
+  const clean = dataUri ? input.slice(dataUri[0].length) : input;
+  if (!clean || clean.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(clean)) {
+    throw new Error("Scene Package: imagem Base64 inválida.");
+  }
   const binary = atob(clean);
+  const byte = index => binary.charCodeAt(index);
+  const ascii = (start, end) => binary.slice(start, end);
+  const valid = mimeType === "image/png"
+    ? binary.length >= 8 && [137, 80, 78, 71, 13, 10, 26, 10].every((value, index) => byte(index) === value)
+    : mimeType === "image/jpeg"
+      ? binary.length >= 3 && byte(0) === 255 && byte(1) === 216 && byte(2) === 255
+      : mimeType === "image/webp"
+        ? binary.length >= 12 && ascii(0, 4) === "RIFF" && ascii(8, 12) === "WEBP"
+        : mimeType === "image/avif"
+          ? binary.length >= 16 && ascii(4, 8) === "ftyp"
+            && /^(avif|avis)$/.test(ascii(8, 12))
+          : false;
+  if (!valid) throw new Error("Scene Package: assinatura da imagem não corresponde ao MIME declarado.");
   const chunks = [];
   const chunkSize = 1024 * 1024;
 
@@ -131,7 +162,13 @@ function base64ToFile(base64, fileName, mimeType) {
 }
 
 async function uploadVisualAsset(visual = {}) {
-  if (visual.backgroundSrc) return { src: String(visual.backgroundSrc), assetId: null };
+  if (visual.backgroundSrc) {
+    const src = String(visual.backgroundSrc).trim();
+    if (src.startsWith("asset://")) {
+      throw new Error("Scene Package: resolva asset:// antes de construir o mapa.");
+    }
+    return { src, assetId: null };
+  }
 
   const base64 = String(visual.backgroundBase64 ?? "").trim();
   if (!base64) return { src: "", assetId: null };
@@ -150,20 +187,45 @@ async function uploadVisualAsset(visual = {}) {
     visual.target
     ?? ("worlds/" + worldId + "/assets/fora-do-abismo/maps")
   );
-  const requestedFileName = String(visual.fileName ?? "jarvis-scene.webp")
+  if (!/^[a-zA-Z0-9_-]+$/.test(source) || !target || target.startsWith("/")
+    || target.includes("\\") || target.split("/").some(part => !part || part === "." || part === "..")) {
+    throw new Error("Scene Package: destino de upload inválido.");
+  }
+  const mimeType = String(visual.mimeType ?? "image/webp").toLowerCase();
+  const extensions = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/avif": "avif" };
+  if (!extensions[mimeType]) {
+    throw new Error("Scene Package: tipo de imagem não aceito para upload.");
+  }
+  const requestedFileName = String(visual.fileName ?? `jarvis-scene.${extensions[mimeType]}`)
     .split(/[\\/]/).pop().replace(/[^a-zA-Z0-9._-]/g, "-");
   const extensionIndex = requestedFileName.lastIndexOf(".");
   const stem = extensionIndex > 0 ? requestedFileName.slice(0, extensionIndex) : requestedFileName;
-  const extension = extensionIndex > 0 ? requestedFileName.slice(extensionIndex) : "";
-  const fileName = `${stem}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}${extension}`;
-  const mimeType = String(visual.mimeType ?? "image/webp");
-  if (!["image/png", "image/jpeg", "image/webp", "image/avif"].includes(mimeType)) {
-    throw new Error("Scene Package: tipo de imagem não aceito para upload.");
+  const requestedExtension = extensionIndex > 0 ? requestedFileName.slice(extensionIndex + 1).toLowerCase() : "";
+  if (requestedExtension && requestedExtension !== extensions[mimeType]
+    && !(mimeType === "image/jpeg" && requestedExtension === "jpeg")) {
+    throw new Error("Scene Package: extensão da imagem não corresponde ao MIME declarado.");
+  }
+  const nonce = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const fileName = `${stem || "jarvis-scene"}-${nonce}.${extensions[mimeType]}`;
+
+  const file = base64ToFile(base64, fileName, mimeType);
+  if (typeof globalThis.createImageBitmap === "function") {
+    let bitmap;
+    try {
+      bitmap = await globalThis.createImageBitmap(file);
+      if (!bitmap?.width || !bitmap?.height) throw new Error("sem dimensões");
+    } catch {
+      throw new Error("Scene Package: imagem não pode ser decodificada pelo Foundry.");
+    } finally {
+      bitmap?.close?.();
+    }
   }
 
   await ensureDirectory(source, target);
-
-  const file = base64ToFile(base64, fileName, mimeType);
+  const listing = await FilePickerClass.browse(source, target);
+  if (listing?.files?.some(existing => String(existing).split(/[?#]/)[0].endsWith(`/${fileName}`))) {
+    throw new Error("Scene Package: nome de imagem já existe; upload cancelado para evitar sobrescrita.");
+  }
   const record = await beginSceneAssetUpload({ source, target, fileName });
   try {
     const result = await FilePickerClass.upload(
@@ -173,7 +235,11 @@ async function uploadVisualAsset(visual = {}) {
       {},
       { notify: false }
     );
-    const src = String(result?.path ?? result?.url ?? result?.file ?? (target + "/" + fileName));
+    const src = result?.path;
+    if (result?.error || result?.success === false || typeof src !== "string"
+      || src !== `${target}/${fileName}`) {
+      throw new Error("Scene Package: upload não confirmado no destino esperado.");
+    }
     await updateSceneAssetUpload(record.id, { status: "uploaded", path: src });
     return { src, assetId: record.id };
   } catch (error) {
@@ -859,6 +925,10 @@ export class JarvisScenePackageBuilder {
       if (!Number.isInteger(Number(payload.scene.rows)) || Number(payload.scene.rows) <= 0) {
         errors.push("scene.rows deve ser inteiro positivo.");
       }
+      const gridSize = Number(payload.scene.grid?.size ?? 100);
+      if (!Number.isInteger(gridSize) || gridSize < 50) {
+        errors.push("scene.grid.size deve ser inteiro >= 50 px.");
+      }
       const darkness = payload.scene.environment?.darknessLevel;
       if (darkness !== undefined && (!Number.isFinite(Number(darkness)) || Number(darkness) < 0 || Number(darkness) > 1)) {
         errors.push("scene.environment.darknessLevel deve estar entre 0 e 1.");
@@ -873,22 +943,38 @@ export class JarvisScenePackageBuilder {
     }
 
     const wallTypes = new Set(["wall", "door", "secret", "low_barrier"]);
-    payload.walls?.forEach((wall, index) => {
-      if (!Array.isArray(wall.a) || wall.a.length !== 2 || !wall.a.every(finite)) {
+    (Array.isArray(payload.walls) ? payload.walls : []).forEach((wall, index) => {
+      if (!Array.isArray(wall?.a) || wall.a.length !== 2 || !wall.a.every(finite)) {
         errors.push("walls[" + index + "].a inválido.");
+      } else if (!withinScene(wall.a[0], wall.a[1], payload.scene, { allowEdge: true })) {
+        errors.push("walls[" + index + "].a fora da cena.");
       }
-      if (!Array.isArray(wall.b) || wall.b.length !== 2 || !wall.b.every(finite)) {
+      if (!Array.isArray(wall?.b) || wall.b.length !== 2 || !wall.b.every(finite)) {
         errors.push("walls[" + index + "].b inválido.");
+      } else if (!withinScene(wall.b[0], wall.b[1], payload.scene, { allowEdge: true })) {
+        errors.push("walls[" + index + "].b fora da cena.");
       }
-      if (!wallTypes.has(wall.type ?? "wall")) {
+      if (!wallTypes.has(wall?.type ?? "wall")) {
         errors.push("walls[" + index + "].type inválido.");
       }
     });
-    if (Array.isArray(payload.walls) && payload.scene) {
+    if (Array.isArray(payload.walls) && payload.scene && payload.walls.every(wall =>
+      Array.isArray(wall?.a) && wall.a.length === 2 && wall.a.every(finite)
+      && Array.isArray(wall?.b) && wall.b.length === 2 && wall.b.every(finite))) {
       errors.push(...inspectWallGeometry(
         payload.walls, payload.scene.columns, payload.scene.rows
       ).errors);
     }
+
+    (Array.isArray(payload.lights) ? payload.lights : []).forEach((light, index) => {
+      if (!withinScene(light?.x, light?.y, payload.scene)) {
+        errors.push(`lights[${index}].x/y inválidos ou fora da cena.`);
+      }
+      if (!finite(light?.dim) || light.dim < 0) errors.push(`lights[${index}].dim deve ser >= 0.`);
+      if (light?.bright !== undefined && (!finite(light.bright) || light.bright < 0)) {
+        errors.push(`lights[${index}].bright deve ser >= 0.`);
+      }
+    });
 
     if (payload.actors !== undefined && !Array.isArray(payload.actors)) {
       errors.push("actors deve ser lista.");
@@ -898,25 +984,52 @@ export class JarvisScenePackageBuilder {
     }
     (Array.isArray(payload.sounds) ? payload.sounds : []).forEach((sound, index) => {
       if (!sound?.path || typeof sound.path !== "string") errors.push(`sounds[${index}].path é obrigatório.`);
-      if (!finite(sound?.x) || !finite(sound?.y) || !finite(sound?.radius) || Number(sound.radius) <= 0) {
+      if (!withinScene(sound?.x, sound?.y, payload.scene) || !finite(sound?.radius) || sound.radius <= 0) {
         errors.push(`sounds[${index}] precisa de x, y e radius válido.`);
       }
+      if (sound?.volume !== undefined && (!finite(sound.volume) || sound.volume < 0 || sound.volume > 1)) {
+        errors.push(`sounds[${index}].volume deve estar entre 0 e 1.`);
+      }
     });
-    payload.actors?.forEach((actor, index) => {
-      if (!actor.actor && !actor.actorId && !actor.actorUuid) {
+    (Array.isArray(payload.actors) ? payload.actors : []).forEach((actor, index) => {
+      if (!actor?.actor && !actor?.actorId && !actor?.actorUuid) {
         errors.push("actors[" + index + "] precisa de actor, actorId ou actorUuid.");
       }
-      if (!finite(actor.x) || !finite(actor.y)) {
+      if (!withinScene(actor?.x, actor?.y, payload.scene)) {
         errors.push("actors[" + index + "].x/y inválidos.");
+      }
+      for (const dimension of ["width", "height"]) {
+        if (actor?.[dimension] !== undefined && (!finite(actor[dimension]) || actor[dimension] <= 0)) {
+          errors.push(`actors[${index}].${dimension} deve ser maior que zero.`);
+        }
+      }
+      if ((finite(actor?.x) && finite(actor?.width)
+          && Number(actor.x) + Number(actor.width) > Number(payload.scene?.columns))
+        || (finite(actor?.y) && finite(actor?.height)
+          && Number(actor.y) + Number(actor.height) > Number(payload.scene?.rows))) {
+        errors.push(`actors[${index}] ultrapassa os limites da cena.`);
       }
     });
 
     if (payload.regions !== undefined && !Array.isArray(payload.regions)) {
       errors.push("regions deve ser lista.");
     }
-    payload.regions?.forEach((region, index) => {
-      requireRect(region.rect, "regions[" + index + "].rect", errors);
+    (Array.isArray(payload.regions) ? payload.regions : []).forEach((region, index) => {
+      requireRect(region?.rect, "regions[" + index + "].rect", errors);
+      if (Array.isArray(region?.rect) && region.rect.length === 4 && region.rect.every(finite)
+        && (Number(region.rect[0]) < 0 || Number(region.rect[1]) < 0
+          || Number(region.rect[0]) + Number(region.rect[2]) > Number(payload.scene?.columns)
+          || Number(region.rect[1]) + Number(region.rect[3]) > Number(payload.scene?.rows))) {
+        errors.push(`regions[${index}].rect fora da cena.`);
+      }
     });
+
+    if (payload.visual !== undefined && (!payload.visual || typeof payload.visual !== "object"
+      || Array.isArray(payload.visual))) {
+      errors.push("visual deve ser objeto.");
+    } else if (payload.visual?.backgroundSrc && payload.visual?.backgroundBase64) {
+      errors.push("visual deve usar backgroundSrc ou backgroundBase64, não ambos.");
+    }
 
     if (errors.length) {
       const error = new Error("Jarvis Scene Package recusou o pacote.");
@@ -1005,10 +1118,18 @@ export class JarvisScenePackageBuilder {
           thickness: Number(grid.thickness ?? 1)
         }
       },
-      walls: (payload.walls ?? []).map(normalizeWall),
+      walls: (payload.walls ?? []).map(wall => ({
+        ...normalizeWall(wall),
+        a: wall.a.map(Number),
+        b: wall.b.map(Number)
+      })),
       drawings: clone(payload.drawings ?? []),
-      lights: clone(payload.lights ?? []),
-      sounds: clone(payload.sounds ?? []),
+      lights: (payload.lights ?? []).map(light => ({ ...clone(light),
+        x: Number(light.x), y: Number(light.y), dim: Number(light.dim),
+        ...(light.bright !== undefined ? { bright: Number(light.bright) } : {}) })),
+      sounds: (payload.sounds ?? []).map(sound => ({ ...clone(sound),
+        x: Number(sound.x), y: Number(sound.y), radius: Number(sound.radius),
+        ...(sound.volume !== undefined ? { volume: Number(sound.volume) } : {}) })),
       tokens: clone(tokens ?? [])
     };
   }
@@ -1016,6 +1137,14 @@ export class JarvisScenePackageBuilder {
   async preview(payload, options = {}) {
     this.validate(payload);
     const actors = await this.prepareActors(payload, options);
+    const blueprint = this.toBlueprint(payload, payload.visual?.backgroundSrc ?? "", actors.tokens);
+    this.builder.validate?.(blueprint);
+    const geometry = inspectExecutorSceneGeometry(blueprint);
+    if (geometry.errors.length) {
+      const error = new Error("Scene Package: posições inválidas após conversão para pixels.");
+      error.details = geometry.errors;
+      throw error;
+    }
 
     return {
       id: payload.id ?? null,
@@ -1034,9 +1163,11 @@ export class JarvisScenePackageBuilder {
       puzzles: payload.puzzles?.length ?? 0,
       rewards: payload.rewards?.length ?? 0,
       hasVisual: Boolean(payload.visual?.backgroundSrc || payload.visual?.backgroundBase64),
+      positions: geometry.positions,
+      pixels: geometry.pixels,
       geometryWarnings: inspectWallGeometry(
         payload.walls ?? [], payload.scene.columns, payload.scene.rows
-      ).warnings
+      ).warnings.concat(geometry.warnings)
     };
   }
 
@@ -1059,6 +1190,15 @@ export class JarvisScenePackageBuilder {
     }
 
     const actors = await this.prepareActors(payload, { allowMissingActors, includeOptionalActors });
+    // Reject invalid Scene Builder input before writing any image to disk.
+    const dryBlueprint = this.toBlueprint(payload, "", actors.tokens);
+    this.builder.validate?.(dryBlueprint);
+    const geometry = inspectExecutorSceneGeometry(dryBlueprint);
+    if (geometry.errors.length) {
+      const error = new Error("Scene Package: posições inválidas após conversão para pixels.");
+      error.details = geometry.errors;
+      throw error;
+    }
     const uploaded = await uploadVisualAsset(payload.visual ?? {});
     const backgroundSrc = uploaded.src;
     let blueprint;

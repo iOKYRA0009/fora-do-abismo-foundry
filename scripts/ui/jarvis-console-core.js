@@ -11,9 +11,9 @@ export function getJarvisAccess(user, actor = null) {
 export function visibleJarvisTabs(access) {
   if (!access?.gm && !access?.player) return [];
   if (access?.gm) {
-    return ["overview", "characters", "content", "maps", "appearances", "compendiums", "macros", "players", "diagnostics"];
+    return ["executor", "library", "characters", "scenes", "appearances", "system"];
   }
-  return ["overview", "characters", "appearances", "compendiums", "macros", "players"];
+  return ["library", "characters", "appearances"];
 }
 
 export function assertJarvisAccess(condition, message = "Jarvis: você não tem permissão para esta ação.") {
