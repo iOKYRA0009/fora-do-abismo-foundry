@@ -21,6 +21,7 @@ test("DialogV2 installs console listeners after its first render", async () => {
     { dataset: { jarvisPanel: "compendiums" }, hidden: true }
   ];
   const result = { hidden: false, setAttribute(name) { if (name === "hidden") this.hidden = true; } };
+  const body = { scrollTop: 360 };
   const listeners = new Map();
   const root = {
     dataset: {},
@@ -30,7 +31,8 @@ test("DialogV2 installs console listeners after its first render", async () => {
       if (selector === "[data-jarvis-panel]") return panels;
       return [];
     },
-    querySelector(selector) { return selector === ".jarvis-console-result" ? result : null; }
+    querySelector(selector) { return ({ ".jarvis-console-result": result,
+      ".jarvis-console-body": body })[selector] ?? null; }
   };
 
   globalThis.document = { createElement: () => ({ innerHTML: "" }) };
@@ -69,6 +71,7 @@ test("DialogV2 installs console listeners after its first render", async () => {
   assert.match(dialog.config.content.innerHTML, /data-jarvis-tab="overview"/);
   assert.match(dialog.config.content.innerHTML, /role="tab"/);
   assert.match(dialog.config.content.innerHTML, /data-jarvis-global-search/);
+  assert.match(dialog.config.content.innerHTML, /data-jarvis-action="diagnostics-capture-start"/);
   assert.equal(listeners.has("click"), false, "the DOM is not available until render finishes");
 
   await dialog.renderPromise;
@@ -81,6 +84,7 @@ test("DialogV2 installs console listeners after its first render", async () => {
   assert.equal(panels[0].hidden, true);
   assert.equal(panels[1].hidden, false);
   assert.equal(tabs[1].attributes["aria-selected"], "true");
+  assert.equal(body.scrollTop, 0, "a new tab starts at its heading instead of the previous tab's scroll position");
 
   let prevented = false;
   listeners.get("keydown")({ key: "Home", preventDefault() { prevented = true; },
@@ -96,6 +100,24 @@ test("DialogV2 installs console listeners after its first render", async () => {
     } : null; }
   } });
   assert.equal(result.hidden, true, "action buttons dispatch after the listener is attached");
+
+  const captured = [];
+  game.actors.get = () => null;
+  game.modules.get("fora-do-abismo-foundry").api.diagnostics = { capture: {
+    recordFailure(kind, error, operation) { captured.push({ kind, message: error.message, operation }); }
+  } };
+  globalThis.ui = { notifications: { error() {} } };
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    await listeners.get("click")({ target: {
+      closest(selector) { return selector === "[data-jarvis-action]" ? {
+        dataset: { jarvisAction: "actor-open" }, disabled: false
+      } : null; }
+    } });
+  } finally { console.error = originalError; }
+  assert.deepEqual(captured, [{ kind: "action", message: "Selecione um personagem acessível.",
+    operation: "actor-open" }], "handled action failures enter the opt-in diagnostics capture");
 });
 
 test("Jarvis registers a Tokens toolbar button in the V14 control structure", () => {

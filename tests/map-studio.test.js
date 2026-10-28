@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { suggestRasterWalls } from "../scripts/scenes/raster-wall-assist.js";
 import { applyLightingPreset, lightFromPreset, listLightingPresets } from "../scripts/scenes/lighting-presets.js";
 import { validateSceneBlueprint } from "../scripts/scenes/scene-blueprint-validator.js";
+import { applyMapReviewAction, createMapReviewState, undoMapReviewAction } from "../scripts/ui/map-studio.js";
 
 function image(width, height, paint = () => false) {
   const data = new Uint8ClampedArray(width * height * 4);
@@ -43,4 +44,42 @@ test("lighting presets preserve original data and use native scene environment",
   assert.equal(validateSceneBlueprint(result), true);
   assert.equal(listLightingPresets().length, 4);
   assert.equal(lightFromPreset("torch", 2, 3).animation.type, "torch");
+});
+
+test("map review undoes the latest edit after switching between walls, lights and sounds", () => {
+  const state = createMapReviewState({ walls: [
+    { a: [0, 0], b: [1, 0], type: "wall", source: "raster-suggestion" }
+  ], lights: [], sounds: [] });
+  applyMapReviewAction(state, { type: "add-wall",
+    wall: { a: [1, 0], b: [2, 0], type: "door", source: "manual", enabled: true } });
+  applyMapReviewAction(state, { type: "add-light", light: { x: 1, y: 1, dim: 20 } });
+  applyMapReviewAction(state, { type: "add-sound", sound: { x: 2, y: 1, path: "test.ogg" } });
+  assert.equal(state.walls.length, 2);
+  assert.equal(state.lights.length, 1);
+  assert.equal(state.sounds.length, 1);
+  assert.equal(undoMapReviewAction(state), true);
+  assert.equal(state.sounds.length, 0);
+  assert.equal(state.lights.length, 1);
+  assert.equal(undoMapReviewAction(state), true);
+  assert.equal(state.lights.length, 0);
+  assert.equal(state.walls.length, 2);
+  assert.equal(undoMapReviewAction(state), true);
+  assert.equal(state.walls.length, 1);
+});
+
+test("map review restores discarded suggestions and cancels an unfinished wall first", () => {
+  const state = createMapReviewState({ walls: [
+    { a: [0, 0], b: [1, 0], type: "wall", source: "raster-suggestion" }
+  ] });
+  applyMapReviewAction(state, { type: "clear-suggestions" });
+  assert.equal(state.walls[0].enabled, false);
+  assert.equal(applyMapReviewAction(state, { type: "clear-suggestions" }), false);
+  assert.equal(state.history.length, 1);
+  state.pending = [2, 2];
+  undoMapReviewAction(state);
+  assert.equal(state.pending, null);
+  assert.equal(state.walls[0].enabled, false);
+  undoMapReviewAction(state);
+  assert.equal(state.walls[0].enabled, true);
+  assert.equal(undoMapReviewAction(state), false);
 });

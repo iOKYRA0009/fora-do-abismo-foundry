@@ -36,10 +36,7 @@ export async function openMapStudio() {
     const prepared = await prepareMap(selected);
     imageUrl = prepared.imageUrl;
     const { payload, warnings } = prepared;
-    const state = {
-      walls: (payload.walls ?? []).map(wall => ({ ...wall, enabled: true })),
-      lights: [...(payload.lights ?? [])], sounds: [...(payload.sounds ?? [])], pending: null
-    };
+    const state = createMapReviewState(payload);
     const choice = await Dialog.wait({
       window: { title: `Jarvis — revisar ${selected.name}`, resizable: true },
       content: htmlElement(`<div class="jarvis-map-review">
@@ -155,7 +152,11 @@ function bindReview(dialog, state, payload, imageUrl) {
         x1: wall.a[0], y1: wall.a[1], x2: wall.b[0], y2: wall.b[1],
         class: `jarvis-map-wall ${wall.type === "door" ? "door" : wall.type === "secret" ? "secret" : ""} ${wall.enabled ? "" : "disabled"}`
       });
-      line.addEventListener("click", event => { event.stopPropagation(); wall.enabled = !wall.enabled; redraw(); });
+      line.addEventListener("click", event => {
+        event.stopPropagation();
+        applyMapReviewAction(state, { type: "toggle-wall", index });
+        redraw();
+      });
       line.setAttribute("data-index", index);
       lines.append(line);
     });
@@ -179,17 +180,20 @@ function bindReview(dialog, state, payload, imageUrl) {
     const y = clamp(Math.round(point.y * 2) / 2, 0, payload.scene.rows);
     const mode = root.querySelector('[name="mode"]')?.value;
     if (mode === "light") {
-      state.lights.push(lightFromPreset(root.querySelector('[name="preset"]')?.value ?? "neutral", x, y));
+      applyMapReviewAction(state, { type: "add-light",
+        light: lightFromPreset(root.querySelector('[name="preset"]')?.value ?? "neutral", x, y) });
       state.pending = null;
     } else if (mode === "sound") {
       const path = root.querySelector('[name="sound-path"]')?.value?.trim();
       if (!path) { ui.notifications?.warn("Informe o caminho do áudio no servidor antes de marcar o som."); return; }
-      state.sounds.push({ name: "Ambiente Jarvis", x, y, path, radius: 30, volume: 0.5, walls: true });
+      applyMapReviewAction(state, { type: "add-sound",
+        sound: { name: "Ambiente Jarvis", x, y, path, radius: 30, volume: 0.5, walls: true } });
       state.pending = null;
     } else if (!state.pending) state.pending = [x, y];
     else {
       if (state.pending[0] !== x || state.pending[1] !== y) {
-        state.walls.push({ a: state.pending, b: [x, y], type: mode, enabled: true, source: "manual" });
+        applyMapReviewAction(state, { type: "add-wall",
+          wall: { a: state.pending, b: [x, y], type: mode, enabled: true, source: "manual" } });
       }
       state.pending = null;
     }
@@ -197,20 +201,64 @@ function bindReview(dialog, state, payload, imageUrl) {
   });
   root.querySelector('[name="mode"]').addEventListener("change", () => { state.pending = null; redraw(); });
   root.querySelector('[data-jarvis-action="clear-suggestions"]').addEventListener("click", () => {
-    for (const wall of state.walls) if (wall.source === "raster-suggestion") wall.enabled = false;
+    applyMapReviewAction(state, { type: "clear-suggestions" });
     redraw();
   });
   root.querySelector('[data-jarvis-action="undo"]').addEventListener("click", () => {
-    if (state.pending) state.pending = null;
-    else if (state.lights.length && root.querySelector('[name="mode"]').value === "light") state.lights.pop();
-    else if (state.sounds.length && root.querySelector('[name="mode"]').value === "sound") state.sounds.pop();
-    else {
-      const index = state.walls.findLastIndex(wall => wall.source === "manual");
-      if (index >= 0) state.walls.splice(index, 1);
-    }
+    undoMapReviewAction(state);
     redraw();
   });
   redraw();
+}
+
+export function createMapReviewState(payload) {
+  return {
+    walls: (payload.walls ?? []).map(wall => ({ ...structuredClone(wall), enabled: true })),
+    lights: structuredClone(payload.lights ?? []), sounds: structuredClone(payload.sounds ?? []),
+    pending: null, history: []
+  };
+}
+
+/** Record completed review edits in chronological order, independent of the selected tool. */
+export function applyMapReviewAction(state, action) {
+  const snapshot = {
+    walls: structuredClone(state.walls), lights: structuredClone(state.lights),
+    sounds: structuredClone(state.sounds)
+  };
+  switch (action.type) {
+    case "toggle-wall": {
+      const wall = state.walls[action.index];
+      if (!wall) return false;
+      wall.enabled = !wall.enabled;
+      break;
+    }
+    case "add-wall": state.walls.push(structuredClone(action.wall)); break;
+    case "add-light": state.lights.push(structuredClone(action.light)); break;
+    case "add-sound": state.sounds.push(structuredClone(action.sound)); break;
+    case "clear-suggestions": {
+      const enabled = state.walls.filter(wall => wall.source === "raster-suggestion" && wall.enabled);
+      if (!enabled.length) return false;
+      for (const wall of enabled) wall.enabled = false;
+      break;
+    }
+    default: throw new Error(`Ação de revisão desconhecida: ${action.type}.`);
+  }
+  state.history.push(snapshot);
+  if (state.history.length > 100) state.history.shift();
+  return true;
+}
+
+export function undoMapReviewAction(state) {
+  if (state.pending) {
+    state.pending = null;
+    return true;
+  }
+  const snapshot = state.history.pop();
+  if (!snapshot) return false;
+  state.walls = snapshot.walls;
+  state.lights = snapshot.lights;
+  state.sounds = snapshot.sounds;
+  return true;
 }
 
 function svgNode(name, attributes) {

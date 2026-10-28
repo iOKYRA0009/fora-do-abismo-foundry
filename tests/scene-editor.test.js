@@ -86,6 +86,20 @@ test("preview detects near openings and rejects invalid or hostile geometry", ()
     data: { c: [0, 0, 0, 0] } }), /parede inválida/);
   assert.throws(() => previewSceneEdit(scene, { type: "Wall", mode: "update", documentId: "old",
     data: { _id: "another" } }), /campo não editável/);
+  assert.throws(() => previewSceneEdit(scene, { type: "Wall", mode: "create",
+    data: { c: [null, 0, 100, 0] } }), /parede inválida/);
+});
+
+test("scene preview rejects invalid sound radius, volume and light alpha before writing history", () => {
+  const { scene, journal } = setup();
+  for (const [data, message] of [
+    [{ x: 100, y: 100, path: "test.ogg", radius: -4 }, /raio do som/],
+    [{ x: 100, y: 100, path: "test.ogg", radius: 8, volume: 1.5 }, /volume do som/],
+    [{ x: 100, y: 100, path: "test.ogg", radius: null }, /raio do som/]
+  ]) assert.throws(() => previewSceneEdit(scene, { type: "AmbientSound", mode: "create", data }), message);
+  assert.throws(() => previewSceneEdit(scene, { type: "AmbientLight", mode: "create",
+    data: { x: 100, y: 100, config: { dim: 20, alpha: 2 } } }), /intensidade de cor/);
+  assert.equal(journal.length, 0);
 });
 
 test("stale preview blocks update and undo does not overwrite later edits", async () => {

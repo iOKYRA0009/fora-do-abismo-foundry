@@ -43,6 +43,14 @@ function getEffectConfigs(automation) {
   return input ? [input] : [];
 }
 
+function hasExecutableAutomation(automation) {
+  return Boolean(
+    String(automation?.pre ?? "").trim()
+    || String(automation?.post ?? "").trim()
+    || getEffectConfigs(automation).length
+  );
+}
+
 function getSelectedTargetActors() {
   return Array.from(game.user?.targets ?? [])
     .map(token => token?.actor ?? token?.document?.actor ?? null)
@@ -109,14 +117,7 @@ function buildScope(activity, usageConfig, results = null) {
       },
       async removeActorEffect(keyOrName) {
         if (!actor) throw new Error("Automação Jarvis sem Actor associado.");
-        const key = String(keyOrName ?? "").trim().toLowerCase();
-        const ids = actor.effects.filter(effect => {
-          const automationKey = String(effect.getFlag?.(MODULE_ID, "automationKey") ?? "").toLowerCase();
-          const name = String(effect.name ?? "").toLowerCase();
-          return automationKey === key || name === key;
-        }).map(effect => effect.id);
-        if (!ids.length) return [];
-        return actor.deleteEmbeddedDocuments("ActiveEffect", ids);
+        return removeAppliedEmbeddedEffectFromActor(actor, keyOrName);
       },
       getTargetActors() {
         return getSelectedTargetActors();
@@ -277,7 +278,14 @@ export function registerActivityAutomation() {
   hooksRegistered = true;
 
   Hooks.on("dnd5e.preUseActivity", (activity, usageConfig) => {
-    if (!isActiveGm()) return undefined;
+    if (!isActiveGm()) {
+      if (!hasExecutableAutomation(getAutomation(activity))) return undefined;
+      ui.notifications?.warn?.(
+        `Jarvis: '${activity?.item?.name ?? "Item"} / ${activity?.name ?? "Activity"}' usa automação Jarvis. ` +
+        "Peça ao Mestre ativo para executar esta Activity; o uso neste cliente foi cancelado."
+      );
+      return false;
+    }
     const result = runPre(activity, usageConfig);
     if (result === false) return false;
     return undefined;

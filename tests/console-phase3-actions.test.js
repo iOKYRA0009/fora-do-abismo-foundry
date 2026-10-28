@@ -109,6 +109,22 @@ test("managed macro UI runs a visible entry and blocks player administration", a
   await assert.rejects(executeJarvisConsoleAction("managed-macro-create", root), /Mestre/);
 });
 
+test("removing a favorite macro immediately clears its dashboard shortcut", async () => {
+  const rows = [{ id: "macro-1", name: "Antiga", category: "geral" }];
+  const api = { macros: { list: () => rows, favorites: () => ["macro-1"],
+    async remove(id) { rows.splice(rows.findIndex(row => row.id === id), 1); return { id }; } } };
+  setup(api);
+  const { root, fields } = rootFor({ "managed-macro": "macro-1" });
+  const favoriteHost = { innerHTML: '<button data-jarvis-macro-run="macro-1">Antiga</button>' };
+  const originalQuery = root.querySelector;
+  root.querySelector = selector => selector === "[data-jarvis-macro-favorites]"
+    ? favoriteHost : originalQuery(selector);
+  await executeJarvisConsoleAction("managed-macro-remove", root);
+  assert.equal(rows.length, 0);
+  assert.match(favoriteHost.innerHTML, /Nenhuma macro favorita/);
+  assert.equal(fields["managed-macro"].value, "");
+});
+
 test("player area reports only Items of an accessible selected Actor", async () => {
   const actor = { id: "owned", name: "Lia", system: { attributes: { hp: { value: 9, max: 12 } } },
     items: [{ id: "item", name: "Arco", type: "weapon", system: { uses: { max: 2 } } }],

@@ -7,6 +7,7 @@ test("creating a character updates the active Actor selector without reopening J
   const actors = [];
   const select = { value: "", innerHTML: "" };
   const count = { textContent: "" };
+  const active = { textContent: "Nenhum personagem selecionado" };
   const heading = { textContent: "" };
   const resultPanel = { removeAttribute() {} };
   const output = { textContent: "", closest: () => resultPanel };
@@ -16,6 +17,7 @@ test("creating a character updates the active Actor selector without reopening J
     const field = /^\[name="([^"]+)"\]$/.exec(selector)?.[1];
     if (field) return fields[field] ?? null;
     return ({ "[data-jarvis-actor-count]": count,
+      "[data-jarvis-active-actor]": active,
       ".jarvis-console-result-title": heading,
       ".jarvis-console-result-content": output })[selector] ?? null;
   } };
@@ -34,6 +36,7 @@ test("creating a character updates the active Actor selector without reopening J
   assert.equal(select.value, "new-actor");
   assert.match(select.innerHTML, /Nova heroína/);
   assert.match(count.textContent, /1 ficha/);
+  assert.match(active.textContent, /Nova heroína/);
   assert.match(output.textContent, /Nova heroína/);
   assert.doesNotMatch(output.textContent, /Reabra/);
 });

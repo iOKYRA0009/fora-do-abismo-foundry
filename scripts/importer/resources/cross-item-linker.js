@@ -14,7 +14,9 @@ function buildItemIndex(items = []) {
   const index = new Map();
 
   for (const item of items) {
-    const identifier = item.system?.identifier ? String(item.system.identifier) : null;
+    // References are slugged by makeJarvisItemRef(), but native or legacy Items
+    // may retain a mixed-case identifier instead of an adapter-generated slug.
+    const identifier = item.system?.identifier ? slugify(item.system.identifier) : null;
     const nameKey = slugify(item.name);
 
     for (const key of [identifier, nameKey].filter(Boolean)) {

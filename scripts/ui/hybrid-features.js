@@ -54,11 +54,15 @@ function getOrganization(item) {
   return item.getFlag(MODULE_ID, "organization") ?? {};
 }
 
-function inferActivationGroup(item, organization = {}) {
+export function inferActivationGroup(item, organization = {}) {
   if (organization.group && GROUP_LABELS[organization.group]) return organization.group;
   if (organization.resource === true) return "resource";
 
-  const activities = Array.from(item.system?.activities ?? []);
+  const collection = item.system?.activities;
+  const activities = Array.isArray(collection) ? collection
+    : Array.isArray(collection?.contents) ? collection.contents
+      : typeof collection?.values === "function" ? Array.from(collection.values())
+        : collection && typeof collection === "object" ? Object.values(collection) : [];
   if (!activities.length) return "passive";
 
   const types = new Set(activities.map(activity => activity.activation?.type).filter(Boolean));
@@ -69,12 +73,13 @@ function inferActivationGroup(item, organization = {}) {
     if (String(type).startsWith("reaction")) return "reaction";
   }
 
-  if ([...types].every(type => String(type).startsWith("reaction"))) return "reaction";
+  if (types.size && [...types].every(type => String(type).startsWith("reaction"))) return "reaction";
   return "other";
 }
 
-function getOrigin(item, organization = {}) {
-  const origin = organization.origin ? slugify(organization.origin) : "other";
+function getOrigin(item, organization = {}, group = null) {
+  const origin = organization.origin ? slugify(organization.origin)
+    : group === "resource" ? "resources" : "other";
   const originLabel = String(
     organization.originLabel
       ?? organization.label
@@ -91,7 +96,7 @@ function makeSectionLabel(origin, originLabel, group) {
   return `${originLabel} — ${GROUP_LABELS[group] ?? GROUP_LABELS.other}`;
 }
 
-function buildBuckets(actor, rows) {
+export function buildBuckets(actor, rows) {
   const buckets = new Map();
 
   for (const row of rows) {
@@ -100,7 +105,7 @@ function buildBuckets(actor, rows) {
 
     const organization = getOrganization(item);
     const group = inferActivationGroup(item, organization);
-    const { origin, originLabel, originOrder } = getOrigin(item, organization);
+    const { origin, originLabel, originOrder } = getOrigin(item, organization, group);
     const key = `${origin}:${group}`;
 
     if (!buckets.has(key)) {

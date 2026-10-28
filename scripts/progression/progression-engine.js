@@ -2,9 +2,7 @@ const MODULE_ID = "fora-do-abismo-foundry";
 const progressionInFlight = new WeakMap();
 
 function isAuthoritativeGm() {
-  if (!game.user?.isGM) return false;
-  const activeGm = game.users?.activeGM;
-  return !activeGm || activeGm.id === game.user.id;
+  return Boolean(game.user?.isGM && game.user.id && game.users?.activeGM?.id === game.user.id);
 }
 
 function slugify(value = "entry") {
@@ -67,6 +65,7 @@ async function markEntriesGranted(item, granted) {
 
 async function applyItemProgressionOnce(item, { notify = false } = {}) {
   if (!item?.actor || !["class", "subclass"].includes(item.type)) return 0;
+  if (!isAuthoritativeGm()) throw new Error("Jarvis Progression: apenas o Mestre ativo pode conceder progressões.");
 
   const progression = getProgression(item);
   if (!progression.length) return 0;
@@ -99,6 +98,9 @@ async function applyItemProgressionOnce(item, { notify = false } = {}) {
       const created = await importer.importItems(item.actor, missing, {
         sourceLabel: `${item.name} nível ${requiredLevel}`
       });
+      if (!Array.isArray(created) || created.length !== missing.length) {
+        throw new Error(`Jarvis Progression: importação incompleta no nível ${requiredLevel}; entrada não foi marcada como concedida.`);
+      }
       createdCount += created.length;
     }
 

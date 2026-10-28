@@ -51,12 +51,17 @@ function environmentSnapshot(scene) {
   return { environment: clone(data.environment ?? {}), backgroundColor: data.backgroundColor ?? "#000000" };
 }
 
+function finiteNumber(value) {
+  if (value === null || value === "" || typeof value === "boolean") return NaN;
+  return Number(value);
+}
+
 function validateGeometry(scene, type, data) {
   if (type === "SceneEnvironment") {
     if (data.environment && (typeof data.environment !== "object" || Array.isArray(data.environment))) {
       throw new Error("Jarvis Cena: ambiente inválido.");
     }
-    const darkness = Number(data.environment?.darknessLevel);
+    const darkness = finiteNumber(data.environment?.darknessLevel);
     if (!Number.isFinite(darkness) || darkness < 0 || darkness > 1
       || !/^#[0-9a-f]{6}$/i.test(String(data.backgroundColor ?? ""))) {
       throw new Error("Jarvis Cena: escuridão deve ser 0–1 e cor em formato #RRGGBB.");
@@ -70,28 +75,46 @@ function validateGeometry(scene, type, data) {
     && x >= 0 && y >= 0 && x <= width && y <= height;
   if (type === "Wall") {
     const c = data.c;
-    if (!Array.isArray(c) || c.length !== 4 || !c.every(value => Number.isFinite(Number(value)))
-      || !within(Number(c[0]), Number(c[1])) || !within(Number(c[2]), Number(c[3]))
-      || (Number(c[0]) === Number(c[2]) && Number(c[1]) === Number(c[3]))) {
+    if (!Array.isArray(c) || c.length !== 4 || !c.every(value => Number.isFinite(finiteNumber(value)))
+      || !within(finiteNumber(c[0]), finiteNumber(c[1])) || !within(finiteNumber(c[2]), finiteNumber(c[3]))
+      || (finiteNumber(c[0]) === finiteNumber(c[2]) && finiteNumber(c[1]) === finiteNumber(c[3]))) {
       throw new Error("Jarvis Cena: parede inválida ou fora da área do mapa.");
     }
     if (data.door !== undefined && ![0, 1, 2].includes(Number(data.door))) {
       throw new Error("Jarvis Cena: tipo de porta inválido.");
     }
   } else {
-    if (!within(Number(data.x), Number(data.y))) {
+    if (!within(finiteNumber(data.x), finiteNumber(data.y))) {
       throw new Error("Jarvis Cena: luz ou som fora da área do mapa.");
     }
     if (type === "AmbientLight") {
-      const dim = Number(data.config?.dim ?? 0);
-      const bright = Number(data.config?.bright ?? 0);
+      const dim = finiteNumber(data.config?.dim ?? 0);
+      const bright = finiteNumber(data.config?.bright ?? 0);
       if (![dim, bright].every(value => Number.isFinite(value) && value >= 0)
         || (dim === 0 && bright === 0)) {
         throw new Error("Jarvis Cena: luz precisa de raios válidos e maior que zero.");
       }
+      if (data.config?.alpha !== undefined) {
+        const alpha = finiteNumber(data.config.alpha);
+        if (!Number.isFinite(alpha) || alpha < 0 || alpha > 1) {
+          throw new Error("Jarvis Cena: intensidade de cor da luz deve estar entre 0 e 1.");
+        }
+      }
     }
-    if (type === "AmbientSound" && !String(data.path ?? "").trim()) {
-      throw new Error("Jarvis Cena: informe o caminho do áudio hospedado.");
+    if (type === "AmbientSound") {
+      if (typeof data.path !== "string" || !data.path.trim()) {
+        throw new Error("Jarvis Cena: informe o caminho do áudio hospedado.");
+      }
+      const radius = finiteNumber(data.radius);
+      if (!Number.isFinite(radius) || radius <= 0) {
+        throw new Error("Jarvis Cena: raio do som deve ser maior que zero.");
+      }
+      if (data.volume !== undefined) {
+        const volume = finiteNumber(data.volume);
+        if (!Number.isFinite(volume) || volume < 0 || volume > 1) {
+          throw new Error("Jarvis Cena: volume do som deve estar entre 0 e 1.");
+        }
+      }
     }
   }
 }

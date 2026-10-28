@@ -109,15 +109,37 @@ export async function applyEmbeddedEffectToActor(activity, actor, {
   const effect = resolveEmbeddedEffect(activity, { effectId, effectName });
   const normalizedKey = asKey(key) || `embedded:${effect.uuid}`;
 
-  if (replace) {
-    const existing = findAppliedEffects(actor, { key: normalizedKey, sourceUuid: effect.uuid });
-    if (existing.length) {
+  const existing = replace
+    ? findAppliedEffects(actor, { key: normalizedKey, sourceUuid: effect.uuid })
+    : [];
+  const data = await prepareEmbeddedEffectForActor(effect, activity, actor, { key: normalizedKey });
+  // Preparing or creating the replacement can fail. Keep the previous Effect
+  // until Foundry has confirmed that the new document exists on the Actor.
+  const created = await ActiveEffect.implementation.create(data, { parent: actor });
+  if (!created) throw new Error("Jarvis Effect Engine: Foundry não criou o Active Effect.");
+  if (existing.length) {
+    try {
       await actor.deleteEmbeddedDocuments("ActiveEffect", existing.map(entry => entry.id));
+    } catch (error) {
+      // A bulk deletion can fail before or after removing some documents. Only
+      // remove the new Effect when at least one predecessor is still present.
+      const remainingOld = existing.some(entry => Array.from(actor.effects ?? [])
+        .some(current => current.id === entry.id));
+      if (remainingOld) {
+        try {
+          if (typeof created.delete !== "function") {
+            throw new Error("o novo Active Effect não expõe delete()");
+          }
+          await created.delete();
+        } catch (rollbackError) {
+          throw new AggregateError([error, rollbackError],
+            "Jarvis Effect Engine: não foi possível remover o Effect antigo nem desfazer o novo. Revise os Effects do Actor.");
+        }
+      }
+      throw new Error("Jarvis Effect Engine: falha ao concluir a substituição. Revise os Effects do Actor.", { cause: error });
     }
   }
-
-  const data = await prepareEmbeddedEffectForActor(effect, activity, actor, { key: normalizedKey });
-  return ActiveEffect.implementation.create(data, { parent: actor });
+  return created;
 }
 
 export async function applyEmbeddedEffect(activity, options = {}) {
@@ -129,10 +151,11 @@ export async function applyEmbeddedEffect(activity, options = {}) {
 export async function removeAppliedEmbeddedEffectFromActor(actor, keyOrEffectName) {
   if (!actor) throw new Error("Jarvis Effect Engine: Actor alvo ausente.");
   const key = asKey(keyOrEffectName).toLowerCase();
+  if (!key) throw new Error("Jarvis Effect Engine: informe uma chave ou nome de Effect Jarvis.");
   const ids = actor.effects.filter(effect => {
     const automationKey = asKey(effect.getFlag?.(MODULE_ID, "automationKey")).toLowerCase();
     const name = String(effect.name ?? "").trim().toLowerCase();
-    return automationKey === key || name === key;
+    return Boolean(automationKey) && (automationKey === key || name === key);
   }).map(effect => effect.id);
 
   if (!ids.length) return [];

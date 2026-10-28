@@ -4,8 +4,9 @@ import assert from "node:assert/strict";
 import {
   createManagedMacro, duplicateManagedMacro, executeManagedMacro,
   importManagedMacros, installManagedMacroHotbar, listManagedMacros,
-  managedMacroHistory, previewManagedMacroImport, registerManagedMacros,
-  removeManagedMacro, updateManagedMacro
+  managedMacroFavorites, managedMacroHistory, previewManagedMacroImport,
+  registerManagedMacros, removeManagedMacro, toggleManagedMacroFavorite,
+  updateManagedMacro
 } from "../scripts/macros/managed-macros.js";
 
 function setup() {
@@ -85,6 +86,21 @@ test("hotbar wrapper contains only fixed Jarvis dispatcher and a managed ID", as
   assert.equal(result.slot, 2);
   assert.match(native.command, /api\?\.macros\?\.execute/);
   assert.doesNotMatch(native.command, /Function|eval/);
+  let opened = 0;
+  game.modules.get("fora-do-abismo-foundry").api.ui.open = () => { opened += 1; };
+  game.modules.get("fora-do-abismo-foundry").api.macros = { execute: executeManagedMacro };
+  const dispatch = new Function("game", `return ${native.command}`);
+  assert.deepEqual(await dispatch(game), { opened: "console" });
+  assert.equal(opened, 1);
+});
+
+test("hotbar reuses a native Macro from a Foundry Collection", async () => {
+  setup();
+  const entry = await createManagedMacro({ name: "Central", command: "open-console" });
+  const command = `game.modules.get("fora-do-abismo-foundry")?.api?.macros?.execute(${JSON.stringify(entry.id)})`;
+  game.macros = new Map([["existing", { id: "existing", type: "script", command }]]);
+  globalThis.Macro = { async create() { throw new Error("duplicate Macro"); } };
+  assert.equal((await installManagedMacroHotbar(entry.id, 3)).nativeMacroId, "existing");
 });
 
 test("an Item macro rechecks document permission when a player executes it", async () => {
@@ -98,4 +114,33 @@ test("an Item macro rechecks document permission when a player executes it", asy
   assert.equal((await executeManagedMacro(entry.id)).opened, "item");
   item.testUserPermission = () => false;
   await assert.rejects(executeManagedMacro(entry.id), /não acessível/);
+});
+
+test("an Item macro never falls back to an unrelated world Item when its Actor is gone", async () => {
+  setup();
+  const worldItem = { id: "same-id", name: "Outro Item", sheet: { render() { throw new Error("wrong Item"); } } };
+  game.items = { get: id => id === "same-id" ? worldItem : null };
+  const entry = await createManagedMacro({ name: "Item da ficha", command: "open-item",
+    params: { actorId: "deleted-actor", itemId: "same-id" } });
+  await assert.rejects(executeManagedMacro(entry.id), /Personagem da macro não encontrado/);
+  assert.equal(managedMacroHistory()[0].ok, false);
+});
+
+test("a rejected sheet render is reported as a failed macro execution", async () => {
+  setup();
+  game.actors.get("actor").sheet.render = async () => { throw new Error("Falha ao abrir ficha"); };
+  const entry = await createManagedMacro({ name: "Abrir ficha", command: "open-actor",
+    params: { actorId: "actor" } });
+  await assert.rejects(executeManagedMacro(entry.id), /Falha ao abrir ficha/);
+  assert.equal(managedMacroHistory()[0].ok, false);
+});
+
+test("simultaneous macro favorites and executions preserve every user flag update", async () => {
+  setup();
+  const first = await createManagedMacro({ name: "Primeira", command: "open-console" });
+  const second = await createManagedMacro({ name: "Segunda", command: "open-console" });
+  await Promise.all([toggleManagedMacroFavorite(first.id), toggleManagedMacroFavorite(second.id)]);
+  assert.deepEqual(managedMacroFavorites(), [second.id, first.id]);
+  await Promise.all([executeManagedMacro(first.id), executeManagedMacro(second.id)]);
+  assert.deepEqual(managedMacroHistory().map(row => row.id), [second.id, first.id]);
 });

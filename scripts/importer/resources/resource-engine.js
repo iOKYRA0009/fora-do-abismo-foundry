@@ -44,10 +44,15 @@ export function applyActorResources(systemData, resources = []) {
     throw new Error("O D&D5e oferece apenas 3 slots nativos de recurso no Actor (primary, secondary, tertiary). Recursos adicionais devem usar Item Uses ou flags próprias do Jarvis.");
   }
 
+  const normalized = resources.map(normalizeResource);
+  const slots = normalized.map(resource => resource.slot);
+  if (new Set(slots).size !== slots.length) {
+    throw new Error("actor.jarvis.resources contém slots repetidos; cada recurso deve usar primary, secondary ou tertiary uma vez.");
+  }
+
   systemData.resources ??= {};
 
-  resources.forEach((resource, index) => {
-    const { slot, data } = normalizeResource(resource, index);
+  normalized.forEach(({ slot, data }) => {
     systemData.resources[slot] = {
       ...(systemData.resources[slot] ?? {}),
       ...data

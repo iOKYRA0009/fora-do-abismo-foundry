@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { TOOL_CATALOG } from "../scripts/ui/console-tool-catalog.js";
 
 import {
@@ -66,4 +67,16 @@ test("every current Jarvis toolbar action is recognized by favorites and recents
     assert.ok(ids.includes(id), `Missing action in shared catalog: ${id}`);
   }
   assert.throws(() => recordConsoleRecent("unsafe-action"), /desconhecida/);
+});
+
+test("the tool catalog covers every static action button shown in the Central", () => {
+  const source = readFileSync(new URL("../scripts/ui/jarvis-console.js", import.meta.url), "utf8");
+  const buttonIds = [...source.matchAll(/button\("([^"]+)"/g)].map(match => match[1]);
+  const catalogIds = new Set(TOOL_CATALOG.map(tool => tool.id));
+  // Clearing output is a panel control, not a tool users can search or favorite.
+  const missing = [...new Set(buttonIds)].filter(id => id !== "clear-output" && !catalogIds.has(id));
+  assert.deepEqual(missing, []);
+  assert.equal(TOOL_CATALOG.find(tool => tool.id === "managed-macro-create")?.gmOnly, true);
+  assert.equal(TOOL_CATALOG.find(tool => tool.id === "appearance-apply")?.trustedOnly, true);
+  assert.equal(TOOL_CATALOG.find(tool => tool.id === "managed-macro-run")?.gmOnly, undefined);
 });

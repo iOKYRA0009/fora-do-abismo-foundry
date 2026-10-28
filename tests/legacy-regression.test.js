@@ -62,6 +62,16 @@ test("resource slots clamp values and reject a fourth native slot", () => {
   assert.throws(() => applyActorResources({}, Array.from({ length: 4 }, () => ({ max: 1 }))), /3 slots/);
 });
 
+test("duplicate native resource slots fail before changing the Actor payload", () => {
+  const system = { resources: { primary: { label: "Original", value: 2, max: 3 } } };
+  const before = structuredClone(system);
+  assert.throws(() => applyActorResources(system, [
+    { slot: "primary", label: "Primeiro", max: 5 },
+    { slot: "primary", label: "Segundo", max: 8 }
+  ]), /slots repetidos/);
+  assert.deepEqual(system, before);
+});
+
 test("image strategy keeps a custom path and a deterministic generated fallback", () => {
   assert.equal(resolveDocumentImage({ name: "Ícone" }, { source: "custom", customPath: "worlds/teste/icone.webp" }),
     "worlds/teste/icone.webp");

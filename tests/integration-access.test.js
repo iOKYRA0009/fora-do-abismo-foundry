@@ -212,3 +212,21 @@ test("owned profiles remain readable when optional visual modules are inactive",
   await assert.rejects(applyAppearance(token, "sombra"), /Visage não está ativo/);
   await assert.rejects(morphToken(token, "fera"), /Metamorph não está ativo/);
 });
+
+test("Metamorph form descriptors survive profile storage and API refusals surface as errors", async () => {
+  const actor = makeActor({ owners: ["owner"] });
+  const token = makeToken(actor);
+  setup({ user: { id: "owner", isGM: false }, actor, tokens: [token] });
+  const target = { actorId: "wolf-actor", packId: "dnd5e.monsters" };
+  await setTransformationProfile(actor, "lobo", target);
+  assert.deepEqual(getTransformationProfiles(actor).lobo.target, target);
+
+  const api = game.modules.get("metamorph").api;
+  api.morph = async (_token, passedTarget) => {
+    assert.deepEqual(passedTarget, target);
+    return { ok: false, reason: "not-owner" };
+  };
+  api.revert = async () => ({ ok: false, reason: "missing-form" });
+  await assert.rejects(morphToken(token, "lobo"), /recusou a transformação.*not-owner/);
+  await assert.rejects(revertToken(token), /recusou a reversão.*missing-form/);
+});

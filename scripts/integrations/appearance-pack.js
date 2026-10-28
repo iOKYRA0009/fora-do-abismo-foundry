@@ -361,7 +361,7 @@ export async function installLocalAppearance(actorOrRef, spec, {
 
   const actor = resolveActor(actorOrRef);
   if (!actor) throw new Error("Jarvis Appearance Pack: Actor não encontrado.");
-  if (!actor.isOwner && !game.user.isGM) {
+  if (!game.user?.isGM && !actor.testUserPermission?.(game.user, "OWNER")) {
     throw new Error(`Jarvis Appearance Pack: sem permissão para alterar ${actor.name}.`);
   }
 
@@ -412,6 +412,8 @@ export async function installAppearancePack(actorOrRef, pack, {
   }
 
   const entries = entriesFromPack(pack);
+  // Reject a malformed later entry before persisting any earlier appearance.
+  for (const spec of entries) buildLocalAppearance(spec);
   const installed = [];
   const warnings = [];
 

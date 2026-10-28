@@ -100,13 +100,17 @@ export async function setTransformationProfile(actor, key, target, {
   let targetRef = target;
   if (typeof target === "object") {
     if (target.uuid) targetRef = target.uuid;
+    else if (target.actorId) targetRef = {
+      actorId: String(target.actorId),
+      packId: target.packId == null ? null : String(target.packId)
+    };
     else if (target.id) targetRef = target.id;
     else throw new Error("Jarvis Transformation: não consegui obter id/uuid do Actor alvo.");
   }
 
   const profiles = profilesFromActor(actor);
   profiles[normalizeKey(key)] = {
-    target: String(targetRef),
+    target: typeof targetRef === "string" ? targetRef : foundry.utils.deepClone(targetRef),
     hpMode,
     ...(label ? { label: String(label) } : {})
   };
@@ -158,7 +162,11 @@ export async function morphToken(tokenOrId, keyOrTarget, options = {}) {
   if (!profile.target) throw new Error("Jarvis Transformation: forma alvo vazia.");
 
   const hpMode = options.hpMode ?? profile.hpMode ?? "keep-original";
-  return api.morph(token, profile.target, { hpMode });
+  const result = await api.morph(token, profile.target, { hpMode });
+  if (result === false || result?.ok === false) {
+    throw new Error(`Jarvis Transformation: Metamorph recusou a transformação${result?.reason ? ` (${result.reason})` : ""}.`);
+  }
+  return result;
 }
 
 export async function revertToken(tokenOrId) {
@@ -166,7 +174,11 @@ export async function revertToken(tokenOrId) {
   if (!token) throw new Error("Jarvis Transformation: Token não encontrado no canvas atual.");
   await assertTokenPermission(token, "OWNER");
   const api = getMetamorphApi();
-  return api.revert(token);
+  const result = await api.revert(token);
+  if (result === false || result?.ok === false) {
+    throw new Error(`Jarvis Transformation: Metamorph recusou a reversão${result?.reason ? ` (${result.reason})` : ""}.`);
+  }
+  return result;
 }
 
 export async function getCurrentForm(tokenOrId) {

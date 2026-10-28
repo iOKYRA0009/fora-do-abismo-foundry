@@ -179,8 +179,16 @@ export async function createContent(input, { openSheet = true } = {}) {
       await document.setFlag(MODULE_ID, "progression", spec.progression);
     }
   } catch (error) {
-    if (created) await created.delete().catch(rollbackError =>
-      console.error(`${MODULE_ID} | Falha ao remover conteúdo incompleto`, rollbackError));
+    if (created) {
+      try {
+        await created.delete();
+      } catch (rollbackError) {
+        const message = `Jarvis Conteúdo: falha ao remover o documento criado (${created.name ?? "sem nome"}). Revise a ficha antes de repetir a criação.`;
+        console.error(`${MODULE_ID} | ${message}`, rollbackError);
+        ui.notifications?.error?.(message);
+        throw new AggregateError([error, rollbackError], message);
+      }
+    }
     throw error;
   }
   if (openSheet) document.sheet?.render(true);

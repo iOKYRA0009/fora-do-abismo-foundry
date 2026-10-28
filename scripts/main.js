@@ -82,8 +82,9 @@ import { getCoreScenePresetDefinitions } from "./scenes/presets/core-presets.js"
 import { JarvisScenePackageBuilder } from "./scenes/package/scene-package-builder.js";
 import { inspectSceneAssetLedger, listSceneAssetLedger, registerSceneAssetLedger } from "./scenes/package/asset-ledger.js";
 import { convertUniversalVtt } from "./scenes/importers/universal-vtt.js";
-import { formatJarvisDiagnostics, runJarvisDiagnostics } from "./diagnostics/health-check.js";
+import { downloadJarvisDiagnostics, formatJarvisDiagnostics, runJarvisDiagnostics } from "./diagnostics/health-check.js";
 import { compareActorToPayload } from "./diagnostics/actor-equivalence.js";
+import { installJarvisRuntimeCapture } from "./diagnostics/runtime-capture.js";
 import { contentItemTypes, contentTemplates, createContent, previewContent } from "./content/content-wizard.js";
 import {
   createManagedMacro, duplicateManagedMacro, executeManagedMacro, importManagedMacros,
@@ -96,8 +97,9 @@ import {
 } from "./scenes/scene-editor.js";
 
 const MODULE_ID = "fora-do-abismo-foundry";
+const runtimeCapture = installJarvisRuntimeCapture();
 
-Hooks.once("init", () => {
+Hooks.once("init", runtimeCapture.guard("initialization", "init", () => {
   console.log(`${MODULE_ID} | Inicializando Jarvis Tools`);
   registerHybridFeatureLayout();
   registerMacroFileDrop();
@@ -111,9 +113,9 @@ Hooks.once("init", () => {
   registerProgressionEngine();
   registerSceneAssetLedger();
   registerManagedMacros();
-});
+}));
 
-Hooks.once("ready", () => {
+Hooks.once("ready", runtimeCapture.guard("initialization", "ready", () => {
   if (game.system?.id !== "dnd5e") {
     ui.notifications?.warn("Fora do Abismo — Jarvis Tools foi projetado para o sistema D&D 5e.");
   }
@@ -308,7 +310,16 @@ Hooks.once("ready", () => {
   api.diagnostics = {
     run: options => runJarvisDiagnostics(api, options),
     format: formatJarvisDiagnostics,
-    compareActor: compareActorToPayload
+    download: downloadJarvisDiagnostics,
+    compareActor: compareActorToPayload,
+    capture: {
+      start: () => runtimeCapture.start(),
+      stop: () => runtimeCapture.stop(),
+      events: () => runtimeCapture.snapshot(),
+      recordFailure: (kind, error, operation) => runtimeCapture.recordFailure(kind, error, operation),
+      clear: () => runtimeCapture.clear(),
+      get active() { return runtimeCapture.active; }
+    }
   };
 
   if (module) module.api = api;
@@ -321,4 +332,4 @@ Hooks.once("ready", () => {
     `Metamorph=${transformation.active ? transformation.version : "inativo"} | ` +
     `SceneFramework=${sceneFramework.version} | ScenePackage=${scenePackageBuilder.version} | Presets=${sceneFramework.listPresets().length} | Templates=${sceneFramework.listTemplates().length} | Skins=${sceneFramework.listSkins().length}`
   );
-});
+}));

@@ -101,6 +101,14 @@ function refreshDashboard(root, state) {
   }
 }
 
+function refreshCaptureStatus(root, capture = globalThis.game?.modules?.get?.(MODULE_ID)?.api?.diagnostics?.capture) {
+  const status = root.querySelector("[data-jarvis-capture-status]");
+  if (!status) return;
+  status.textContent = capture
+    ? `Captura ${capture.active ? "ativa" : "parada"} · ${capture.events().length} evento(s) registrado(s).`
+    : "Captura de erros indisponível nesta versão do Jarvis.";
+}
+
 function refreshActorOptions(root, actorId = null) {
   const select = field(root, "jarvis-actor");
   if (!select) return;
@@ -111,6 +119,10 @@ function refreshActorOptions(root, actorId = null) {
   select.value = actors.some(actor => actor.id === previous) ? previous : "";
   const count = root.querySelector("[data-jarvis-actor-count]");
   if (count) count.textContent = `${actors.length} ficha(s) acessível(is)`;
+  const active = root.querySelector("[data-jarvis-active-actor]");
+  const selected = actors.find(actor => actor.id === select.value);
+  if (active) active.textContent = selected
+    ? `${selected.name} · ${selected.type}` : "Nenhum personagem selecionado";
   refreshActorRelatedOptions(root);
 }
 
@@ -415,6 +427,9 @@ function renderContent() {
   const diagnostics = gm ? panel("diagnostics", `
     <h2>Diagnóstico</h2><p>Verificação somente leitura do módulo, sistema, importador, cenas e fichas.</p>
     <div class="jarvis-console-row">${button("diagnostics-run", "Executar diagnóstico")}${button("framework-test", "Testar templates e skins")}${button("modules-list", "Listar módulos ativos")}</div>
+    <h3>Erros da sessão</h3><p>Inicie a captura antes de testar as ações. Os registros ficam neste navegador até serem limpos ou a página ser fechada.</p>
+    <div class="jarvis-console-row">${button("diagnostics-capture-start", "Iniciar captura")}${button("diagnostics-capture-stop", "Parar captura")}${button("diagnostics-export", "Exportar relatório JSON")}</div>
+    <p class="jarvis-console-hint" data-jarvis-capture-status aria-live="polite"></p>
     <p class="jarvis-console-hint">O teste em memória não substitui uma rodada no mundo real com Token, visão, áudio e combate.</p>
   `) : "";
 
@@ -1009,9 +1024,28 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
     return setOutput(root, "Compêndio importado", `${created.name} foi adicionado ${destination}.`);
   }
 
+  if (["diagnostics-capture-start", "diagnostics-capture-stop", "diagnostics-export"].includes(action)) {
+    requireGM();
+    const capture = jarvis.diagnostics?.capture;
+    if (!capture) throw new Error("A captura de erros não está disponível nesta versão do Jarvis.");
+    if (action === "diagnostics-capture-start") {
+      capture.start();
+      refreshCaptureStatus(root, capture);
+      return setOutput(root, "Captura iniciada", "Teste as ações desejadas e depois exporte o relatório. Nenhum documento do mundo é alterado pela captura.");
+    }
+    capture.stop();
+    refreshCaptureStatus(root, capture);
+    if (action === "diagnostics-capture-stop") {
+      return setOutput(root, "Captura encerrada", `${capture.events().length} evento(s) registrado(s). A ausência de erros não comprova ações que não foram testadas.`);
+    }
+    const report = await jarvis.diagnostics.run({ checkUpdates: false });
+    const filename = jarvis.diagnostics.download(report);
+    return setOutput(root, "Relatório exportado", `${filename} · ${capture.events().length} evento(s). A ausência de erros não comprova ações que não foram testadas.`);
+  }
   if (action === "diagnostics-run") {
     requireGM();
     const report = await jarvis.diagnostics.run();
+    refreshCaptureStatus(root);
     return setOutput(root, "Diagnóstico Jarvis", jarvis.diagnostics.format(report));
   }
   if (action === "framework-test") {
@@ -1044,6 +1078,7 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
       const result = await library.import(source);
       state.macroImportPreview = null;
       refreshManagedMacroOptions(root);
+      refreshDashboard(root, state);
       return setOutput(root, "Macros importadas", result);
     }
     if (action === "managed-macro-create") {
@@ -1052,6 +1087,7 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
       if (!await confirmAction("Criar macro", `Criar '${spec.name}' com o comando ${spec.command}?`)) return;
       const entry = await library.create(spec);
       refreshManagedMacroOptions(root, entry.id);
+      refreshDashboard(root, state);
       return setOutput(root, "Macro criada", entry);
     }
     const entry = selectedManagedMacro(root);
@@ -1073,16 +1109,19 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
       if (!await confirmAction("Editar macro", `Salvar mudanças em '${entry.name}'?`)) return;
       const updated = await library.update(entry.id, spec);
       refreshManagedMacroOptions(root, updated.id);
+      refreshDashboard(root, state);
       return setOutput(root, "Macro atualizada", updated);
     }
     if (action === "managed-macro-duplicate") {
       const copied = await library.duplicate(entry.id);
       refreshManagedMacroOptions(root, copied.id);
+      refreshDashboard(root, state);
       return setOutput(root, "Macro duplicada", copied);
     }
     if (!await confirmAction("Excluir macro", `Excluir '${entry.name}' da biblioteca? Atalhos já instalados deixarão de funcionar.`)) return;
     const removed = await library.remove(entry.id);
     refreshManagedMacroOptions(root);
+    refreshDashboard(root, state);
     return setOutput(root, "Macro removida", removed);
   }
   if (["automation-inspect", "automation-approve", "automation-revoke"].includes(action)) {
@@ -1147,6 +1186,8 @@ function selectTab(root, id, { focus = false } = {}) {
     if (active && focus) tab.focus?.();
   }
   for (const panel of root.querySelectorAll("[data-jarvis-panel]")) panel.hidden = panel.dataset.jarvisPanel !== id;
+  const body = root.querySelector(".jarvis-console-body");
+  if (body) body.scrollTop = 0;
 }
 
 function renderSearchResults(root, rows) {
@@ -1207,10 +1248,12 @@ async function openSearchResult(root, state, index) {
 function queueGlobalSearch(root, state) {
   clearTimeout(state.searchTimer);
   state.searchAbort?.abort();
+  state.searchRows = [];
+  renderSearchResults(root, []);
   const query = root.querySelector("[data-jarvis-global-search]")?.value ?? "";
   if (!query.trim()) {
-    state.searchRows = [];
-    renderSearchResults(root, []);
+    const status = root.querySelector("[data-jarvis-status]");
+    if (status) status.textContent = "";
     return;
   }
   const controller = new AbortController();
@@ -1280,6 +1323,7 @@ function bindDialog(dialog, state) {
   if (!root || root.dataset.jarvisBound) return;
   root.dataset.jarvisBound = "true";
   refreshDashboard(root, state);
+  refreshCaptureStatus(root);
   refreshActorRelatedOptions(root);
   refreshSceneDocumentOptions(root);
   root.addEventListener("click", async event => {
@@ -1314,6 +1358,9 @@ function bindDialog(dialog, state) {
     }
     catch (error) {
       const detail = Array.isArray(error?.details) ? `\n${error.details.join("\n")}` : "";
+      try { api().diagnostics?.capture?.recordFailure?.("action", error, action); }
+      catch { /* Diagnostics must never hide the original action error. */ }
+      refreshCaptureStatus(root);
       setOutput(root, "Erro", `${error?.message ?? error}${detail}`);
       ui.notifications?.error(`Jarvis: ${error?.message ?? error}`);
       console.error(`${MODULE_ID} | Ação ${action} falhou`, error);

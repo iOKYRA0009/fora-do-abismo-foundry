@@ -3,9 +3,10 @@ import assert from "node:assert/strict";
 
 import { createContent, previewContent, contentTemplates } from "../scripts/content/content-wizard.js";
 
-function setup({ effectFailure = false } = {}) {
+function setup({ effectFailure = false, rollbackFailure = false } = {}) {
   const created = [];
   const deleted = [];
+  const errors = [];
   const document = data => ({ ...data, id: `created-${created.length + 1}`,
     sheet: { render() {} },
     async createEmbeddedDocuments(type, entries) {
@@ -13,7 +14,10 @@ function setup({ effectFailure = false } = {}) {
       return effectFailure ? [] : entries.map(entry => ({ ...entry, id: "effect-1" }));
     },
     async setFlag(_module, key, value) { this.flags ??= {}; this.flags[key] = value; },
-    async delete() { deleted.push(this.id); }
+    async delete() {
+      if (rollbackFailure) throw new Error("exclusão falhou");
+      deleted.push(this.id);
+    }
   });
   globalThis.game = {
     user: { id: "gm", isGM: true }, users: { activeGM: { id: "gm" } },
@@ -23,10 +27,10 @@ function setup({ effectFailure = false } = {}) {
   };
   globalThis.CONFIG = { DND5E: {} };
   globalThis.foundry = { utils: { deepClone: structuredClone, randomID: () => "TestActivity0001" } };
-  globalThis.ui = { notifications: { warn() {} } };
+  globalThis.ui = { notifications: { warn() {}, error(message) { errors.push(message); } } };
   globalThis.Item = { async create(data) { const item = document(data); created.push(item); return item; } };
   globalThis.Actor = { async create(data) { const actor = document(data); created.push(actor); return actor; } };
-  return { created, deleted };
+  return { created, deleted, errors };
 }
 
 test("simple wizard creates a native homebrew Item with escaped description and uses", async () => {
@@ -60,6 +64,27 @@ test("failed embedded Effect creation rolls back only the new Item", async () =>
   await assert.rejects(createContent({ kind: "item", name: "Talento", type: "feat",
     effects: [{ name: "Efeito" }] }), /incompletos/);
   assert.deepEqual(fixture.deleted, [fixture.created[0].id]);
+});
+
+test("failed rollback reports the incomplete document and both causes", async () => {
+  const fixture = setup({ effectFailure: true, rollbackFailure: true });
+  const previousError = console.error;
+  console.error = () => {};
+  try {
+    await assert.rejects(createContent({ kind: "item", name: "Talento incompleto", type: "feat",
+      effects: [{ name: "Efeito" }] }, { openSheet: false }), error => {
+      assert.ok(error instanceof AggregateError);
+      assert.match(error.errors[0].message, /incompletos/);
+      assert.match(error.errors[1].message, /exclusão falhou/);
+      assert.match(error.message, /Revise a ficha/);
+      return true;
+    });
+  } finally {
+    console.error = previousError;
+  }
+  assert.equal(fixture.created.length, 1);
+  assert.deepEqual(fixture.deleted, []);
+  assert.match(fixture.errors[0], /Talento incompleto/);
 });
 
 test("wizard rejects player mutations and class progression on unrelated Items", async () => {

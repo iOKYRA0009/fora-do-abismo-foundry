@@ -40,6 +40,20 @@ test("progression runs once for concurrent requests to the same class", async ()
   assert.equal(imports, 1);
 });
 
+test("progression does not mark a level granted when item creation is incomplete", async () => {
+  const { item } = progressionFixture(async () => []);
+  await assert.rejects(applyItemProgression(item), /importação incompleta/);
+  assert.equal(item.getFlag(MODULE_ID, "progressionState"), undefined);
+});
+
+test("progression fails closed without an elected active GM", async () => {
+  let imports = 0;
+  const { item } = progressionFixture(async () => { imports += 1; return [{}]; });
+  game.users.activeGM = null;
+  await assert.rejects(applyItemProgression(item), /Mestre ativo/);
+  assert.equal(imports, 0);
+});
+
 test("automatic progression acts only on the authoritative GM and reconciles at ready", async () => {
   let imports = 0;
   const { item } = progressionFixture(async () => { imports += 1; return [{}]; });

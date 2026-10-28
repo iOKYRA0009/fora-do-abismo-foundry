@@ -15,6 +15,15 @@ const COMMANDS = Object.freeze({
   "run-diagnostics": { label: "Executar diagnóstico", category: "geral", gmOnly: true }
 });
 let writeQueue = Promise.resolve();
+const flagWriteQueues = new Map();
+
+function queueFlagWrite(user, key, operation) {
+  const queueKey = `${user.id}:${key}`;
+  const previous = flagWriteQueues.get(queueKey) ?? Promise.resolve();
+  const queued = previous.catch(() => {}).then(operation);
+  flagWriteQueues.set(queueKey, queued.catch(() => {}));
+  return queued;
+}
 
 function currentUser() {
   if (!game.user?.id) throw new Error("Jarvis Macro: usuário não identificado.");
@@ -50,6 +59,12 @@ function writeMacros(mutator) {
 
 function id() {
   return globalThis.crypto?.randomUUID?.() ?? `m-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function collectionValues(collection) {
+  if (Array.isArray(collection)) return collection;
+  if (Array.isArray(collection?.contents)) return collection.contents;
+  return typeof collection?.values === "function" ? Array.from(collection.values()) : [];
 }
 
 function validateParams(command, params) {
@@ -110,11 +125,13 @@ function findVisible(id) {
 async function recordHistory(entry, ok, message) {
   const user = currentUser();
   try {
-    const previous = user.getFlag?.(MODULE_ID, HISTORY_KEY);
-    const rows = Array.isArray(previous) ? previous.slice(0, 19) : [];
-    rows.unshift({ id: entry.id, name: entry.name, at: Date.now(), ok,
-      message: String(message ?? "").slice(0, 160) });
-    await user.setFlag(MODULE_ID, HISTORY_KEY, rows);
+    await queueFlagWrite(user, HISTORY_KEY, async () => {
+      const previous = user.getFlag?.(MODULE_ID, HISTORY_KEY);
+      const rows = Array.isArray(previous) ? previous.slice(0, 19) : [];
+      rows.unshift({ id: entry.id, name: entry.name, at: Date.now(), ok,
+        message: String(message ?? "").slice(0, 160) });
+      await user.setFlag(MODULE_ID, HISTORY_KEY, rows);
+    });
   } catch (error) {
     console.warn(`${MODULE_ID} | Histórico de macro não foi salvo`, error);
   }
@@ -149,12 +166,17 @@ export function managedMacroFavorites() {
 export async function toggleManagedMacroFavorite(macroId) {
   findVisible(macroId);
   const user = currentUser();
-  const favorites = managedMacroFavorites();
-  const next = favorites.includes(macroId)
-    ? favorites.filter(entry => entry !== macroId)
-    : [macroId, ...favorites].slice(0, 20);
-  await user.setFlag(MODULE_ID, FAVORITES_KEY, next);
-  return next;
+  return queueFlagWrite(user, FAVORITES_KEY, async () => {
+    const visible = new Set(readMacros().filter(entry => allowed(entry, user)).map(entry => entry.id));
+    if (!visible.has(macroId)) throw new Error("Jarvis Macro: macro não disponível para este usuário.");
+    const previous = user.getFlag?.(MODULE_ID, FAVORITES_KEY);
+    const favorites = Array.isArray(previous) ? previous.filter(entry => visible.has(entry)).slice(0, 20) : [];
+    const next = favorites.includes(macroId)
+      ? favorites.filter(entry => entry !== macroId)
+      : [macroId, ...favorites].slice(0, 20);
+    await user.setFlag(MODULE_ID, FAVORITES_KEY, next);
+    return next;
+  });
 }
 
 export function createManagedMacro(input) {
@@ -216,17 +238,18 @@ export async function executeManagedMacro(macroId) {
   try {
     let result;
     if (entry.command === "open-console") {
-      moduleApi.ui.open();
+      await moduleApi.ui.open();
       result = { opened: "console" };
     } else if (entry.command === "open-actor") {
       const actor = game.actors.get(entry.params.actorId);
       if (!actor || !(game.user.isGM || actor.testUserPermission?.(game.user, "OBSERVER"))) {
         throw new Error("Ficha não acessível.");
       }
-      actor.sheet?.render(true);
+      await actor.sheet?.render(true);
       result = { opened: "actor", id: actor.id, name: actor.name };
     } else if (entry.command === "open-item") {
       const actor = entry.params.actorId ? game.actors.get(entry.params.actorId) : null;
+      if (entry.params.actorId && !actor) throw new Error("Personagem da macro não encontrado.");
       if (actor && !(game.user.isGM || actor.testUserPermission?.(game.user, "OBSERVER"))) {
         throw new Error("Item não acessível.");
       }
@@ -234,19 +257,19 @@ export async function executeManagedMacro(macroId) {
       if (!item || (!actor && !game.user.isGM && !item.testUserPermission?.(game.user, "OBSERVER"))) {
         throw new Error("Item não acessível.");
       }
-      item.sheet?.render(true);
+      await item.sheet?.render(true);
       result = { opened: "item", id: item.id, name: item.name };
     } else if (entry.command === "open-compendium") {
       const pack = game.packs.get(entry.params.packId);
       if (!pack || pack.visible === false) throw new Error("Compêndio não acessível.");
       const document = await pack.getDocument(entry.params.documentId);
       if (!document) throw new Error("Documento de compêndio não encontrado.");
-      document.sheet?.render(true);
+      await document.sheet?.render(true);
       result = { opened: "compendium", name: document.name };
     } else if (entry.command === "audit-scene") {
       activeGM();
       const scene = entry.params.sceneId ? game.scenes.get(entry.params.sceneId) : globalThis.canvas?.scene;
-      result = moduleApi.scenes.audit(scene);
+      result = await moduleApi.scenes.audit(scene);
     } else if (entry.command === "open-map-studio") {
       activeGM();
       result = await moduleApi.scenes.openStudio();
@@ -267,7 +290,7 @@ export async function installManagedMacroHotbar(macroId, slot) {
   const number = Number(slot);
   if (!Number.isInteger(number) || number < 1 || number > 10) throw new Error("Jarvis Macro: atalho deve ser 1–10.");
   const command = `game.modules.get("${MODULE_ID}")?.api?.macros?.execute(${JSON.stringify(entry.id)})`;
-  let macro = Array.from(game.macros ?? []).find(candidate => candidate.command === command && candidate.type === "script");
+  let macro = collectionValues(game.macros).find(candidate => candidate.command === command && candidate.type === "script");
   if (!macro) {
     macro = await Macro.create({ name: `Jarvis — ${entry.name}`, type: "script",
       command, img: "icons/svg/book.svg" });

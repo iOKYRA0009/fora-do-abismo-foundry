@@ -2,6 +2,7 @@ import { validateJarvisActorPayload } from "../importer/validators/payload-valid
 import { Dnd5eV6Adapter } from "../importer/adapters/dnd5e-adapter.js";
 import { suggestRasterWalls } from "../scenes/raster-wall-assist.js";
 import { applyLightingPreset } from "../scenes/lighting-presets.js";
+import { getJarvisRuntimeCapture } from "./runtime-capture.js";
 
 const MODULE_ID = "fora-do-abismo-foundry";
 
@@ -77,7 +78,8 @@ export async function runJarvisDiagnostics(api, {
   gameRef = globalThis.game,
   inspectActors = true,
   actorLimit = 5,
-  checkUpdates = true
+  checkUpdates = true,
+  capture = getJarvisRuntimeCapture()
 } = {}) {
   const checks = [];
   const add = (id, status, detail) => checks.push({ id, status, detail: String(detail) });
@@ -92,7 +94,7 @@ export async function runJarvisDiagnostics(api, {
   const module = gameRef?.modules?.get?.(MODULE_ID);
   if (!module?.active || !api) {
     add("module", "fail", "Jarvis Tools não está ativo neste mundo.");
-    return summarize(checks, module?.version ?? null);
+    return summarize(checks, module?.version ?? null, capture);
   }
   add("module", "pass", `Jarvis Tools ${module.version ?? api.version ?? "sem versão"} ativo.`);
 
@@ -236,10 +238,19 @@ export async function runJarvisDiagnostics(api, {
 
   add("integracao-de-escrita", "skip",
     "Criação/substituição de cenas, restauração de backup, luz no canvas, áudio audível e efeitos em combate exigem mundo de teste; não foram executados.");
-  return summarize(checks, module.version ?? api.version ?? null);
+  const events = capture?.snapshot?.() ?? [];
+  const jarvisFailures = events.filter(event => event.owner === "jarvis").length;
+  const externalFailures = events.filter(event => event.owner === "external-module").length;
+  if (jarvisFailures) add("erros-em-sessao", "fail",
+    `${jarvisFailures} erro(s) atribuídos ao Jarvis; ${externalFailures} a outros módulos. Consulte os eventos no relatório JSON.`);
+  else if (events.length) add("erros-em-sessao", "warn",
+    `${events.length} erro(s) capturado(s), nenhum atribuído diretamente ao Jarvis; ${externalFailures} a outros módulos. Consulte os eventos no relatório JSON.`);
+  else add("erros-em-sessao", "skip",
+    "Nenhum erro capturado nesta sessão. Isso não valida ações que não foram executadas.");
+  return summarize(checks, module.version ?? api.version ?? null, capture);
 }
 
-function summarize(checks, version) {
+function summarize(checks, version, capture = null) {
   const counts = { pass: 0, warn: 0, fail: 0, skip: 0 };
   for (const check of checks) counts[check.status] += 1;
   return {
@@ -247,15 +258,42 @@ function summarize(checks, version) {
     mode: "read-only",
     ok: counts.fail === 0,
     counts,
-    checks
+    checks,
+    events: capture?.snapshot?.() ?? []
   };
 }
 
 export function formatJarvisDiagnostics(report) {
   const labels = { pass: "OK", warn: "AVISO", fail: "FALHA", skip: "NÃO EXECUTADO" };
+  const events = report.events ?? [];
   return [
     `Jarvis ${report.version ?? "?"} — diagnóstico somente leitura`,
     ...report.checks.map(check => `[${labels[check.status]}] ${check.id}: ${check.detail}`),
+    ...events.slice(-20).map(event =>
+      `[ERRO] ${event.time} ${event.kind} / ${event.owner}${event.moduleId ? ` (${event.moduleId})` : ""}` +
+      `${event.operation ? ` / ${event.operation}` : ""}: ${event.message}`),
+    ...(events.length > 20 ? [`Mais ${events.length - 20} evento(s) no relatório JSON.`] : []),
     `Resultado: ${report.counts.pass} OK, ${report.counts.warn} aviso(s), ${report.counts.fail} falha(s), ${report.counts.skip} não executado(s).`
   ].join("\n");
+}
+
+/** Downloads one local JSON report. It does not upload data or modify Foundry documents. */
+export function downloadJarvisDiagnostics(report, {
+  documentRef = globalThis.document,
+  urlRef = globalThis.URL,
+  filename = `jarvis-diagnostico-${new Date().toISOString().replace(/[:.]/g, "-")}.json`
+} = {}) {
+  if (!documentRef?.createElement || typeof urlRef?.createObjectURL !== "function") {
+    throw new Error("Download disponível somente no navegador do Foundry.");
+  }
+  const url = urlRef.createObjectURL(new Blob([`${JSON.stringify(report, null, 2)}\n`], { type: "application/json" }));
+  try {
+    const link = documentRef.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.click();
+  } finally {
+    urlRef.revokeObjectURL(url);
+  }
+  return filename;
 }

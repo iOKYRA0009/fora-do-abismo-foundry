@@ -12,6 +12,7 @@ const MODULE_ID = "fora-do-abismo-foundry";
 function setup() {
   const callbacks = new Map();
   const settings = new Map();
+  const warnings = [];
   globalThis.Hooks = {
     on(name, callback) {
       const entries = callbacks.get(name) ?? [];
@@ -40,7 +41,7 @@ function setup() {
   };
   globalThis.ui = { notifications: {
     error() { throw new Error("unexpected automation error"); },
-    warn() {}
+    warn(message) { warnings.push(message); }
   } };
   globalThis.canvas = {};
   globalThis.foundry = {};
@@ -57,7 +58,8 @@ function setup() {
   return {
     pre: callbacks.get("dnd5e.preUseActivity")[0],
     post: callbacks.get("dnd5e.postUseActivity")[0],
-    settings
+    settings,
+    warnings
   };
 }
 
@@ -75,6 +77,58 @@ async function settlePost() {
 
 const automationHooks = setup();
 
+test("Player and Trusted clients cannot use executable Jarvis Activities without the active GM", async () => {
+  const { pre, post, warnings } = automationHooks;
+  const startWarnings = warnings.length;
+  globalThis.__jarvisPlayerAutomation = 0;
+  game.users.activeGM = { id: "gm-1" };
+  const scripted = activity({
+    pre: "globalThis.__jarvisPlayerAutomation += 1;",
+    post: "globalThis.__jarvisPlayerAutomation += 1;"
+  });
+
+  for (const user of [{ id: "player", isGM: false }, { id: "trusted", isGM: false }]) {
+    game.user = user;
+    assert.equal(pre(scripted, {}), false);
+    post(scripted, {}, {});
+    assert.equal(pre(activity({ effects: [{ effectName: "Proteção" }] }), {}), false);
+    assert.equal(pre(activity(null), {}), undefined);
+    assert.equal(pre(activity({ effects: [], pre: "", post: "" }), {}), undefined);
+  }
+  await settlePost();
+  assert.equal(globalThis.__jarvisPlayerAutomation, 0);
+  assert.equal(warnings.length - startWarnings, 4);
+  assert.ok(warnings.slice(startWarnings).every(message => /Mestre ativo.*cancelado/.test(message)));
+  game.user = { id: "gm-1", isGM: true };
+  delete globalThis.__jarvisPlayerAutomation;
+});
+
+test("post-script removal by name leaves unrelated Active Effects intact", async () => {
+  const { post } = automationHooks;
+  game.user = { id: "gm-1", isGM: true };
+  game.users.activeGM = { id: "gm-1" };
+  const managed = { id: "jarvis-effect", name: "Proteção",
+    getFlag: (_module, key) => key === "automationKey" ? "managed-protection" : null };
+  const unrelated = { id: "other-effect", name: "Proteção", getFlag: () => null };
+  const removed = [];
+  const actor = {
+    effects: [managed, unrelated],
+    async deleteEmbeddedDocuments(type, ids) {
+      assert.equal(type, "ActiveEffect");
+      removed.push(...ids);
+      this.effects = this.effects.filter(effect => !ids.includes(effect.id));
+      return ids;
+    }
+  };
+  const guarded = activity({ post: "await jarvis.removeActorEffect('Proteção');" });
+  guarded.item.actor = actor;
+  await approveActivityAutomation(guarded);
+  post(guarded, {}, {});
+  await settlePost();
+  assert.deepEqual(removed, ["jarvis-effect"]);
+  assert.deepEqual(actor.effects, [unrelated]);
+});
+
 test("Activity scripts and effects run only on the elected active GM, with no duplicate hooks", async () => {
   const { pre, post } = automationHooks;
   globalThis.__jarvisAutomationCalls = [];
@@ -86,18 +140,18 @@ test("Activity scripts and effects run only on the elected active GM, with no du
   const usageConfig = {};
 
   game.user = { id: "player-1", isGM: false };
-  assert.equal(pre(guarded, usageConfig), undefined);
+  assert.equal(pre(guarded, usageConfig), false);
   post(guarded, usageConfig, {});
   await settlePost();
 
   game.user = { id: "gm-2", isGM: true };
-  assert.equal(pre(guarded, usageConfig), undefined);
+  assert.equal(pre(guarded, usageConfig), false);
   post(guarded, usageConfig, {});
   await settlePost();
 
   game.user = { id: "gm-1", isGM: true };
   game.users.activeGM = null;
-  assert.equal(pre(guarded, usageConfig), undefined);
+  assert.equal(pre(guarded, usageConfig), false);
   post(guarded, usageConfig, {});
   await settlePost();
 
