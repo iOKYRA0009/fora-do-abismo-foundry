@@ -26,13 +26,13 @@ No Foundry VTT:
 
 O Foundry usa o mesmo Manifest URL para detectar atualizações futuras.
 
-## Jarvis 1.2.0 — Central e Macro Executor
+## Jarvis 1.2.1 — Central, Macro Executor e calibração visual
 
 Após ativar o módulo, clique em **Jarvis — Fora do Abismo** nos controles de **Tokens**. A Central organiza as funções em seis áreas: **Executor**, **Biblioteca**, **Personagens**, **Cenas**, **Aparências** e **Sistema**. O Mestre começa no Executor e vê as ações de administração. Jogadores começam na Biblioteca e só recebem as ações permitidas para seu papel e para os Actors que controlam. As ferramentas anteriores continuam disponíveis nas seções avançadas.
 
 O Executor recebe JavaScript colado ou arquivos `.js`/`.txt`, além de pacotes JSON `jarvis-executor-1` com personagens, itens, habilidades, efeitos, cenas e imagens. Ele mostra uma prévia antes da execução e exige confirmação explícita do Mestre para JavaScript, que roda com as permissões do Mestre e não tem reversão automática. Para pacotes JSON, valida dados, imagens e geometria antes de criar documentos; o histórico permite reverter de forma conservadora documentos novos da execução. Imagens enviadas permanecem no armazenamento após a reversão. Pacotes JSON também registram perfis Visage e Metamorph para personagens criados no mesmo pacote quando os módulos opcionais estão ativos; os perfis não são aplicados automaticamente aos Tokens. Consulte [o guia do Executor](docs/MACRO-EXECUTOR.md).
 
-O Estúdio de Mapas revisa sugestões antes de criar cenas. Na Central, o Mestre também pode analisar e editar paredes, portas, luzes, sons e escuridão de cenas existentes, com prévia e histórico de desfazer compatível. Itens, classes e personagens usam documentos nativos D&D5e com modos simples e avançado. A Biblioteca oferece comandos gerenciados por categoria e execução conforme as permissões. Consulte [o guia da Central](docs/jarvis-console.md).
+A atualização 1.2.1 acrescenta calibração por pixels da imagem e geração automática de paredes/portas a partir de contornos informados no pacote, além da prévia sobreposta à própria arte. Um preset opcional configura visão limitada nos novos tokens. O módulo não identifica com certeza construções em qualquer imagem sem anotações geométricas. Veja o guia do Executor para o formato e as limitações.\n\nO Estúdio de Mapas revisa sugestões antes de criar cenas. Na Central, o Mestre também pode analisar e editar paredes, portas, luzes, sons e escuridão de cenas existentes, com prévia e histórico de desfazer compatível. Itens, classes e personagens usam documentos nativos D&D5e com modos simples e avançado. A Biblioteca oferece comandos gerenciados por categoria e execução conforme as permissões. Consulte [o guia da Central](docs/jarvis-console.md).
 
 Macro Script equivalente ao botão:
 
