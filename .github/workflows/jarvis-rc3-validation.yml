@@ -1,0 +1,26 @@
+name: Jarvis RC3 Fix Validation
+
+on:
+  push:
+    branches:
+      - feat/jarvis-rc3-audit
+    paths:
+      - .github/workflows/jarvis-rc3-validation.yml
+      - scripts/ui/**
+      - tests/console-input-guidance.test.js
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax check and complete regression suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          find scripts -name '*.js' -print0 | xargs -0 -n1 node --check
+          node --test tests/*.test.js
+          for schema in schemas/*.json; do jq -e . "$schema" >/dev/null; done
