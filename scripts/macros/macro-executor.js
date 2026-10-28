@@ -431,6 +431,7 @@ export function previewJarvisExecution(source, { mode = "auto", files = [] } = {
       doors: s.walls?.filter(w => ["door", "secret"].includes(w.type)).length ?? 0,
       positions: sceneGeometry[index].positions, pixels: sceneGeometry[index].pixels,
       backgroundSrc: sceneInputs[index].scene?.backgroundSrc ?? null,
+       imageTiles: sceneInputs[index].scene?.imageTiles ?? [],
       calibration: calibratedScenes[index].calibration
     })), itemAdditions: additions.map(x => ({ actor: x.actor, items: x.items.length })),
     appearanceProfiles: appearances.summaries, transformationProfiles: transformations.summaries,
@@ -735,6 +736,15 @@ export async function runJarvisExecution(plan, api) {
     try {
       const mapDimensions = {};
       for (const blueprint of payload.scenes ?? []) {
+        for (const tile of blueprint.scene?.imageTiles ?? []) {
+          const ref = String(tile.src ?? "");
+          if (!ref.startsWith("asset://")) continue;
+          const id = ref.slice(8), width = tile.pixelWidth, height = tile.pixelHeight;
+          if (mapDimensions[id] && (mapDimensions[id].width !== width || mapDimensions[id].height !== height)) {
+            throw new Error("Jarvis Executor: dimensões conflitantes para o setor de mapa " + id + ".");
+          }
+          mapDimensions[id] = { width, height };
+        }
         const src = String(blueprint.scene?.backgroundSrc ?? "");
         if (src.startsWith("asset://") && blueprint.scene?.imagePlacement) {
           const id = src.slice(8), { width, height } = blueprint.scene.imagePlacement;
