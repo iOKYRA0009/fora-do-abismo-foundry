@@ -427,7 +427,7 @@ function sceneOverlayMarkup(scene, plan, state, sceneIndex) {
     return `<g class="jarvis-map-light-radii" pointer-events="none">
         <circle cx="${light.x}" cy="${light.y}" r="${dimRadius}" fill="none" stroke="#f5cb4f" stroke-opacity="0.38" stroke-dasharray="7 7" stroke-width="3"/>
         <circle cx="${light.x}" cy="${light.y}" r="${brightRadius}" fill="#f5cb4f" fill-opacity="0.045" stroke="#f5cb4f" stroke-opacity="0.5" stroke-width="2"/>
-      </g><circle ${drag(kind,target)} cx="${light.x}" cy="${light.y}" r="${Math.max(9,gridSize*.18)}"`
+      </g><circle ${drag(kind,target)} cx="${light.x}" cy="${light.y}" r="${Math.max(9,gridSize*.18)}"
       fill="#f5cb4f" fill-opacity="0.8" stroke="#fff4c4" stroke-width="3"><title>Mover luz ${index+1}</title></circle>`;
   }).join("");
   const tokens = (pixels.tokens ?? []).map((token,index)=>
