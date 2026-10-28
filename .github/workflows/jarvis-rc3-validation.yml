@@ -7,7 +7,7 @@ on:
     paths:
       - .github/workflows/jarvis-rc3-validation.yml
       - scripts/ui/**
-      - tests/console-input-guidance.test.js
+      - "tests/*.test.js"
 
 permissions:
   contents: read
