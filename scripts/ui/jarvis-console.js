@@ -316,16 +316,36 @@ function advanced(title, body, open = false) {
 function clearExecutorObjectUrls(state) {
   for (const url of state.executorObjectUrls ?? []) globalThis.URL?.revokeObjectURL?.(url);
   state.executorObjectUrls = [];
+  state.executorAssetPreviewUrls = new Map();
 }
 
 function executorImageSource(image, plan, state) {
   const asset = plan.data?.assets?.find(row => row.id === image.id);
-  if (asset?.dataBase64 && /^image\/(?:png|jpeg|webp|gif)$/.test(asset.mimeType)) {
+  if (asset?.dataBase64 && /^image\\/(?:png|jpeg|webp|gif)$/.test(asset.mimeType)) {
+    // Blob URLs avoid megabytes of repeated base64 in preview HTML attributes.
+    const cached = state.executorAssetPreviewUrls?.get(asset.id);
+    if (cached) return cached;
+    if (globalThis.Blob && globalThis.URL?.createObjectURL && globalThis.atob) {
+      try {
+        const raw = atob(asset.dataBase64);
+        const bytes = new Uint8Array(raw.length);
+        for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+        const url = URL.createObjectURL(new Blob([bytes], { type: asset.mimeType }));
+        state.executorObjectUrls ??= [];
+        state.executorAssetPreviewUrls ??= new Map();
+        state.executorObjectUrls.push(url);
+        state.executorAssetPreviewUrls.set(asset.id, url);
+        return url;
+      } catch (error) {
+        console.warn("Jarvis: prévia de imagem por Blob não disponível", error);
+      }
+    }
     return `data:${asset.mimeType};base64,${asset.dataBase64}`;
   }
   const file = plan.files?.find(row => row.name === image.fileName);
   if (file && globalThis.URL?.createObjectURL) {
     const url = URL.createObjectURL(file);
+    state.executorObjectUrls ??= [];
     state.executorObjectUrls.push(url);
     return url;
   }
