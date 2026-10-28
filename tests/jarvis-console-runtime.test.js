@@ -73,6 +73,10 @@ test("DialogV2 installs console listeners after its first render", async () => {
   assert.match(dialog.config.content.innerHTML, /data-jarvis-global-search/);
   assert.match(dialog.config.content.innerHTML, /data-jarvis-action="diagnostics-capture-start"/);
   assert.match(dialog.config.content.innerHTML, /name="actor-image-file"/, "V9 import supports a local portrait inside Jarvis");
+  assert.match(dialog.config.content.innerHTML, /name="executor-source"/, "macro source editor available in Central");
+  assert.match(dialog.config.content.innerHTML, /data-jarvis-action="executor-preview"/);
+  assert.match(dialog.config.content.innerHTML, /data-jarvis-action="executor-run"/);
+  assert.match(dialog.config.content.innerHTML, /name="executor-files"/, "assets can be added with the macro");
   assert.equal(listeners.has("click"), false, "the DOM is not available until render finishes");
 
   await dialog.renderPromise;
