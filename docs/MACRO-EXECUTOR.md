@@ -167,6 +167,23 @@ Exemplo dentro de `scenes[0]`, mantendo o esquema `"schemaVersion":"1.0"` da cen
 
 ---
 
+## Ajuste visual antes da importação (1.2.2)
+
+A prévia do pacote agora contém **Ajustar mapa antes de criar**. Arraste com o mouse os elementos sobre a imagem:
+
+- **Construção (contorno laranja):** move a estrutura completa, mantendo largura, altura e posição relativa da porta. Uma luz explícita pertencente à estrutura acompanha o movimento.
+- **Luz (círculo amarelo):** move somente a fonte de luz. Luzes geradas pelo contorno podem ser reposicionadas independentemente.
+- **Token (quadrado verde):** move o token sem alterar seu tamanho.
+- **Parede avulsa (linha laranja) e seus extremos:** permite reposicionar segmentos que foram definidos diretamente em `walls`. Construções criadas a partir de `structures` devem ser arrastadas pelo seu contorno, para preservar o fechamento e a porta.
+
+**Fluxo recomendado:** carregue o JSON e as imagens → **Validar e visualizar** → arraste até alinhar → **Confirmar e executar**. Cada movimento gera um novo JSON e uma nova validação. Nada é escrito no mundo durante a edição da prévia.
+
+Use **Desfazer ajuste** para recuperar o movimento anterior (até 20 ações), ou **Baixar pacote ajustado** para salvar o JSON e reutilizá-lo sem precisar repetir os alinhamentos em outra sessão.
+
+A prévia não modifica cenas que já existem. A execução continua criando apenas novos documentos conforme as regras do Executor, com confirmação, histórico e reversão. Ajustar construções inteiras evita recalcular manualmente cada parede. O editor não faz reconhecimento automático de todas as paredes de uma imagem e não substitui o Estúdio de Mapas para edição de cenas existentes.
+
+---
+
 ## Segurança e limitações
 
 - **Atenção:** JS executa com as permissões do Mestre, pode alterar o mundo. Prévia exibe o código, mas não consegue prever alterações arbitrárias nem desfazê-las.
