@@ -346,6 +346,37 @@ function scenePositionMarkup(scene) {
     ${rows.length > 24 ? `<p class="jarvis-console-hint">Mais ${rows.length - 24} posição(ões) no pacote.</p>` : ""}</details>`;
 }
 
+function sceneOverlayMarkup(scene, plan, state) {
+  if (!scene.pixels || !(scene.pixels.width > 0 && scene.pixels.height > 0)) return "";
+  const { width, height, gridSize } = scene.pixels;
+  const marker = String(scene.backgroundSrc ?? "");
+  const id = marker.startsWith("asset://") ? marker.slice(8) : null;
+  const image = id ? plan.review?.images?.find(row => row.id === id) : null;
+  const src = image ? executorImageSource(image, plan, state) : "";
+  const pixels = scene.positions ?? {};
+  const walls = (pixels.walls ?? []).map(w => {
+    const stroke = ["door", "secret"].includes(w.type) ? "#5edbea" : "#fb9d54";
+    return `<line x1="${w.a[0]}" y1="${w.a[1]}" x2="${w.b[0]}" y2="${w.b[1]}" stroke="${stroke}" stroke-width="${Math.max(3, gridSize*0.065)}" stroke-linecap="round"/>`;
+  }).join("");
+  const lights = (pixels.lights ?? []).map(l =>
+    `<circle cx="${l.x}" cy="${l.y}" r="${Math.max(7,gridSize*0.18)}" fill="#f5cb4f" fill-opacity="0.7" stroke="#fff4c4" stroke-width="3"/>`
+  ).join("");
+  const tokens = (pixels.tokens ?? []).map(t =>
+    `<rect x="${t.x}" y="${t.y}" width="${(t.width ?? 1)*gridSize}" height="${(t.height ?? 1)*gridSize}" fill="#75d99b" fill-opacity="0.2" stroke="#75d99b" stroke-width="3"/>`
+  ).join("");
+  const source = src ? `<img src="${escapeHtml(src)}" alt="Mapa de ${escapeHtml(scene.name)}"/>`
+    : `<div class="jarvis-executor-map-missing">Mapa sem imagem incorporada para sobreposição.</div>`;
+  return `<details class="jarvis-executor-map-preview" open><summary>Mapa com paredes, luzes e tokens sobrepostos</summary>
+    <div class="jarvis-executor-map-frame">${source}
+      <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-label="Prévia do posicionamento das paredes, portas, luzes e tokens">
+        ${walls}${lights}${tokens}
+      </svg>
+    </div>
+    <p class="jarvis-console-hint">Laranja: paredes · azul: portas · amarelo: luzes · verde: tokens. A sobreposição usa as mesmas coordenadas que o Scene Builder.</p>
+    ${scene.calibration ? `<p class="jarvis-console-hint">Calibração por pixels: ${scene.calibration.source.width}×${scene.calibration.source.height} → ${width}×${height}; ${scene.calibration.structures} estrutura(s).</p>` : ""}
+  </details>`;
+}
+
 function renderExecutorPreview(root, state) {
   const host = root.querySelector("[data-jarvis-executor-preview]");
   if (!host) return;
@@ -394,7 +425,7 @@ function renderExecutorPreview(root, state) {
     <p class="jarvis-executor-success">Pacote validado. Confira o conteúdo antes de executar.</p>
     <div class="jarvis-executor-counts">${counter("personagem(ns)", actors.length)}${counter("cena(s)", scenes.length)}${counter("adição(ões) de itens", additions.length)}${counter("imagem(ns)", images.length)}${counter("parede(s)", counts.walls ?? scenes.reduce((sum, scene) => sum + Number(scene.walls ?? 0), 0))}${counter("token(s)", counts.tokens ?? scenes.reduce((sum, scene) => sum + Number(scene.tokens ?? 0), 0))}${counter("perfil(is) Visage", counts.appearanceProfiles ?? appearanceProfiles.length)}${counter("perfil(is) Metamorph", counts.transformationProfiles ?? transformationProfiles.length)}</div>
     ${actors.length ? `<h4>Personagens</h4><ul>${actors.map(actor => `<li>${escapeHtml(actor.name)} · ${Number(actor.items ?? 0)} item(ns), ${Number(actor.activities ?? 0)} atividade(s)</li>`).join("")}</ul>` : ""}
-    ${scenes.length ? `<h4>Cenas e posições</h4><ul>${scenes.map(scene => `<li>${escapeHtml(scene.name)} · ${Number(scene.walls ?? 0)} parede(s), ${Number(scene.lights ?? 0)} luz(es), ${Number(scene.sounds ?? 0)} som(ns), ${Number(scene.tokens ?? 0)} token(s)${scenePositionMarkup(scene)}</li>`).join("")}</ul>` : ""}
+    ${scenes.length ? `<h4>Cenas e posições</h4><ul>${scenes.map(scene => `<li>${escapeHtml(scene.name)} · ${Number(scene.walls ?? 0)} parede(s), ${Number(scene.lights ?? 0)} luz(es), ${Number(scene.sounds ?? 0)} som(ns), ${Number(scene.tokens ?? 0)} token(s)${sceneOverlayMarkup(scene, plan, state)}${scenePositionMarkup(scene)}</li>`).join("")}</ul>` : ""}
     ${additions.length ? `<h4>Itens em fichas</h4><ul>${additions.map(row => `<li>${escapeHtml(row.actor)} · ${Number(row.items ?? 0)} item(ns)</li>`).join("")}</ul>` : ""}
     ${appearanceProfiles.length ? `<h4>Perfis Visage</h4><p class="jarvis-console-hint">Serão registrados nos personagens novos, sem aplicar a aparência aos Tokens.</p><ul>${appearanceRows}</ul>${appearanceProfiles.length > 8 ? `<p class="jarvis-console-hint">Mais ${appearanceProfiles.length - 8} perfil(is) Visage no pacote.</p>` : ""}` : ""}
     ${transformationProfiles.length ? `<h4>Perfis Metamorph</h4><p class="jarvis-console-hint">Serão registrados nos personagens novos, sem transformar Tokens.</p><ul>${transformationRows}</ul>${transformationProfiles.length > 8 ? `<p class="jarvis-console-hint">Mais ${transformationProfiles.length - 8} perfil(is) Metamorph no pacote.</p>` : ""}` : ""}
