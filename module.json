@@ -2,8 +2,8 @@
   "id": "fora-do-abismo-foundry",
   "type": "module",
   "title": "Fora do Abismo — Jarvis Tools",
-  "description": "Jarvis Macro Executor para Foundry V14: JavaScript, pacotes JSON, personagens V9, itens, habilidades, ícones, cenas, paredes, luzes, tokens, skins e ferramentas de diagnóstico.",
-  "version": "1.2.0",
+  "description": "Jarvis Tools V14: Macro Executor 1.2.1 com calibração de cenas pela imagem, preview visual de paredes, portas, luzes e tokens, visão limitada opcional e imports V9.",
+  "version": "1.2.1",
   "authors": [
     {
       "name": "iOKYRA0009",
