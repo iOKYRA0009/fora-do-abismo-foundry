@@ -78,6 +78,33 @@ test("unified executor previews NPC, Item/Activity icons, walls, lights and toke
   assert.deepEqual(registry.scenes, []);
 });
 
+test("multi-megabyte embedded map base64 previews without JavaScript call stack overflow", () => {
+  setup();
+  // Valid PNG header plus a large payload makes a ~4.8 MB base64 field.
+  // This specifically reproduces the 1.2.2 stack overflow before decoding.
+  const bigBytes = Buffer.concat([
+    Buffer.from(PNG_1PX, "base64"),
+    Buffer.alloc(3_610_000, 0x5a)
+  ]);
+  const bigData = bigBytes.toString("base64");
+  const pkg = {
+    schemaVersion: EXECUTOR_VERSION,
+    name: "Mapa grande com base64",
+    assets: [{ id: "mapa", fileName: "mapa.png", mimeType: "image/png", dataBase64: bigData }],
+    scenes: [{ schemaVersion: "1.0",
+      scene: { name: "Cena grande", columns: 20, rows: 16, grid: { size: 100 },
+        visualMode: true, backgroundSrc: "asset://mapa" } }]
+  };
+  assert.ok(bigData.length > 4_800_000);
+  const plan = previewJarvisExecution(JSON.stringify(pkg));
+  assert.equal(plan.review.images.length, 1);
+  assert.equal(plan.review.images[0].size, bigBytes.length);
+  assert.equal(plan.review.scenes[0].name, "Cena grande");
+  // Invalid middle padding must still be rejected by the non-recursive validator.
+  pkg.assets[0].dataBase64 = "AQ=I";
+  assert.throws(() => previewJarvisExecution(JSON.stringify(pkg)), /base64 inválido/);
+});
+
 test("executor rejects missing images, duplicate NPCs, non-V9 payload and existing scenes before changing documents", () => {
   const registry = setup();
   const missing = packageData();
