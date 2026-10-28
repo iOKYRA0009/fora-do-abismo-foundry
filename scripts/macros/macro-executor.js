@@ -6,6 +6,13 @@ const IMAGE_TYPES = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "we
 const MAX_BYTES = 8 * 1024 * 1024;
 const MAX_TOTAL = 48 * 1024 * 1024;
 const DIRECTORY = "jarvis-executor-assets";
+const EXT_MIMES = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp", gif: "image/gif" };
+function mimeForFile(file) {
+  if (IMAGE_TYPES[file?.type]) return file.type;
+  const ext = String(file?.name ?? "").split(".").pop().toLowerCase();
+  return EXT_MIMES[ext] ?? "";
+}
+
 let activeExecution = false;
 
 function activeGM() {
@@ -38,7 +45,7 @@ function availableAssets(manifest, files) {
     }
     const file = matching[0];
     const bytes = embedded ? Math.ceil(String(asset.dataBase64).length * 0.75) : Number(file.size);
-    const mime = embedded ? asset.mimeType : file?.type;
+    const mime = embedded ? asset.mimeType : mimeForFile(file);
     if (!IMAGE_TYPES[mime] || !bytes || bytes > MAX_BYTES) {
       throw new Error(`Jarvis Executor: imagem '${asset.id}' deve ser PNG/JPG/WebP/GIF de até 8 MB.`);
     }
@@ -48,7 +55,7 @@ function availableAssets(manifest, files) {
     total += bytes;
   }
   if (total > MAX_TOTAL) throw new Error("Jarvis Executor: imagens ultrapassam o limite total de 48 MB.");
-  return manifest.map(asset => ({ id: asset.id, fileName: asset.fileName, mimeType: asset.mimeType ?? fileList.find(f=>f.name === asset.fileName)?.type, size: asset.dataBase64 ? Math.ceil(asset.dataBase64.length * 0.75) : fileList.find(f => f.name === asset.fileName)?.size }));
+  return manifest.map(asset => ({ id: asset.id, fileName: asset.fileName, mimeType: asset.mimeType ?? mimeForFile(fileList.find(f=>f.name === asset.fileName)), size: asset.dataBase64 ? Math.ceil(asset.dataBase64.length * 0.75) : fileList.find(f => f.name === asset.fileName)?.size }));
 }
 
 function findRefs(value, result = new Set()) {
@@ -180,9 +187,10 @@ async function uploadAssets(assets, files) {
     const file = asset.dataBase64
       ? new File([decodeBase64(asset.dataBase64)], asset.fileName ?? `${asset.id}.${IMAGE_TYPES[asset.mimeType]}`, { type: asset.mimeType })
       : files.find(f => f.name === asset.fileName);
-    const ext = IMAGE_TYPES[file.type];
+    const mime = asset.dataBase64 ? asset.mimeType : mimeForFile(file);
+    const ext = IMAGE_TYPES[mime];
     const name = `jarvis-${Date.now()}-${globalThis.foundry?.utils?.randomID?.(12) ?? Math.random().toString(36).slice(2)}.${ext}`;
-    const uploaded = await picker.upload("data", DIRECTORY, new File([file], name, { type: file.type }), {}, { notify: false });
+    const uploaded = await picker.upload("data", DIRECTORY, new File([file], name, { type: mime }), {}, { notify: false });
     if (uploaded?.error || uploaded?.success === false || typeof uploaded?.path !== "string"
       || !uploaded.path.startsWith(`${DIRECTORY}/`)) {
       throw new Error(`Jarvis Executor: upload não confirmado para imagem '${asset.id}'.`);
