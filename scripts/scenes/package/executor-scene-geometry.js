@@ -58,7 +58,7 @@ export function inspectExecutorSceneGeometry(blueprint) {
       errors.push(`${key} deve ser uma lista.`);
     }
   }
-  if (scene.visualMode && !scene.backgroundSrc && !scene.backgroundFallbackSrc) {
+  if (scene.visualMode && !scene.backgroundSrc && !scene.backgroundFallbackSrc && !scene.imageTiles?.length) {
     warnings.push("Cena visual sem imagem de fundo; confira o asset do mapa.");
   }
 
