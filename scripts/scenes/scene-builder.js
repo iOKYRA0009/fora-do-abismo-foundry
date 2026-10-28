@@ -281,6 +281,16 @@ async function buildTokenData(tokens = [], gridSize) {
     delete data._id;
     data.actorId = actor.id;
     data.actorLink = spec.actorLink ?? data.actorLink ?? false;
+    if (spec.vision !== undefined) {
+      if (!spec.vision || typeof spec.vision !== "object" || Array.isArray(spec.vision)
+        || typeof spec.vision.enabled !== "boolean"
+        || (spec.vision.range !== undefined && spec.vision.range !== null
+          && (!Number.isFinite(spec.vision.range) || spec.vision.range < 0))) {
+        throw new Error(`Jarvis Scene Builder: visão inválida para Token '${actor.name}'.`);
+      }
+      data.sight = { ...(data.sight ?? {}), enabled: spec.vision.enabled,
+        range: spec.vision.range ?? null };
+    }
     if (spec.width !== undefined) data.width = Number(spec.width);
     if (spec.height !== undefined) data.height = Number(spec.height);
     data.flags ??= {};
