@@ -32,7 +32,7 @@ test("drag cabin translates footprint and associated lantern without changing si
   assert.equal(cab.doors[0].center,0.25);
   assert.equal(cab.light.x,707);
   assert.equal(cab.light.y,525);
-  const converted=calibrateExecutorScene(revised).blueprint;
+  const converted=calibrateExecutorScene(revised.scenes[0]).blueprint;
   assert.equal(converted.walls.filter(w=>w.type==="door").length,1);
   assert.deepEqual(inspectExecutorSceneGeometry(converted).errors,[]);
 });
