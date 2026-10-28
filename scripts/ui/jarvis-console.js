@@ -2,6 +2,7 @@ import { getJarvisAccess, visibleJarvisTabs, assertJarvisAccess } from "./jarvis
 import { searchConsole } from "./console-search.js";
 import { TOOL_CATALOG } from "./console-tool-catalog.js";
 import { JarvisInputError } from "./console-input-error.js";
+import { importJarvisActorWithImage } from "./actor-import-with-image.js";
 import {
   loadConsolePreferences, recordConsoleRecent, setConsoleSidebarCollapsed,
   toggleConsoleFavorite
@@ -356,6 +357,8 @@ function renderContent() {
       <div class="jarvis-console-row">${button("actor-wizard-preview", "Pré-visualizar ficha")}${button("actor-create", "Confirmar criação")}</div>
       <h3>Importar ficha Jarvis V9</h3><p>JSON com <code>schemaVersion: "9.0"</code>, Actor, Items e Effects. O importador valida antes de criar.</p>
       <input name="actor-json-file" type="file" accept=".json,application/json"><textarea name="actor-json" rows="5" placeholder='{"schemaVersion":"9.0","actor":{"name":"Novo personagem","type":"character"},"items":[]}'></textarea>
+    <label>Retrato do NPC (opcional, PNG/JPG/WebP até 6 MB): <input name="actor-image-file" type="file" accept="image/png,image/jpeg,image/webp"></label>
+    <p class="jarvis-console-hint">O Jarvis envia o retrato para Dados do Usuário e define a imagem da ficha e do Token. O JSON V9 contém atributos, equipamentos, ataques e Effects.</p>
       <div class="jarvis-console-row">${button("actor-import", "Validar e importar")}${button("actor-progression", "Aplicar progressão da ficha")}${button("actor-compare", "Comparar JSON com a ficha")}</div>
       <h3>Manutenção da ficha</h3><div class="jarvis-console-row"><label>Regras alvo<select name="actor-rules-target"><option value="2024">D&D 2024</option><option value="2014">D&D 2014</option></select></label>
       ${button("actor-rules-set", "Salvar perfil de regras")}${button("actor-provenance-stamp", "Registrar origem dos Items")}${button("actor-jack-sync", "Sincronizar almas de Jack")}</div>` : ""}
@@ -625,7 +628,11 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
   if (action === "actor-import") {
     requireGM();
     const json = await fileOrText(root, "actor-json-file", "actor-json");
-    const actor = await jarvis.importer.importFromJson(json, { renderSheet: true });
+    const actor = await importJarvisActorWithImage(json, {
+      imageFile: field(root, "actor-image-file")?.files?.[0] ?? null,
+      importer: jarvis.importer,
+      renderSheet: true
+    });
     refreshActorOptions(root, actor.id);
     return setOutput(root, "Importação concluída", `${actor.name} foi criado.`);
   }
