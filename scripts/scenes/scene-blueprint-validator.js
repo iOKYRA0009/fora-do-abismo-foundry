@@ -1,4 +1,5 @@
 import { inspectWallGeometry } from "./scene-geometry.js";
+import { validateImageTiles } from "./package/multi-image-tiles.js";
 
 export class SceneBlueprintValidationError extends Error {
   constructor(message, details = []) {
@@ -60,6 +61,8 @@ export function validateSceneBlueprint(payload) {
     if (!isPositiveInteger(payload.scene.columns)) errors.push("scene.columns deve ser inteiro positivo.");
     if (!isPositiveInteger(payload.scene.rows)) errors.push("scene.rows deve ser inteiro positivo.");
 
+    try { validateImageTiles(payload.scene); }
+    catch (error) { errors.push(error.message); }
     const size = Number(payload.scene.grid?.size ?? 100);
     if (!Number.isInteger(size) || size < 50) errors.push("scene.grid.size deve ser inteiro >= 50 px.");
 
