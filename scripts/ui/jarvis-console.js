@@ -428,21 +428,48 @@ function sceneOverlayMarkup(scene, plan, state, sceneIndex) {
       fill="#75d99b" fill-opacity="0.22" stroke="#75d99b" stroke-width="3">
       <title>Mover token ${index+1}</title></rect>`
   ).join("");
-  const source = src ? `<img src="${escapeHtml(src)}" alt="Mapa de ${escapeHtml(scene.name)}"/>`
+  const tiles = sourceScene.scene?.imageTiles ?? [];
+  const area = sourceScene.scene?.imagePlacement;
+  const tileMarkup = tiles.map((tile, index) => {
+    const key = String(tile.src ?? "").startsWith("asset://") ? tile.src.slice(8) : null;
+    const asset = key ? plan.review?.images?.find(row => row.id === key) : null;
+    const tileSrc = asset ? executorImageSource(asset, plan, state) : "";
+    const rect = tile.rect;
+    if (!tileSrc || !area?.width || !area?.height || !Array.isArray(rect)) return "";
+    const [x, y, w, h] = rect;
+    return `<img class="jarvis-map-sector" src="${escapeHtml(tileSrc)}" alt="Setor ${index + 1}" loading="lazy"
+      style="left:${100*x/area.width}%;top:${100*y/area.height}%;width:${100*w/area.width}%;height:${100*h/area.height}%"/>`;
+  }).join("");
+  const source = tiles.length ? tileMarkup
+    : src ? `<img class="jarvis-map-sector" src="${escapeHtml(src)}" alt="Mapa de ${escapeHtml(scene.name)}"
+        style="left:0;top:0;width:100%;height:100%"/>`
     : `<div class="jarvis-executor-map-missing">Sem imagem incorporada. Use os indicadores por coordenadas.</div>`;
-  return `<details class="jarvis-executor-map-preview" open><summary>Ajustar mapa antes de criar</summary>
-    <p class="jarvis-console-hint"><strong>Arraste</strong> paredes, construções, luzes ou tokens. As coordenadas são recalculadas automaticamente ao soltar. Nenhuma mudança é feita no mundo até confirmar a execução.</p>
-    <div class="jarvis-executor-map-frame">${source}
-      <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" data-jarvis-map-svg aria-label="Mapa editável com paredes, portas, luzes e tokens">
-        ${baseWalls}${structures}${lights}${tokens}
-      </svg>
+  const zoom = Math.max(1, Math.min(6, Number(state.executorMapZoom ?? 1)));
+  const panning = state.executorMapPanEnabled === true;
+  return `<details class="jarvis-executor-map-preview" open><summary>Ajustar mapa antes de criar (${tiles.length || (src ? 1 : 0)} setor(es))</summary>
+    <p class="jarvis-console-hint">Use <strong>Zoom</strong> para examinar paredes, portas e luzes. Ative <strong>Mover tela</strong> para arrastar o mapa sem alterar a geometria. Desative para arrastar os elementos. Os ajustes só serão criados após confirmar.</p>
+    <div class="jarvis-console-row jarvis-map-controls">
+      <button type="button" data-jarvis-map-zoom="-1" data-jarvis-scene-index="${sceneIndex}">− Zoom</button>
+      <button type="button" data-jarvis-map-zoom="1" data-jarvis-scene-index="${sceneIndex}">+ Zoom</button>
+      <button type="button" data-jarvis-map-zoom="fit" data-jarvis-scene-index="${sceneIndex}">Encaixar</button>
+      <button type="button" data-jarvis-map-pan-toggle aria-pressed="${panning}">${panning ? "✓ Mover tela" : "Mover tela"}</button>
+      <span data-jarvis-map-zoom-label>${Math.round(zoom*100)}%</span>
+    </div>
+    <div class="jarvis-executor-map-viewport" data-jarvis-map-viewport data-jarvis-scene-index="${sceneIndex}"
+      data-jarvis-map-pan-active="${panning}" tabindex="0" aria-label="Mapa com zoom e rolagem">
+      <div class="jarvis-executor-map-frame" data-jarvis-map-stage style="width:${zoom*100}%;aspect-ratio:${width}/${height}">
+        ${source}
+        <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" data-jarvis-map-svg aria-label="Mapa editável com paredes, portas, luzes e tokens">
+          ${baseWalls}${structures}${lights}${tokens}
+        </svg>
+      </div>
     </div>
     <div class="jarvis-console-row">
       <button type="button" data-jarvis-map-undo>Desfazer ajuste</button>
       <button type="button" data-jarvis-map-export>Baixar pacote ajustado</button>
     </div>
-    <p class="jarvis-console-hint">Laranja: paredes e construções · azul: portas · amarelo: luzes · verde: tokens. Selecione e arraste sem alterar as dimensões da cabana.</p>
-    ${scene.calibration ? `<p class="jarvis-console-hint">Calibrado: ${scene.calibration.source.width}×${scene.calibration.source.height} → ${width}×${height} pixels.</p>` : ""}
+    <p class="jarvis-console-hint">Laranja: paredes · azul: portas · amarelo: luzes · verde: tokens. A prévia permite examinar a geometria, mas não simula a visão de um jogador dentro do Foundry.</p>
+    ${scene.calibration ? `<p class="jarvis-console-hint">Atlas: ${scene.calibration.source.width}×${scene.calibration.source.height} → cena ${width}×${height} pixels.</p>` : ""}
   </details>`;
 }
 function renderExecutorPreview(root, state) {
