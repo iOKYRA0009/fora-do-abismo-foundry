@@ -1,6 +1,7 @@
 import { validateJarvisActorPayload } from "../importer/validators/payload-validator.js";
 import { validateSceneBlueprint } from "../scenes/scene-blueprint-validator.js";
 import { inspectExecutorSceneGeometry } from "../scenes/package/executor-scene-geometry.js";
+import { calibrateExecutorScene } from "../scenes/package/scene-calibration.js";
 import { getAppearanceStatus } from "../integrations/visage-bridge.js";
 import { getTransformationStatus } from "../integrations/metamorph-bridge.js";
 
@@ -328,7 +329,9 @@ export function previewJarvisExecution(source, { mode = "auto", files = [] } = {
     }
   }
   const actors = list(pkg.actors, "actors", 20);
-  const scenes = list(pkg.scenes, "scenes", 10);
+  const sceneInputs = list(pkg.scenes, "scenes", 10);
+  const calibratedScenes = sceneInputs.map(calibrateExecutorScene);
+  const scenes = calibratedScenes.map(row => row.blueprint);
   const additions = list(pkg.itemAdditions, "itemAdditions", 30);
   const assets = list(pkg.assets, "assets", 40);
   const appearanceProfiles = list(pkg.appearanceProfiles, "appearanceProfiles", 40);
@@ -422,7 +425,9 @@ export function previewJarvisExecution(source, { mode = "auto", files = [] } = {
       name: s.scene.name, walls: s.walls?.length ?? 0, lights: s.lights?.length ?? 0,
       sounds: s.sounds?.length ?? 0, tokens: s.tokens?.length ?? 0,
       doors: s.walls?.filter(w => ["door", "secret"].includes(w.type)).length ?? 0,
-      positions: sceneGeometry[index].positions, pixels: sceneGeometry[index].pixels
+      positions: sceneGeometry[index].positions, pixels: sceneGeometry[index].pixels,
+      backgroundSrc: sceneInputs[index].scene?.backgroundSrc ?? null,
+      calibration: calibratedScenes[index].calibration
     })), itemAdditions: additions.map(x => ({ actor: x.actor, items: x.items.length })),
     appearanceProfiles: appearances.summaries, transformationProfiles: transformations.summaries,
     integrations: {
@@ -754,7 +759,8 @@ export async function runJarvisExecution(plan, api) {
           { hpMode: profile.hpMode ?? "keep-original", label: profile.label ?? null });
         await modifyHistory(executionId, ledgerSnapshot(createdActors, createdScenes, addedItems, images));
       }
-      for (const blueprint of resolved.scenes ?? []) {
+      for (const originalBlueprint of resolved.scenes ?? []) {
+        const blueprint = calibrateExecutorScene(originalBlueprint).blueprint;
         operation = `criação da cena '${blueprint.scene.name}'`;
         const result = await api.scenes.build(stampScene(blueprint, executionId), {
           replaceExisting: false, activate: false, view: false, allowMissingActors: false
