@@ -115,3 +115,13 @@ test("Scene Builder creates precisely three native background tiles and common w
   assert.equal(embedded.AmbientLight[0].x,512);
   assert.equal(embedded.AmbientLight[0].y,3000);
 });
+
+test("decoded pixel budget prevents an unexpectedly huge four-tile Scene", () => {
+  const m = mosaic(4);
+  m.scene.columns = 32; m.scene.rows = 96;
+  m.scene.imagePlacement.height = 12288;
+  for (const [i,t] of m.scene.imageTiles.entries()) {
+    t.rect=[0,i*3072,4096,3072]; t.pixelHeight=3072;
+  }
+  assert.throws(() => validateImageTiles(m.scene,{sourcePixels:true}), /48 milhões de pixels/);
+});
