@@ -1,6 +1,7 @@
 import { JarvisImporterV9 } from "./importer/v9/jarvis-importer-v9.js";
 import { registerHybridFeatureLayout } from "./ui/hybrid-features.js";
 import { registerMacroFileDrop } from "./ui/macro-file-drop.js";
+import { previewJarvisExecution, runJarvisExecution, EXECUTOR_VERSION } from "./macros/macro-executor.js";
 import { openJarvisConsole, registerJarvisConsoleControl } from "./ui/jarvis-console.js";
 import { openUniversalVttImporter, registerUniversalVttControl } from "./ui/universal-vtt-importer.js";
 import { openMapStudio, registerMapStudioControl } from "./ui/map-studio.js";
@@ -140,6 +141,11 @@ Hooks.once("ready", runtimeCapture.guard("initialization", "ready", () => {
   const api = {
     ui: { open: openJarvisConsole },
     importer: new JarvisImporterV9(),
+    executor: {
+      version: EXECUTOR_VERSION,
+      preview: (source, options = {}) => previewJarvisExecution(source, options),
+      run: plan => runJarvisExecution(plan, game.modules.get(MODULE_ID)?.api)
+    },
     content: { templates: contentTemplates, itemTypes: contentItemTypes,
       preview: previewContent, create: createContent },
     macros: {
