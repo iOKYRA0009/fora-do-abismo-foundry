@@ -184,6 +184,14 @@ A prévia não modifica cenas que já existem. A execução continua criando ape
 
 ---
 
+## Mapas grandes com imagem incorporada (1.2.3)
+
+O validador do Executor usa verificação de base64 sem repetição recursiva de grupos, para evitar `Maximum call stack size exceeded` ao analisar imagens grandes incorporadas ao JSON. A prévia usa URLs temporárias de Blob quando o navegador oferece esse recurso, evitando copiar megabytes de base64 várias vezes para o HTML.
+
+A matriz oficial de mapas e os esquemas `jarvis-executor-1`, `1.0` e Actor V9 permanecem inalterados. O pacote único de mapa, paredes, luzes e tokens continua válido, respeitando os limites de tamanho por imagem e pacote.
+
+---
+
 ## Segurança e limitações
 
 - **Atenção:** JS executa com as permissões do Mestre, pode alterar o mundo. Prévia exibe o código, mas não consegue prever alterações arbitrárias nem desfazê-las.
