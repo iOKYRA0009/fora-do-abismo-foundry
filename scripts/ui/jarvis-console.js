@@ -356,7 +356,7 @@ function sceneOverlayMarkup(scene, plan, state, sceneIndex) {
   const src = image ? executorImageSource(image, plan, state) : "";
   const sourceScene = plan.data?.scenes?.[sceneIndex] ?? {};
   const pixels = scene.positions ?? {};
-  const baseWallCount = sourceScene.walls?.length ?? 0;
+  const baseWallCount = sourceScene.walls?.length ?? (sourceScene.scene ? 0 : pixels.walls?.length ?? 0);
   const originalWidth = sourceScene.scene?.imagePlacement?.width ?? sourceScene.scene?.columns;
   const originalHeight = sourceScene.scene?.imagePlacement?.height ?? sourceScene.scene?.rows;
   const toX = value => Number(value) * width / originalWidth;
