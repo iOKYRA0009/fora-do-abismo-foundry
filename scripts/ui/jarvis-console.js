@@ -483,6 +483,10 @@ function sceneOverlayMarkup(scene, plan, state, sceneIndex) {
       <button type="button" data-jarvis-map-grid-toggle aria-pressed="${showGrid}">${showGrid ? "✓ Grid" : "Mostrar grid"}</button>
       <span data-jarvis-map-zoom-label>${Math.round(zoom*100)}%</span>
     </div>
+    ${qa.sectors.length ? `<div class="jarvis-console-row jarvis-map-focus-controls">
+      <small>Focar setor:</small>${qa.sectors.map(sector => `<button type="button" data-jarvis-map-focus="${sector.index}"
+        data-jarvis-scene-index="${sceneIndex}" title="Centralizar este setor da arte">${escapeHtml(sector.name)}</button>`).join("")}
+      </div>` : ""}
     <div class="jarvis-executor-map-viewport" data-jarvis-map-viewport data-jarvis-scene-index="${sceneIndex}"
       data-jarvis-map-pan-active="${panning}" tabindex="0" aria-label="Mapa com zoom e rolagem">
       <div class="jarvis-executor-map-frame" data-jarvis-map-stage style="width:${zoom*100}%;aspect-ratio:${width}/${height}">
@@ -1708,6 +1712,23 @@ function queueGlobalSearch(root, state) {
 }
 
 async function handleNavigationClick(event, root, state) {
+  const focus = event.target?.closest?.("[data-jarvis-map-focus]");
+  if (focus) {
+    const sceneIndex=Number(focus.dataset.jarvisSceneIndex);
+    const sectorIndex=Number(focus.dataset.jarvisMapFocus);
+    const sourceScene=state.executorPreview?.plan?.data?.scenes?.[sceneIndex];
+    const tile=sourceScene?.scene?.imageTiles?.[sectorIndex];
+    const rect=tile?.rect, area=sourceScene?.scene?.imagePlacement;
+    const panel=focus.closest(".jarvis-executor-map-preview");
+    const viewport=panel?.querySelector("[data-jarvis-map-viewport]");
+    const stage=panel?.querySelector("[data-jarvis-map-stage]");
+    if (!viewport || !stage || !Array.isArray(rect) || !area?.width || !area?.height) return true;
+    viewport.scrollLeft=(rect[0]+rect[2]/2)*stage.clientWidth/area.width-viewport.clientWidth/2;
+    viewport.scrollTop=(rect[1]+rect[3]/2)*stage.clientHeight/area.height-viewport.clientHeight/2;
+    (state.executorMapScroll ??= {})[viewport.dataset.jarvisSceneIndex] =
+      {left:viewport.scrollLeft,top:viewport.scrollTop};
+    return true;
+  }
   const zoomControl = event.target?.closest?.("[data-jarvis-map-zoom]");
   if (zoomControl) {
     const panel = zoomControl.closest(".jarvis-executor-map-preview");
