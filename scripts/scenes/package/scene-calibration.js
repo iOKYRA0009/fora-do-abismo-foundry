@@ -107,6 +107,17 @@ export function calibrateExecutorScene(input) {
     if (result[key] !== undefined && !Array.isArray(result[key])) fail(`${key} deve ser uma lista.`);
     if (result[key]) result[key] = result[key].map((v, i) => convertXY(v, `${key}[${i}]`));
   }
+  if (scene.visionPreset !== undefined) {
+    if (scene.visionPreset !== "limited") fail("scene.visionPreset aceita apenas 'limited'.");
+    scene.tokenVision = true;
+    scene.environment ??= {};
+    scene.environment.globalLight ??= { enabled: false };
+    // This changes only newly created tokens in packages opting into limited vision.
+    result.tokens = (result.tokens ?? []).map(token => ({
+      ...token,
+      vision: token.vision ?? { enabled: true, range: 60 }
+    }));
+  }
   delete result.structures;
   // Source metadata is diagnostic, not a Foundry Scene document property.
   delete result.scene.imagePlacement;
