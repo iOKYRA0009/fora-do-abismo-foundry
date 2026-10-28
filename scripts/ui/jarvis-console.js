@@ -526,6 +526,10 @@ function renderExecutorPreview(root, state) {
     ${transformationProfiles.length ? `<h4>Perfis Metamorph</h4><p class="jarvis-console-hint">Serão registrados nos personagens novos, sem transformar Tokens.</p><ul>${transformationRows}</ul>${transformationProfiles.length > 8 ? `<p class="jarvis-console-hint">Mais ${transformationProfiles.length - 8} perfil(is) Metamorph no pacote.</p>` : ""}` : ""}
     ${images.length ? `<h4>Imagens</h4><ul class="jarvis-executor-images">${imageRows}</ul>${images.length > 8 ? `<p class="jarvis-console-hint">Mais ${images.length - 8} imagem(ns) no pacote.</p>` : ""}` : ""}
     ${issues}`;
+  for (const viewport of host.querySelectorAll("[data-jarvis-map-viewport]")) {
+    const last = state.executorMapScroll?.[viewport.dataset.jarvisSceneIndex];
+    if (last) { viewport.scrollLeft = last.left; viewport.scrollTop = last.top; }
+  }
 }
 
 function renderExecutorHistory(root, rows) {
@@ -1629,6 +1633,35 @@ function queueGlobalSearch(root, state) {
 }
 
 async function handleNavigationClick(event, root, state) {
+  const zoomControl = event.target?.closest?.("[data-jarvis-map-zoom]");
+  if (zoomControl) {
+    const panel = zoomControl.closest(".jarvis-executor-map-preview");
+    const viewport = panel?.querySelector("[data-jarvis-map-viewport]");
+    const stage = panel?.querySelector("[data-jarvis-map-stage]");
+    if (!viewport || !stage) return true;
+    const before = Math.max(1, Number(state.executorMapZoom ?? 1));
+    const direction = zoomControl.dataset.jarvisMapZoom;
+    const after = direction === "fit" ? 1 : Math.max(1, Math.min(6,
+      Number((before + (direction === "1" ? 0.5 : -0.5)).toFixed(2))));
+    state.executorMapZoom = after;
+    stage.style.width = (after * 100) + "%";
+    viewport.scrollLeft = (viewport.scrollLeft + viewport.clientWidth / 2) * after / before - viewport.clientWidth / 2;
+    viewport.scrollTop = (viewport.scrollTop + viewport.clientHeight / 2) * after / before - viewport.clientHeight / 2;
+    panel.querySelector("[data-jarvis-map-zoom-label]").textContent = Math.round(after * 100) + "%";
+    (state.executorMapScroll ??= {})[viewport.dataset.jarvisSceneIndex] = { left: viewport.scrollLeft, top: viewport.scrollTop };
+    return true;
+  }
+  if (event.target?.closest?.("[data-jarvis-map-pan-toggle]")) {
+    state.executorMapPanEnabled = !state.executorMapPanEnabled;
+    for (const viewport of root.querySelectorAll("[data-jarvis-map-viewport]")) {
+      viewport.dataset.jarvisMapPanActive = String(state.executorMapPanEnabled);
+    }
+    for (const button of root.querySelectorAll("[data-jarvis-map-pan-toggle]")) {
+      button.textContent = state.executorMapPanEnabled ? "✓ Mover tela" : "Mover tela";
+      button.setAttribute("aria-pressed", String(state.executorMapPanEnabled));
+    }
+    return true;
+  }
   if (event.target?.closest?.("[data-jarvis-map-undo]")) {
     const previous=state.executorMapUndo?.at(-1);
     if (previous) {
@@ -1716,6 +1749,10 @@ async function setExecutorFiles(root, state, files) {
   if (display) display.textContent = files.length ? files.map(f => f.name).join(" · ") : "Sem arquivos selecionados.";
 }
 function updateExecutorMapSource(root, state, source, { remember = true } = {}) {
+  for (const viewport of root.querySelectorAll("[data-jarvis-map-viewport]")) {
+    (state.executorMapScroll ??= {})[viewport.dataset.jarvisSceneIndex] =
+      { left: viewport.scrollLeft, top: viewport.scrollTop };
+  }
   const previous = fieldValue(root, "executor-source");
   const mode = fieldValue(root, "executor-mode") || "auto";
   const files = state.executorFiles ?? Array.from(field(root, "executor-files")?.files ?? []);
@@ -1741,7 +1778,36 @@ function mapPointerPosition(event, drag) {
   };
 }
 
+function beginExecutorMapPan(event, state) {
+  if (!state.executorMapPanEnabled || event.button !== 0) return false;
+  const viewport = event.target?.closest?.("[data-jarvis-map-viewport]");
+  if (!viewport) return false;
+  state.executorMapPanning = {
+    viewport, id: event.pointerId, x: event.clientX, y: event.clientY,
+    left: viewport.scrollLeft, top: viewport.scrollTop
+  };
+  viewport.setPointerCapture?.(event.pointerId);
+  event.preventDefault();
+  return true;
+}
+function moveExecutorMapPan(event, state) {
+  const p = state.executorMapPanning;
+  if (!p || p.id !== event.pointerId) return false;
+  p.viewport.scrollLeft = p.left - (event.clientX - p.x);
+  p.viewport.scrollTop = p.top - (event.clientY - p.y);
+  event.preventDefault();
+  return true;
+}
+function endExecutorMapPan(event, state) {
+  const p = state.executorMapPanning;
+  if (!p || p.id !== event.pointerId) return false;
+  (state.executorMapScroll ??= {})[p.viewport.dataset.jarvisSceneIndex] =
+    { left: p.viewport.scrollLeft, top: p.viewport.scrollTop };
+  state.executorMapPanning = null;
+  return true;
+}
 function beginExecutorMapDrag(event, state) {
+  if (state.executorMapPanEnabled) return false;
   const target=event.target?.closest?.("[data-jarvis-map-drag]");
   if (!target || event.button !== 0 || !game.user?.isGM || state.executorPreview?.plan?.kind !== "package") return false;
   const svg=target.closest("[data-jarvis-map-svg]");
@@ -1856,10 +1922,10 @@ function bindDialog(dialog, state) {
       }
     } finally { control.disabled = false; control.removeAttribute?.("aria-busy"); }
   });
-  root.addEventListener("pointerdown", event => { beginExecutorMapDrag(event,state); });
-  root.addEventListener("pointermove", event => { updateExecutorMapDrag(event,state); });
-  root.addEventListener("pointerup", event => { finishExecutorMapDrag(event,root,state); });
-  root.addEventListener("pointercancel", event => { finishExecutorMapDrag(event,root,state,{cancel:true}); });
+  root.addEventListener("pointerdown", event => { if (!beginExecutorMapPan(event,state)) beginExecutorMapDrag(event,state); });
+  root.addEventListener("pointermove", event => { if (!moveExecutorMapPan(event,state)) updateExecutorMapDrag(event,state); });
+  root.addEventListener("pointerup", event => { if (!endExecutorMapPan(event,state)) finishExecutorMapDrag(event,root,state); });
+  root.addEventListener("pointercancel", event => { if (!endExecutorMapPan(event,state)) finishExecutorMapDrag(event,root,state,{cancel:true}); });
     root.addEventListener("drop", async event => {
     if (!event.target?.closest?.("[data-jarvis-executor-drop]")) return;
     event.preventDefault();
