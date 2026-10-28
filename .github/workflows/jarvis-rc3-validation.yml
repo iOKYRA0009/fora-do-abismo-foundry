@@ -1,4 +1,4 @@
-name: Jarvis RC3 Fix Validation
+name: Jarvis Candidate Validation
 
 on:
   push:
@@ -6,8 +6,11 @@ on:
       - feat/jarvis-rc3-audit
     paths:
       - .github/workflows/jarvis-rc3-validation.yml
-      - scripts/ui/**
-      - "tests/*.test.js"
+      - 'scripts/**'
+      - 'tests/**'
+      - 'styles/**'
+      - 'docs/**'
+      - 'module.json'
 
 permissions:
   contents: read
