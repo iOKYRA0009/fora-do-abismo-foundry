@@ -130,6 +130,43 @@ Adicione `appearanceProfiles` e/ou `transformationProfiles` no **objeto raiz** d
 
 `mode` aceita `identity` (padrão) ou `overlay`. `hpMode` aceita `independent`, `keep-original` (padrão), `absolute` ou `percent`. Cada lista aceita até 40 entradas. A prévia mostra os contadores, o personagem, a chave e o alvo de cada perfil. Visage/Metamorph precisam estar ativos e com API disponível para validar e importar seus respectivos perfis. A execução **apenas registra** os perfis nos personagens novos: não aplica skins, não transforma Tokens e não altera o Actor usado como `targetActor`. Na reversão de um pacote, os perfis desaparecem junto com os personagens novos removidos.
 
+## Calibração de mapas e posicionamento automático (1.2.1)
+
+Para novas cenas, o Executor pode receber uma geometria **marcada em pixels da própria imagem**, sem exigir que o Mestre desenhe paredes ou luzes no Foundry. O criador do pacote (por exemplo, o ChatGPT) identifica na arte o contorno de uma construção e a posição das tochas; o Jarvis **calcula a escala e cria a geometria nativa**.
+
+Exemplo dentro de `scenes[0]`, mantendo o esquema `"schemaVersion":"1.0"` da cena e o esquema raiz `"jarvis-executor-1"`:
+
+```json
+{
+  "schemaVersion": "1.0",
+  "scene": {
+    "name": "TESTE - Cabana calibrada",
+    "columns": 25, "rows": 20,
+    "grid": { "size": 64, "distance": 5, "units": "ft" },
+    "visualMode": true, "backgroundSrc": "asset://floresta",
+    "imagePlacement": { "width": 1600, "height": 1280 },
+    "visionPreset": "limited",
+    "environment": { "darknessLevel": 0.65 }
+  },
+  "structures": [{
+    "name": "Cabana de madeira",
+    "rect": [638, 235, 350, 378],
+    "doors": [{ "edge": 3, "center": 0.25, "width": 76 }],
+    "light": { "x": 675, "y": 509, "bright": 10, "dim": 20 }
+  }],
+  "lights": [{ "x": 1073, "y": 911, "bright": 10, "dim": 25 }],
+  "tokens": [{ "actor": "Goblin de Teste", "x": 400, "y": 280, "vision": { "enabled": true, "range": 60 } }]
+}
+```
+
+**Como funciona:** `scene.imagePlacement` determina as dimensões reais da arte. Coordenadas de `walls`, `lights`, `sounds` e `tokens` passam a representar pixels da imagem; o executor converte tudo para células da cena e mostra na prévia sobre a própria imagem. As construções em `structures` podem usar `rect:[x,y,largura,altura]` ou `outline:[[x,y],...]`, além de portas `{edge,center,width}`. A numeração de `edge` começa em zero e acompanha os cantos do contorno, fechando o último no primeiro. `center` é a fração da parede (0 a 1), `width` é a largura da porta em pixels. O Jarvis divide a parede correspondente em dois trechos e uma porta nativa.
+
+`visionPreset:"limited"` habilita visão por token e aplica alcance padrão de 60 pés, salvo quando `token.vision` especifica outro alcance. Isso só afeta **novas cenas** que optem pelo modo calibrado. O Mestre ainda pode enxergar o mapa inteiro por privilégios GM; valide também com um usuário de jogador.
+
+**Limitação importante:** esta função não é inteligência visual genérica que descobre sozinha portas e paredes em qualquer pintura. **Alguém precisa identificar os contornos no pacote**; o Jarvis passa a calcular, conferir e instalar a geometria sem ações manuais no Foundry. A prévia ilustrada ajuda a identificar qualquer erro antes de confirmar. O importador recusa proporções incompatíveis e verifica as dimensões reais do bitmap quando o navegador pode decodificá-lo.
+
+---
+
 ## Segurança e limitações
 
 - **Atenção:** JS executa com as permissões do Mestre, pode alterar o mundo. Prévia exibe o código, mas não consegue prever alterações arbitrárias nem desfazê-las.
