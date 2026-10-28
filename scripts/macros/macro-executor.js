@@ -466,7 +466,7 @@ function decodeBase64(base64) {
   for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
   return bytes;
 }
-async function uploadAssets(assets, files) {
+async function uploadAssets(assets, files, expectedDimensions = {}) {
   if (!assets.length) return {};
   const picker = pickerClass();
   if (!picker?.upload || !picker?.browse || !picker?.createDirectory) throw new Error("Jarvis Executor: FilePicker V14 indisponível para imagens.");
@@ -488,8 +488,17 @@ async function uploadAssets(assets, files) {
       try {
         const bitmap = await globalThis.createImageBitmap(new Blob([bytes], { type: mime }));
         if (!bitmap.width || !bitmap.height) throw new Error("dimensões vazias");
+        const expected = expectedDimensions[asset.id];
+        if (expected && (bitmap.width !== expected.width || bitmap.height !== expected.height)) {
+          const message = `mapa '${asset.id}' tem ${bitmap.width}×${bitmap.height} pixels, mas o pacote declarou ${expected.width}×${expected.height}. Corrija o pacote antes de importar.`;
+          bitmap.close?.();
+          throw new Error(message);
+        }
         bitmap.close?.();
-      } catch { throw new Error(`Jarvis Executor: o Foundry não consegue decodificar a imagem '${asset.id}'.`); }
+      } catch (error) {
+        if (error.message?.startsWith("mapa '")) throw new Error(`Jarvis Executor: ${error.message}`);
+        throw new Error(`Jarvis Executor: o Foundry não consegue decodificar a imagem '${asset.id}'.`);
+      }
     }
     prepared.push({ asset, mime, bytes });
   }
@@ -720,7 +729,18 @@ export async function runJarvisExecution(plan, api) {
       name: String(payload.name ?? "Pacote Jarvis"), status: "running", actors: [], scenes: [], items: [], images: {},
       message: "Importação iniciada; documentos novos serão rastreados." }, ...entries]);
     try {
-      images = await uploadAssets(payload.assets ?? [], plan.files);
+      const mapDimensions = {};
+      for (const blueprint of payload.scenes ?? []) {
+        const src = String(blueprint.scene?.backgroundSrc ?? "");
+        if (src.startsWith("asset://") && blueprint.scene?.imagePlacement) {
+          const id = src.slice(8), { width, height } = blueprint.scene.imagePlacement;
+          if (mapDimensions[id] && (mapDimensions[id].width !== width || mapDimensions[id].height !== height)) {
+            throw new Error(`Jarvis Executor: dimensões conflitantes para o mapa '${id}'.`);
+          }
+          mapDimensions[id] = { width, height };
+        }
+      }
+      images = await uploadAssets(payload.assets ?? [], plan.files, mapDimensions);
       await modifyHistory(executionId, { images: { ...images } });
       const resolved = replaceRefs(payload, images);
       for (const actorPayload of resolved.actors ?? []) {
