@@ -14,7 +14,13 @@ function root(fields = {}) {
 
 function setup(actors = []) {
   let previews = 0;
-  const api = { content: { preview() { previews += 1; throw new Error("Unexpected content preview"); } } };
+  const api = {
+    content: {
+      preview() { previews += 1; throw new Error("Unexpected content preview"); },
+      async create() { throw new Error("Unexpected document creation"); }
+    },
+    appearance: { async getAvailable() { throw new Error("Unexpected appearance lookup"); } }
+  };
   globalThis.game = {
     user: { id: "gm", isGM: true, role: 4 },
     actors: { contents: actors, get: id => actors.find(actor => actor.id === id) ?? null },
