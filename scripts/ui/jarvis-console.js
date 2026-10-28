@@ -657,6 +657,15 @@ function renderContent() {
     <div class="jarvis-console-row">${button("map-template-preview", "Prévia do template")}${button("map-template-create", "Criar cena")}${button("map-skin-apply", "Aplicar skin à cena atual")}</div>
     <h3>Presets prontos</h3><div class="jarvis-console-row"><label>Preset<select name="map-preset">${options(presets, item => item.name)}</select></label>${button("map-preset-preview", "Prévia")}${button("map-preset-create", "Criar preset")}</div>
     <h3>Luz da cena atual</h3><div class="jarvis-console-row"><label>Ambiente<select name="map-lighting">${options(lighting)}</select></label>${button("map-lighting-apply", "Aplicar ambiente")}</div>
+    <h3>Diretor de Atmosfera · horror e cerimônia</h3>
+    <p>Três estados originais de clima. A prévia não altera a cena; aplicar muda somente escuridão e cor de fundo. Restaurar devolve os valores anteriores nesta sessão do navegador.</p>
+    <div class="jarvis-console-row"><label>Estado<select name="director-cue">${options(jarvis.scenes.director?.list?.() ?? [])}</select></label>
+    ${button("director-preview","Prévia do clima")}${button("director-apply","Aplicar clima")}${button("director-restore","Restaurar ambiente")}</div>
+    <h3>Registro de Produção · versão da Scene</h3>
+    <p>Snapshot local das imagens, paredes, portas, luzes e sons. Não inclui Tokens nem Actors; não modifica o mundo. Salve antes de mexer na Scene e compare depois.</p>
+    <div class="jarvis-console-row">${button("production-capture","Capturar e baixar JSON")}
+    <label>Comparar com snapshot salvo<input type="file" name="production-snapshot-file" accept=".json,application/json"></label>
+    ${button("production-compare","Comparar versão")}</div>
     <h3>Editar parede, luz ou som da cena atual</h3><p>Para alterar ou remover, informe o ID do documento nativo. A prévia mostra o estado anterior e os avisos geométricos; o histórico permite desfazer operações compatíveis.</p>
     <div class="jarvis-console-grid"><label>Tipo<select name="scene-edit-type"><option value="Wall">Parede/porta</option><option value="AmbientLight">Luz ambiente</option><option value="AmbientSound">Som ambiente</option><option value="SceneEnvironment">Escuridão e cor da cena</option></select></label>
     <label>Operação<select name="scene-edit-mode"><option value="create">Adicionar</option><option value="update">Modificar</option><option value="delete">Remover</option></select></label>
@@ -1146,6 +1155,43 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
     const key = fieldValue(root, "map-skin");
     if (!await confirmAction("Aplicar skin", `Aplicar ${key} à cena '${scene.name}'?`)) return;
     return setOutput(root, "Skin aplicada", await jarvis.scenes.framework.applySkin(scene, key, { replaceBackground: false }));
+  }
+  if (["production-capture","production-compare"].includes(action)) {
+    requireGM();
+    const scene=globalThis.canvas?.scene;
+    if (!scene) throw new Error("Abra uma Scene para usar o Registro de Produção.");
+    if (action === "production-capture") {
+      const snapshot=jarvis.scenes.production.capture(scene);
+      state.productionSnapshot=snapshot;
+      const blob=new Blob([JSON.stringify(snapshot,null,2)],{type:"application/json"});
+      const url=URL.createObjectURL(blob);
+      try {
+        const anchor=document.createElement("a");
+        anchor.href=url;anchor.download=`jarvis-registro-${String(scene.id).replace(/[^a-z0-9_-]/gi,"_")}.json`;
+        anchor.click();
+      } finally { setTimeout(()=>URL.revokeObjectURL(url),0); }
+      return setOutput(root,"Registro capturado",{scene:scene.name,counts:Object.fromEntries(
+        ["tiles","walls","lights","sounds"].map(kind=>[kind,snapshot[kind].length])),
+        note:"Snapshot salvo localmente. Nenhuma Scene foi modificada."});
+    }
+    const file=field(root,"production-snapshot-file")?.files?.[0];
+    if (file?.size>5*1024*1024) throw new Error("Snapshot excede 5 MB.");
+    const baseline=file?JSON.parse(await file.text()):state.productionSnapshot;
+    if (!baseline) throw new Error("Capture um snapshot ou selecione o JSON salvo antes de comparar.");
+    return setOutput(root,"Comparação de produção",jarvis.scenes.production.compare(baseline,scene));
+  }
+  if (["director-preview","director-apply","director-restore"].includes(action)) {
+    requireGM();
+    const scene=globalThis.canvas?.scene;
+    if (!scene) throw new Error("Abra uma Scene para dirigir a atmosfera.");
+    const key=fieldValue(root,"director-cue") || "solemn";
+    if (action==="director-preview") return setOutput(root,"Prévia de atmosfera",jarvis.scenes.director.preview(key,scene));
+    if (action==="director-apply") {
+      if (!await confirmAction("Dirigir atmosfera",`Aplicar o estado ${key} em '${scene.name}'? A geometria e os Tokens não serão alterados.`)) return;
+      return setOutput(root,"Atmosfera aplicada",await jarvis.scenes.director.apply(key,scene));
+    }
+    if (!await confirmAction("Restaurar atmosfera",`Restaurar o estado anterior de '${scene.name}'?`)) return;
+    return setOutput(root,"Ambiente restaurado",await jarvis.scenes.director.restore(scene));
   }
   if (action === "map-lighting-apply") {
     requireGM();
