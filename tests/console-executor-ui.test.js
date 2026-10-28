@@ -128,6 +128,9 @@ test("package preview summarizes content and exposes recorded rollback", async (
   assert.match(preview.innerHTML, /100, 200 → 300, 200 px/);
   assert.match(preview.innerHTML, /1200 × 800 px/);
   assert.match(preview.innerHTML, /Ajustar mapa antes de criar/);
+  assert.match(preview.innerHTML, /data-jarvis-map-drag="wall"/);
+  assert.match(preview.innerHTML, /data-jarvis-map-undo/);
+  assert.match(preview.innerHTML, /data-jarvis-map-export/);
   assert.match(preview.innerHTML, /<svg viewBox="0 0 1200 800"/);
   assert.match(preview.innerHTML, /stroke="#fb9d54"/);
   await executeJarvisConsoleAction("executor-history", root);
