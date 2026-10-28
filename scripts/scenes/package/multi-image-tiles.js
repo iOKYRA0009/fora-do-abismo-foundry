@@ -26,6 +26,7 @@ export function validateImageTiles(scene = {}, { sourcePixels = false } = {}) {
     fail("dimensões da tela única inválidas ou maiores que 32768 pixels/células.");
   }
   const checked = [];
+  let decodedPixels = 0;
   for (let i = 0; i < tiles.length; i++) {
     const tile = tiles[i];
     const rect = sourcePixels ? tile?.rect : [tile?.x, tile?.y, tile?.width, tile?.height];
@@ -42,6 +43,8 @@ export function validateImageTiles(scene = {}, { sourcePixels = false } = {}) {
         fail(`imageTiles[${i}] precisa de pixelWidth/pixelHeight válidos (até 8192 por eixo).`);
       }
       // Keep one native source pixel per atlas pixel. Never silently upscale HD art.
+      decodedPixels += tile.pixelWidth * tile.pixelHeight;
+      if (decodedPixels > 48_000_000) fail("conjunto excede 48 milhões de pixels decodificados; divida a cena ou reduza os setores.");
       if (tile.pixelWidth !== rect[2] || tile.pixelHeight !== rect[3]) {
         fail(`imageTiles[${i}] precisa ter a resolução exata de rect, sem ampliação artificial.`);
       }
