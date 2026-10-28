@@ -7,8 +7,8 @@ import { JarvisInputError } from "../scripts/ui/console-input-error.js";
 function root(fields = {}) {
   const data = Object.fromEntries(Object.entries(fields).map(([name, value]) => [name, { value }]));
   return { dataset: {}, querySelector(selector) {
-    const match = /^\\[name="([^"]+)"\\]$/.exec(selector);
-    return match ? data[match[1]] ?? null : null;
+    if (!selector.startsWith('[name="') || !selector.endsWith('"]')) return null;
+    return data[selector.slice(7, -2)] ?? null;
   } };
 }
 
