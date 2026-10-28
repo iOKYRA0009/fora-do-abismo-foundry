@@ -36,7 +36,8 @@ test("end-to-end Executor preview and build use image pixel alignment, door and 
   assert.equal(plan.review.scenes[0].calibration.mode,"image-pixels");
   assert.equal(plan.review.scenes[0].doors,1);
   assert.equal(plan.review.scenes[0].walls,6);
-  assert.equal(plan.review.scenes[0].positions.lights[0].x,675);
+  assert.equal(plan.review.scenes[0].positions.lights[0].x,1073);
+  assert.equal(plan.review.scenes[0].positions.lights[1].x,675);
   let written;
   const api = { scenes: { async build(blueprint,options) {
     written={blueprint,options};
@@ -49,7 +50,7 @@ test("end-to-end Executor preview and build use image pixel alignment, door and 
   assert.equal(result.scenes.length,1);
   assert.equal(written.blueprint.walls.length,6);
   assert.equal(written.blueprint.walls.filter(w=>w.type==="door").length,1);
-  assert.equal(written.blueprint.lights[0].x,675/64);
+  assert.equal(written.blueprint.lights[1].x,675/64);
   assert.equal(written.blueprint.tokens[0].x,400/64);
   assert.equal(written.blueprint.tokens[0].vision.enabled,true);
   assert.equal(written.blueprint.tokens[0].vision.range,60);
