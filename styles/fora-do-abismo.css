@@ -357,3 +357,34 @@
   .jarvis-console[data-sidebar-collapsed="true"] .jarvis-console-layout { grid-template-columns: minmax(0, 1fr); }
   .jarvis-console-actor span { display: none; }
 }
+
+/* Calibration overlay: image and Scene Builder geometry share one pixel frame. */
+.jarvis-console .jarvis-executor-map-preview {
+  border: 1px solid #64563b;
+  border-radius: 6px;
+  padding: 0.55rem;
+  margin: 0.65rem 0;
+}
+.jarvis-console .jarvis-executor-map-preview summary { cursor: pointer; color: #d9b46e; }
+.jarvis-console .jarvis-executor-map-frame {
+  position: relative;
+  width: 100%;
+  max-width: 900px;
+  min-height: 100px;
+  margin-top: 0.6rem;
+  overflow: hidden;
+  background: #202527;
+}
+.jarvis-console .jarvis-executor-map-frame img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.jarvis-console .jarvis-executor-map-frame svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.jarvis-console .jarvis-executor-map-missing { min-height: 120px; padding: 1rem; color: #b7b8bd; }
