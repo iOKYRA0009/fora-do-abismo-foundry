@@ -449,6 +449,19 @@ function renderContent() {
   `);
 
   const macros = panel("macros", `
+    ${gm ? `<section class="jarvis-console-card">
+      <h2>Jarvis Macro Executor</h2>
+      <p>Cole código JavaScript do ChatGPT ou um pacote JSON Jarvis com NPCs, itens, habilidades, imagens, paredes, luzes e tokens. Prévia obrigatória antes de executar.</p>
+      <label>Formato <select name="executor-mode"><option value="auto">Detecção automática</option><option value="package">Pacote Jarvis JSON</option><option value="javascript">Macro JavaScript</option></select></label>
+      <label>Código ou pacote<textarea name="executor-source" rows="11" spellcheck="false" placeholder="Cole aqui o macro ou o JSON do pacote Jarvis"></textarea></label>
+      <div class="jarvis-console-card jarvis-executor-drop" data-jarvis-executor-drop role="group" aria-label="Importar macro e imagens">
+        <p><strong>Arraste arquivos aqui</strong> ou selecione: .json, .js, .txt e imagens .png, .jpg, .webp, .gif.</p>
+        <input name="executor-files" type="file" multiple accept=".json,.js,.txt,.png,.jpg,.jpeg,.webp,.gif,application/json,text/plain,image/png,image/jpeg,image/webp,image/gif">
+        <p class="jarvis-console-hint" data-jarvis-executor-files>Sem arquivos selecionados.</p>
+      </div>
+      <div class="jarvis-console-row">${button("executor-preview", "Analisar e pré-visualizar")}${button("executor-run", "Confirmar e executar")}</div>
+      <p class="jarvis-console-hint">JavaScript tem os mesmos poderes de uma macro Script do Mestre. Só execute código confiável. Pacotes JSON permitem validação estruturada e reversão de documentos recém-criados.</p>
+    </section>` : ""}
     <h2>Macros e automações</h2><p>Comandos gerenciados usam ações autorizadas do Jarvis. O editor nativo de Macros e o arrastar de arquivos .txt/.js continuam disponíveis no Foundry.</p>
     <div class="jarvis-console-row"><label>Biblioteca<select name="managed-macro"><option value="">Selecione</option>${options(managedMacros, row => `${row.name} · ${row.category}`, row => row.id)}</select></label>
     ${button("managed-macro-run", "Executar")}${button("managed-macro-favorite", "Favoritar")}${button("managed-macro-history", "Histórico")}</div>
@@ -1164,6 +1177,31 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
     state.automationPreview = null;
     return setOutput(root, "Aprovação revogada", await jarvis.automation.revoke(activity));
   }
+  if (action === "executor-preview" || action === "executor-run") {
+    requireGM();
+    const source = fieldValue(root, "executor-source");
+    const mode = fieldValue(root, "executor-mode") || "auto";
+    const files = state.executorFiles ?? Array.from(field(root, "executor-files")?.files ?? []);
+    const fingerprint = JSON.stringify([source, mode, files.map(f => [f.name, f.size, f.lastModified])]);
+    if (action === "executor-preview") {
+      const plan = jarvis.executor.preview(source, { mode, files });
+      state.executorPreview = { fingerprint, plan };
+      return setOutput(root, "Prévia do Macro Executor", plan.review);
+    }
+    if (!state.executorPreview || state.executorPreview.fingerprint !== fingerprint) {
+      state.executorPreview = null;
+      throw new JarvisInputError("Prévia desatualizada. Clique em Analisar e pré-visualizar antes de executar.");
+    }
+    const { plan } = state.executorPreview;
+    const warning = plan.kind === "javascript"
+      ? "O código JavaScript poderá alterar qualquer documento permitido ao Mestre, sem desfazer automático."
+      : "O pacote criará NPCs, itens, cenas e enviará imagens. Alterações serão registradas; arquivos enviados poderão permanecer.";
+    if (!await confirmAction("Executar macro ou pacote Jarvis", warning)) return;
+    state.executorPreview = null; // Never execute the same reviewed plan twice by accident.
+    const result = await jarvis.executor.run(plan);
+    refreshActorOptions(root);
+    return setOutput(root, "Macro Executor: execução concluída", result);
+  }
   if (action === "macro-copy") {
     requireGM();
     if (!globalThis.navigator?.clipboard?.writeText) throw new Error("Área de transferência indisponível; copie o código exibido.");
@@ -1328,6 +1366,23 @@ async function handleNavigationClick(event, root, state) {
   return false;
 }
 
+async function setExecutorFiles(root, state, files) {
+  if (!Array.isArray(files) || files.length > 45) throw new Error("Escolha até 45 arquivos por pacote.");
+  state.executorFiles = files;
+  state.executorPreview = null;
+  const scripts = files.filter(file => /\\.(json|js|txt)$/i.test(file.name));
+  if (scripts.length > 1) throw new Error("Selecione apenas um arquivo de código e as imagens.");
+  if (scripts.length) {
+    if (scripts[0].size > 12 * 1024 * 1024) throw new Error("O macro ultrapassa 12 MB.");
+    const sourceField = field(root, "executor-source");
+    if (sourceField) sourceField.value = await scripts[0].text();
+    const modeField = field(root, "executor-mode");
+    if (modeField) modeField.value = /\\.js$/i.test(scripts[0].name) ? "javascript"
+      : /\\.json$/i.test(scripts[0].name) ? "package" : "auto";
+  }
+  const display = root.querySelector("[data-jarvis-executor-files]");
+  if (display) display.textContent = files.length ? files.map(f => f.name).join(" · ") : "Sem arquivos selecionados.";
+}
 function bindDialog(dialog, state) {
   const root = dialog.element?.querySelector(".jarvis-console");
   if (!root || root.dataset.jarvisBound) return;
@@ -1384,7 +1439,23 @@ function bindDialog(dialog, state) {
       }
     } finally { control.disabled = false; control.removeAttribute?.("aria-busy"); }
   });
+  root.addEventListener("drop", async event => {
+    if (!event.target?.closest?.("[data-jarvis-executor-drop]")) return;
+    event.preventDefault();
+    if (!game.user?.isGM) return;
+    try {
+      const files = Array.from(event.dataTransfer?.files ?? []);
+      await setExecutorFiles(root, state, files);
+    } catch (error) { ui.notifications?.error?.(`Jarvis Executor: ${error.message}`); }
+  });
+  root.addEventListener("dragover", event => {
+    if (event.target?.closest?.("[data-jarvis-executor-drop]")) event.preventDefault();
+  });
   root.addEventListener("change", event => {
+    if (event.target?.matches?.('[name="executor-files"]')) {
+      void setExecutorFiles(root, state, Array.from(event.target.files ?? [])).catch(error =>
+        ui.notifications?.error?.(`Jarvis Executor: ${error.message}`));
+    }
     if (event.target?.matches?.('[name="jarvis-actor"]')) {
       refreshDashboard(root, state);
       refreshActorRelatedOptions(root);
