@@ -95,7 +95,8 @@ test("Executor HD preview exposes grid, quality inspector and three focus contro
   const fields={"executor-source":{value:'{"schemaVersion":"jarvis-executor-1"}'},
     "executor-mode":{value:"package"}};
   const root={dataset:{},querySelector(selector){
-    const m=/^\\[name="([^"]+)"\\]$/.exec(selector);if(m)return fields[m[1]]??null;
+    const field=selector.startsWith('[name="') && selector.endsWith('"]') ? selector.slice(7,-2) : null;
+    if(field) return fields[field]??null;
     return ({"[data-jarvis-executor-preview]":output,
       ".jarvis-console-result-title":heading,
       ".jarvis-console-result-content":content})[selector]??null;
