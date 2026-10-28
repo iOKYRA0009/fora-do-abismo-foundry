@@ -2,8 +2,8 @@
   "id": "fora-do-abismo-foundry",
   "type": "module",
   "title": "Fora do Abismo — Jarvis Tools",
-  "description": "Jarvis Tools V14: Macro Executor 1.2.1 com calibração de cenas pela imagem, preview visual de paredes, portas, luzes e tokens, visão limitada opcional e imports V9.",
-  "version": "1.2.1",
+  "description": "Jarvis Tools V14: Macro Executor com editor visual de mapas por arrastar antes da importação, calibração de paredes, portas, luzes e tokens, desfazer e salvar pacote.",
+  "version": "1.2.2",
   "authors": [
     {
       "name": "iOKYRA0009",
