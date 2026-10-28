@@ -106,7 +106,8 @@ test("DialogV2 installs console listeners after its first render", async () => {
   game.modules.get("fora-do-abismo-foundry").api.diagnostics = { capture: {
     recordFailure(kind, error, operation) { captured.push({ kind, message: error.message, operation }); }
   } };
-  globalThis.ui = { notifications: { error() {} } };
+  const warnings = [];
+  globalThis.ui = { notifications: { error() {}, warn(message) { warnings.push(message); } } };
   const originalError = console.error;
   console.error = () => {};
   try {
@@ -116,8 +117,8 @@ test("DialogV2 installs console listeners after its first render", async () => {
       } : null; }
     } });
   } finally { console.error = originalError; }
-  assert.deepEqual(captured, [{ kind: "action", message: "Selecione um personagem acessível.",
-    operation: "actor-open" }], "handled action failures enter the opt-in diagnostics capture");
+  assert.deepEqual(captured, [], "missing selections are guidance and do not pollute the error capture");
+  assert.match(warnings[0], /Selecione um personagem acessível/);
 });
 
 test("Jarvis registers a Tokens toolbar button in the V14 control structure", () => {
