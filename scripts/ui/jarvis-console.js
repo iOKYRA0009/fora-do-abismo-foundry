@@ -3,6 +3,7 @@ import { searchConsole } from "./console-search.js";
 import { TOOL_CATALOG } from "./console-tool-catalog.js";
 import { JarvisInputError } from "./console-input-error.js";
 import { importJarvisActorWithImage } from "./actor-import-with-image.js";
+import { moveExecutorMapElement } from "./executor-map-edit.js";
 import {
   loadConsolePreferences, recordConsoleRecent, setConsoleSidebarCollapsed,
   toggleConsoleFavorite
@@ -346,37 +347,84 @@ function scenePositionMarkup(scene) {
     ${rows.length > 24 ? `<p class="jarvis-console-hint">Mais ${rows.length - 24} posição(ões) no pacote.</p>` : ""}</details>`;
 }
 
-function sceneOverlayMarkup(scene, plan, state) {
+function sceneOverlayMarkup(scene, plan, state, sceneIndex) {
   if (!scene.pixels || !(scene.pixels.width > 0 && scene.pixels.height > 0)) return "";
   const { width, height, gridSize } = scene.pixels;
   const marker = String(scene.backgroundSrc ?? "");
   const id = marker.startsWith("asset://") ? marker.slice(8) : null;
   const image = id ? plan.review?.images?.find(row => row.id === id) : null;
   const src = image ? executorImageSource(image, plan, state) : "";
+  const sourceScene = plan.data?.scenes?.[sceneIndex] ?? {};
   const pixels = scene.positions ?? {};
-  const walls = (pixels.walls ?? []).map(w => {
-    const stroke = ["door", "secret"].includes(w.type) ? "#5edbea" : "#fb9d54";
-    return `<line x1="${w.a[0]}" y1="${w.a[1]}" x2="${w.b[0]}" y2="${w.b[1]}" stroke="${stroke}" stroke-width="${Math.max(3, gridSize*0.065)}" stroke-linecap="round"/>`;
-  }).join("");
-  const lights = (pixels.lights ?? []).map(l =>
-    `<circle cx="${l.x}" cy="${l.y}" r="${Math.max(7,gridSize*0.18)}" fill="#f5cb4f" fill-opacity="0.7" stroke="#fff4c4" stroke-width="3"/>`
+  const baseWallCount = sourceScene.walls?.length ?? 0;
+  const originalWidth = sourceScene.scene?.imagePlacement?.width ?? sourceScene.scene?.columns;
+  const originalHeight = sourceScene.scene?.imagePlacement?.height ?? sourceScene.scene?.rows;
+  const toX = value => Number(value) * width / originalWidth;
+  const toY = value => Number(value) * height / originalHeight;
+  const drag = (kind, index, extra = "") =>
+    `data-jarvis-map-drag="${kind}" data-jarvis-scene-index="${sceneIndex}" data-jarvis-map-index="${index}" ${extra}`;
+  const strokeWidth = Math.max(3, gridSize * 0.065);
+  const drawWall = wall => {
+    const stroke = ["door", "secret"].includes(wall.type) ? "#5edbea" : "#fb9d54";
+    return `<line x1="${wall.a[0]}" y1="${wall.a[1]}" x2="${wall.b[0]}" y2="${wall.b[1]}" stroke="${stroke}" stroke-width="${strokeWidth}" stroke-linecap="round"/>`;
+  };
+  const baseWalls = (pixels.walls ?? []).slice(0, baseWallCount).map((wall,index) =>
+    `<g ${drag("wall",index)}><title>Arrastar parede ${index+1}</title>${drawWall(wall)}
+      <line x1="${wall.a[0]}" y1="${wall.a[1]}" x2="${wall.b[0]}" y2="${wall.b[1]}" stroke="transparent" stroke-width="${strokeWidth*4}"/>
+    </g>
+    <circle ${drag("wall-endpoint",index,'data-jarvis-endpoint="a"')} cx="${wall.a[0]}" cy="${wall.a[1]}" r="${Math.max(6,gridSize*.12)}" fill="#ffe2b5" stroke="#97501e" stroke-width="2"/>
+    <circle ${drag("wall-endpoint",index,'data-jarvis-endpoint="b"')} cx="${wall.b[0]}" cy="${wall.b[1]}" r="${Math.max(6,gridSize*.12)}" fill="#ffe2b5" stroke="#97501e" stroke-width="2"/>`
   ).join("");
-  const tokens = (pixels.tokens ?? []).map(t =>
-    `<rect x="${t.x}" y="${t.y}" width="${(t.width ?? 1)*gridSize}" height="${(t.height ?? 1)*gridSize}" fill="#75d99b" fill-opacity="0.2" stroke="#75d99b" stroke-width="3"/>`
+  let nextWall = baseWallCount;
+  const structures = (sourceScene.structures ?? []).map((structure,index) => {
+    const rectangle = structure.rect;
+    const corners = Array.isArray(rectangle) && rectangle.length === 4
+      ? [[rectangle[0],rectangle[1]],[rectangle[0]+rectangle[2],rectangle[1]],
+        [rectangle[0]+rectangle[2],rectangle[1]+rectangle[3]],[rectangle[0],rectangle[1]+rectangle[3]]]
+      : structure.outline ?? [];
+    const segmentCount = corners.length + 2 * (structure.doors?.length ?? 0);
+    const ownWalls = (pixels.walls ?? []).slice(nextWall,nextWall+segmentCount);
+    nextWall += segmentCount;
+    const outline = corners.map(p => `${toX(p[0])},${toY(p[1])}`).join(" ");
+    return `<g ${drag("structure",index)}>
+      <title>Arrastar ${escapeHtml(structure.name ?? "construção")} inteira, mantendo o tamanho</title>
+      <polygon points="${outline}" fill="#fb9d54" fill-opacity="0.09" stroke="#eebc83" stroke-dasharray="6 5" stroke-width="2"/>
+      ${ownWalls.map(drawWall).join("")}
+    </g>`;
+  }).join("");
+  const baseLightCount = sourceScene.lights?.length ?? 0;
+  const structureLightIndices = (sourceScene.structures ?? []).flatMap((x,i)=>x.light?[i]:[]);
+  const lights = (pixels.lights ?? []).map((light,index)=>{
+    const standalone = index < baseLightCount;
+    const target = standalone?index:structureLightIndices[index-baseLightCount];
+    const kind = standalone?"light":"structure-light";
+    if (target===undefined) return "";
+    return `<circle ${drag(kind,target)} cx="${light.x}" cy="${light.y}" r="${Math.max(9,gridSize*.18)}"
+      fill="#f5cb4f" fill-opacity="0.8" stroke="#fff4c4" stroke-width="3"><title>Mover luz ${index+1}</title></circle>`;
+  }).join("");
+  const tokens = (pixels.tokens ?? []).map((token,index)=>
+    `<rect ${drag("token",index)} x="${token.x}" y="${token.y}"
+      width="${(token.width??1)*gridSize}" height="${(token.height??1)*gridSize}"
+      fill="#75d99b" fill-opacity="0.22" stroke="#75d99b" stroke-width="3">
+      <title>Mover token ${index+1}</title></rect>`
   ).join("");
   const source = src ? `<img src="${escapeHtml(src)}" alt="Mapa de ${escapeHtml(scene.name)}"/>`
-    : `<div class="jarvis-executor-map-missing">Mapa sem imagem incorporada para sobreposição.</div>`;
-  return `<details class="jarvis-executor-map-preview" open><summary>Mapa com paredes, luzes e tokens sobrepostos</summary>
+    : `<div class="jarvis-executor-map-missing">Sem imagem incorporada. Use os indicadores por coordenadas.</div>`;
+  return `<details class="jarvis-executor-map-preview" open><summary>Ajustar mapa antes de criar</summary>
+    <p class="jarvis-console-hint"><strong>Arraste</strong> paredes, construções, luzes ou tokens. As coordenadas são recalculadas automaticamente ao soltar. Nenhuma mudança é feita no mundo até confirmar a execução.</p>
     <div class="jarvis-executor-map-frame">${source}
-      <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-label="Prévia do posicionamento das paredes, portas, luzes e tokens">
-        ${walls}${lights}${tokens}
+      <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" data-jarvis-map-svg aria-label="Mapa editável com paredes, portas, luzes e tokens">
+        ${baseWalls}${structures}${lights}${tokens}
       </svg>
     </div>
-    <p class="jarvis-console-hint">Laranja: paredes · azul: portas · amarelo: luzes · verde: tokens. A sobreposição usa as mesmas coordenadas que o Scene Builder.</p>
-    ${scene.calibration ? `<p class="jarvis-console-hint">Calibração por pixels: ${scene.calibration.source.width}×${scene.calibration.source.height} → ${width}×${height}; ${scene.calibration.structures} estrutura(s).</p>` : ""}
+    <div class="jarvis-console-row">
+      <button type="button" data-jarvis-map-undo>Desfazer ajuste</button>
+      <button type="button" data-jarvis-map-export>Baixar pacote ajustado</button>
+    </div>
+    <p class="jarvis-console-hint">Laranja: paredes e construções · azul: portas · amarelo: luzes · verde: tokens. Selecione e arraste sem alterar as dimensões da cabana.</p>
+    ${scene.calibration ? `<p class="jarvis-console-hint">Calibrado: ${scene.calibration.source.width}×${scene.calibration.source.height} → ${width}×${height} pixels.</p>` : ""}
   </details>`;
 }
-
 function renderExecutorPreview(root, state) {
   const host = root.querySelector("[data-jarvis-executor-preview]");
   if (!host) return;
@@ -425,7 +473,7 @@ function renderExecutorPreview(root, state) {
     <p class="jarvis-executor-success">Pacote validado. Confira o conteúdo antes de executar.</p>
     <div class="jarvis-executor-counts">${counter("personagem(ns)", actors.length)}${counter("cena(s)", scenes.length)}${counter("adição(ões) de itens", additions.length)}${counter("imagem(ns)", images.length)}${counter("parede(s)", counts.walls ?? scenes.reduce((sum, scene) => sum + Number(scene.walls ?? 0), 0))}${counter("token(s)", counts.tokens ?? scenes.reduce((sum, scene) => sum + Number(scene.tokens ?? 0), 0))}${counter("perfil(is) Visage", counts.appearanceProfiles ?? appearanceProfiles.length)}${counter("perfil(is) Metamorph", counts.transformationProfiles ?? transformationProfiles.length)}</div>
     ${actors.length ? `<h4>Personagens</h4><ul>${actors.map(actor => `<li>${escapeHtml(actor.name)} · ${Number(actor.items ?? 0)} item(ns), ${Number(actor.activities ?? 0)} atividade(s)</li>`).join("")}</ul>` : ""}
-    ${scenes.length ? `<h4>Cenas e posições</h4><ul>${scenes.map(scene => `<li>${escapeHtml(scene.name)} · ${Number(scene.walls ?? 0)} parede(s), ${Number(scene.lights ?? 0)} luz(es), ${Number(scene.sounds ?? 0)} som(ns), ${Number(scene.tokens ?? 0)} token(s)${sceneOverlayMarkup(scene, plan, state)}${scenePositionMarkup(scene)}</li>`).join("")}</ul>` : ""}
+    ${scenes.length ? `<h4>Cenas e posições</h4><ul>${scenes.map((scene, index) => `<li>${escapeHtml(scene.name)} · ${Number(scene.walls ?? 0)} parede(s), ${Number(scene.lights ?? 0)} luz(es), ${Number(scene.sounds ?? 0)} som(ns), ${Number(scene.tokens ?? 0)} token(s)${sceneOverlayMarkup(scene, plan, state, index)}${scenePositionMarkup(scene)}</li>`).join("")}</ul>` : ""}
     ${additions.length ? `<h4>Itens em fichas</h4><ul>${additions.map(row => `<li>${escapeHtml(row.actor)} · ${Number(row.items ?? 0)} item(ns)</li>`).join("")}</ul>` : ""}
     ${appearanceProfiles.length ? `<h4>Perfis Visage</h4><p class="jarvis-console-hint">Serão registrados nos personagens novos, sem aplicar a aparência aos Tokens.</p><ul>${appearanceRows}</ul>${appearanceProfiles.length > 8 ? `<p class="jarvis-console-hint">Mais ${appearanceProfiles.length - 8} perfil(is) Visage no pacote.</p>` : ""}` : ""}
     ${transformationProfiles.length ? `<h4>Perfis Metamorph</h4><p class="jarvis-console-hint">Serão registrados nos personagens novos, sem transformar Tokens.</p><ul>${transformationRows}</ul>${transformationProfiles.length > 8 ? `<p class="jarvis-console-hint">Mais ${transformationProfiles.length - 8} perfil(is) Metamorph no pacote.</p>` : ""}` : ""}
