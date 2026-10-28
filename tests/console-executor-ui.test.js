@@ -127,6 +127,9 @@ test("package preview summarizes content and exposes recorded rollback", async (
   assert.match(preview.innerHTML, /4 parede/);
   assert.match(preview.innerHTML, /100, 200 → 300, 200 px/);
   assert.match(preview.innerHTML, /1200 × 800 px/);
+  assert.match(preview.innerHTML, /Mapa com paredes, luzes e tokens sobrepostos/);
+  assert.match(preview.innerHTML, /<svg viewBox="0 0 1200 800"/);
+  assert.match(preview.innerHTML, /stroke="#fb9d54"/);
   await executeJarvisConsoleAction("executor-history", root);
   assert.match(history.innerHTML, /data-jarvis-execution-id="exec-1"/);
   await executeJarvisConsoleAction("executor-rollback", root);
