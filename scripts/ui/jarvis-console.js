@@ -1407,6 +1407,7 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
     const files = state.executorFiles ?? Array.from(field(root, "executor-files")?.files ?? []);
     const fingerprint = JSON.stringify([source, mode, files.map(f => [f.name, f.size, f.lastModified])]);
     if (action === "executor-preview") {
+      state.executorMapUndo = [];
       const plan = jarvis.executor.preview(source, { mode, files });
       state.executorPreview = { fingerprint, plan };
       renderExecutorPreview(root, state);
@@ -1581,6 +1582,20 @@ function queueGlobalSearch(root, state) {
 }
 
 async function handleNavigationClick(event, root, state) {
+  if (event.target?.closest?.("[data-jarvis-map-undo]")) {
+    const previous=state.executorMapUndo?.at(-1);
+    if (previous) {
+      updateExecutorMapSource(root,state,previous,{remember:false});
+      state.executorMapUndo.pop();
+    }
+    return true;
+  }
+  if (event.target?.closest?.("[data-jarvis-map-export]")) {
+    if (state.executorPreview?.plan?.kind!=="package") throw new Error("Valide um pacote JSON primeiro.");
+    downloadAdjustedMapPackage(root);
+    return true;
+  }
+
   const tab = event.target.closest("[data-jarvis-tab]");
   if (tab) { selectTab(root, tab.dataset.jarvisTab); return true; }
   const execution = event.target.closest("[data-jarvis-execution-id]");
@@ -1653,6 +1668,91 @@ async function setExecutorFiles(root, state, files) {
   const display = root.querySelector("[data-jarvis-executor-files]");
   if (display) display.textContent = files.length ? files.map(f => f.name).join(" · ") : "Sem arquivos selecionados.";
 }
+function updateExecutorMapSource(root, state, source, { remember = true } = {}) {
+  const previous = fieldValue(root, "executor-source");
+  const mode = fieldValue(root, "executor-mode") || "auto";
+  const files = state.executorFiles ?? Array.from(field(root, "executor-files")?.files ?? []);
+  const plan = api().executor.preview(source, { mode, files });
+  if (plan.kind !== "package") throw new Error("A edição do mapa exige um pacote JSON.");
+  if (remember) {
+    state.executorMapUndo ??= [];
+    state.executorMapUndo.push(previous);
+    if (state.executorMapUndo.length > 20) state.executorMapUndo.shift();
+  }
+  const fieldNode = field(root, "executor-source");
+  if (fieldNode) fieldNode.value = source;
+  const fingerprint = JSON.stringify([source, mode, files.map(f => [f.name,f.size,f.lastModified])]);
+  state.executorPreview = { fingerprint, plan };
+  renderExecutorPreview(root, state);
+  return plan;
+}
+
+function mapPointerPosition(event, drag) {
+  return {
+    x: (event.clientX - drag.bounds.left)*drag.width/drag.bounds.width,
+    y: (event.clientY - drag.bounds.top)*drag.height/drag.bounds.height
+  };
+}
+
+function beginExecutorMapDrag(event, state) {
+  const target=event.target?.closest?.("[data-jarvis-map-drag]");
+  if (!target || event.button !== 0 || !game.user?.isGM || state.executorPreview?.plan?.kind !== "package") return false;
+  const svg=target.closest("[data-jarvis-map-svg]");
+  const frame=svg?.getBoundingClientRect?.();
+  const box=svg?.viewBox?.baseVal;
+  if (!frame?.width || !frame?.height || !box?.width || !box?.height) return false;
+  const drag={ target, pointerId:event.pointerId, bounds:frame, width:box.width, height:box.height,
+    sceneIndex:Number(target.dataset.jarvisSceneIndex), index:Number(target.dataset.jarvisMapIndex),
+    kind:target.dataset.jarvisMapDrag, endpoint:target.dataset.jarvisEndpoint };
+  drag.start=mapPointerPosition(event,drag);
+  state.executorMapDrag=drag;
+  target.setPointerCapture?.(event.pointerId);
+  event.preventDefault();
+  return true;
+}
+function updateExecutorMapDrag(event,state) {
+  const drag=state.executorMapDrag;
+  if (!drag || drag.pointerId !== event.pointerId) return;
+  const point=mapPointerPosition(event,drag);
+  const dx=point.x-drag.start.x,dy=point.y-drag.start.y;
+  drag.target.setAttribute?.("transform",`translate(${dx} ${dy})`);
+  event.preventDefault?.();
+}
+function finishExecutorMapDrag(event,root,state,{cancel=false}={}) {
+  const drag=state.executorMapDrag;
+  if (!drag || drag.pointerId !== event.pointerId) return;
+  state.executorMapDrag=null;
+  drag.target.removeAttribute?.("transform");
+  if (cancel) return;
+  const point=mapPointerPosition(event,drag);
+  const deltaX=point.x-drag.start.x,deltaY=point.y-drag.start.y;
+  if (Math.hypot(deltaX,deltaY)<2) return;
+  try {
+    const revised=moveExecutorMapElement(state.executorPreview.plan.data,{
+      sceneIndex:drag.sceneIndex, kind:drag.kind, index:drag.index, endpoint:drag.endpoint,
+      deltaX,deltaY
+    });
+    updateExecutorMapSource(root,state,JSON.stringify(revised,null,2));
+    const status=root.querySelector("[data-jarvis-status]");
+    if (status) status.textContent="Posição atualizada na prévia; ainda não criada no Foundry.";
+  } catch (error) {
+    ui.notifications?.warn?.(`Jarvis Mapa: ${error.message}`);
+    const status=root.querySelector("[data-jarvis-status]");
+    if (status) status.textContent=error.message;
+  }
+}
+
+function downloadAdjustedMapPackage(root) {
+  const source=fieldValue(root,"executor-source");
+  if (!source || !source.trim().startsWith("{")) throw new Error("Importe um pacote JSON primeiro.");
+  const blob=new Blob([source],{type:"application/json"});
+  const url=URL.createObjectURL(blob);
+  const link=document.createElement("a");
+  link.href=url;link.download="jarvis-mapa-ajustado.json";
+  link.click();
+  setTimeout(()=>URL.revokeObjectURL(url),0);
+}
+
 function bindDialog(dialog, state) {
   const root = dialog.element?.querySelector(".jarvis-console");
   if (!root || root.dataset.jarvisBound) return;
@@ -1709,7 +1809,11 @@ function bindDialog(dialog, state) {
       }
     } finally { control.disabled = false; control.removeAttribute?.("aria-busy"); }
   });
-  root.addEventListener("drop", async event => {
+  root.addEventListener("pointerdown", event => { beginExecutorMapDrag(event,state); });
+  root.addEventListener("pointermove", event => { updateExecutorMapDrag(event,state); });
+  root.addEventListener("pointerup", event => { finishExecutorMapDrag(event,root,state); });
+  root.addEventListener("pointercancel", event => { finishExecutorMapDrag(event,root,state,{cancel:true}); });
+    root.addEventListener("drop", async event => {
     if (!event.target?.closest?.("[data-jarvis-executor-drop]")) return;
     event.preventDefault();
     if (!game.user?.isGM) return;
@@ -1745,6 +1849,7 @@ function bindDialog(dialog, state) {
   root.addEventListener("input", event => {
     if (event.target?.matches?.("[data-jarvis-global-search]")) queueGlobalSearch(root, state);
     if (event.target?.matches?.('[name="executor-source"]')) {
+      state.executorMapUndo = [];
       state.executorPreview = null;
       renderExecutorPreview(root, state);
     }
