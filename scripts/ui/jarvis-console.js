@@ -1364,7 +1364,7 @@ function bindDialog(dialog, state) {
       if (error instanceof JarvisInputError) {
         // Missing selections or required names are guidance, not runtime failures.
         setOutput(root, "Preencha os campos", `${error.message}${detail}`);
-        ui.notifications?.warn(`Jarvis: ${error.message}`);
+        ui.notifications?.warn?.(`Jarvis: ${error.message}`);
         if (status) status.textContent = "Aguardando preenchimento.";
       } else {
         try { api().diagnostics?.capture?.recordFailure?.("action", error, action); }
