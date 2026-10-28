@@ -2,8 +2,8 @@
   "id": "fora-do-abismo-foundry",
   "type": "module",
   "title": "Fora do Abismo — Jarvis Tools",
-  "description": "Jarvis Tools V14: Macro Executor com prévia visual de mapas e correção de estouro de pilha ao importar imagens grandes embutidas em JSON.",
-  "version": "1.2.3",
+  "description": "Jarvis Tools V14: Macro Executor com mosaico de até quatro mapas HD em uma Scene, prévia com zoom, deslocamento e ajuste de paredes e luzes.",
+  "version": "1.3.0",
   "authors": [
     {
       "name": "iOKYRA0009",
