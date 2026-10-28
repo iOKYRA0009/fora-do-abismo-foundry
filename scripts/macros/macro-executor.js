@@ -1,6 +1,8 @@
 import { validateJarvisActorPayload } from "../importer/validators/payload-validator.js";
 import { validateSceneBlueprint } from "../scenes/scene-blueprint-validator.js";
 import { inspectExecutorSceneGeometry } from "../scenes/package/executor-scene-geometry.js";
+import { getAppearanceStatus } from "../integrations/visage-bridge.js";
+import { getTransformationStatus } from "../integrations/metamorph-bridge.js";
 
 export const EXECUTOR_VERSION = "jarvis-executor-1";
 const IMAGE_TYPES = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif" };
@@ -103,6 +105,64 @@ function list(value, key, max) {
   if (value === undefined) return [];
   if (!Array.isArray(value) || value.length > max) throw new Error(`Jarvis Executor: '${key}' deve ser uma lista com até ${max} entradas.`);
   return value;
+}
+function profileText(value, path, max = 200) {
+  if (typeof value !== "string" || !value.trim() || value.length > max) {
+    throw new Error(`Jarvis Executor: '${path}' deve ser texto não vazio com até ${max} caracteres.`);
+  }
+  return value.trim();
+}
+function profileKey(value, path) {
+  const key = profileText(value, path, 64);
+  if (!/^[\p{L}\p{N} _.-]+$/u.test(key) || ["__proto__", "prototype", "constructor"].includes(normalize(key))) {
+    throw new Error(`Jarvis Executor: chave de perfil inválida em '${path}'.`);
+  }
+  return key;
+}
+function validateIntegrationProfiles(entries, kind, actorNames) {
+  const appearance = kind === "appearance";
+  const label = appearance ? "appearanceProfiles" : "transformationProfiles";
+  const allowed = new Set(appearance
+    ? ["actor", "key", "visageId", "mode", "label"]
+    : ["actor", "key", "targetActor", "hpMode", "label"]);
+  const seen = new Set();
+  const summaries = [];
+  for (const [index, entry] of entries.entries()) {
+    const path = `${label}[${index}]`;
+    if (!object(entry) || Object.keys(entry).some(key => !allowed.has(key))) {
+      throw new Error(`Jarvis Executor: '${path}' contém campos inválidos.`);
+    }
+    const actor = profileText(entry.actor, `${path}.actor`);
+    if (!actorNames.has(normalize(actor))) {
+      throw new Error(`Jarvis Executor: perfil '${path}' exige personagem criado no mesmo pacote; '${actor}' não pode ser alterado.`);
+    }
+    const key = profileKey(entry.key, `${path}.key`);
+    const unique = `${normalize(actor)}:${normalize(key)}`;
+    if (seen.has(unique)) throw new Error(`Jarvis Executor: perfil duplicado '${key}' para '${actor}'.`);
+    seen.add(unique);
+    const extra = appearance
+      ? { visageId: profileText(entry.visageId, `${path}.visageId`), mode: entry.mode ?? "identity" }
+      : { targetActor: profileText(entry.targetActor, `${path}.targetActor`), hpMode: entry.hpMode ?? "keep-original" };
+    if (appearance && !["identity", "overlay"].includes(extra.mode)) {
+      throw new Error(`Jarvis Executor: '${path}.mode' deve ser identity ou overlay.`);
+    }
+    if (!appearance && !["independent", "keep-original", "absolute", "percent"].includes(extra.hpMode)) {
+      throw new Error(`Jarvis Executor: '${path}.hpMode' inválido.`);
+    }
+    if (!appearance && !actorNames.has(normalize(extra.targetActor)) && !findActor(extra.targetActor)) {
+      throw new Error(`Jarvis Executor: Actor alvo da transformação não encontrado: '${extra.targetActor}'.`);
+    }
+    const profileLabel = entry.label === undefined ? null : profileText(entry.label, `${path}.label`, 120);
+    summaries.push({ actor, key, ...extra, ...(profileLabel ? { label: profileLabel } : {}) });
+  }
+  if (entries.length) {
+    const status = appearance ? getAppearanceStatus() : getTransformationStatus();
+    if (!status.active || !status.apiReady) {
+      throw new Error(`Jarvis Executor: ${appearance ? "Visage" : "Metamorph"} precisa estar ativo e com API disponível antes de importar perfis.`);
+    }
+    return { summaries, status };
+  }
+  return { summaries, status: null };
 }
 function imageSignature(bytes, mime) {
   const is = (...header) => header.every((byte, index) => bytes[index] === byte);
@@ -261,10 +321,18 @@ export function previewJarvisExecution(source, { mode = "auto", files = [] } = {
   if (!object(pkg) || pkg.schemaVersion !== EXECUTOR_VERSION) {
     throw new Error(`Jarvis Executor: schemaVersion deve ser '${EXECUTOR_VERSION}'.`);
   }
+  for (const key of Object.keys(pkg)) {
+    if (/(visage|metamorph|appearance|transformation)/i.test(key)
+      && !["appearanceProfiles", "transformationProfiles"].includes(key)) {
+      throw new Error(`Jarvis Executor: campo de integração '${key}' desconhecido; use appearanceProfiles ou transformationProfiles.`);
+    }
+  }
   const actors = list(pkg.actors, "actors", 20);
   const scenes = list(pkg.scenes, "scenes", 10);
   const additions = list(pkg.itemAdditions, "itemAdditions", 30);
   const assets = list(pkg.assets, "assets", 40);
+  const appearanceProfiles = list(pkg.appearanceProfiles, "appearanceProfiles", 40);
+  const transformationProfiles = list(pkg.transformationProfiles, "transformationProfiles", 40);
   if (!actors.length && !scenes.length && !additions.length) {
     throw new Error("Jarvis Executor: pacote sem NPCs, cenas ou itens.");
   }
@@ -277,6 +345,10 @@ export function previewJarvisExecution(source, { mode = "auto", files = [] } = {
     if (actorNames.has(name)) throw new Error(`Jarvis Executor: NPC duplicado no pacote: '${actor.actor.name}'.`);
     actorNames.add(name);
   }
+  const appearances = validateIntegrationProfiles(appearanceProfiles, "appearance", actorNames);
+  const transformations = validateIntegrationProfiles(transformationProfiles, "transformation", actorNames);
+  if (appearanceProfiles.length) warnings.push("Perfis Visage serão registrados em personagens novos, sem aplicar skins automaticamente.");
+  if (transformationProfiles.length) warnings.push("Perfis Metamorph serão registrados em personagens novos, sem transformar Tokens automaticamente.");
   const sceneNames = new Set();
   const sceneGeometry = [];
   for (const blueprint of scenes) {
@@ -310,21 +382,18 @@ export function previewJarvisExecution(source, { mode = "auto", files = [] } = {
       throw new Error("Jarvis Executor: cada itemAdditions exige até 60 itens com name e type.");
     }
     validateActorPayload({schemaVersion:"9.0", actor:{name:"Validação de itens", type:"npc"}, items:addition.items});
-    if (!actorNames.has(normalize(addition.actor)) && !findActor(addition.actor)) {
+    if (!actorNames.has(normalize(addition.actor))) {
+      if (findActor(addition.actor)) {
+        throw new Error(`Jarvis Executor: não é seguro adicionar itens ao personagem existente '${addition.actor}' por pacote; inclua o personagem novo no mesmo pacote.`);
+      }
       throw new Error(`Jarvis Executor: personagem não encontrado para itens: '${addition.actor}'.`);
     }
-    const existingActor = actorNames.has(normalize(addition.actor)) ? null : findActor(addition.actor);
-    const existingItems = collectionValues(existingActor?.items);
     const key = normalize(addition.actor);
     const seenItems = additionKeys.get(key) ?? new Set([
-      ...existingItems.map(item => `${normalize(item.name)}:${item.type}`),
       ...(actors.find(actor => normalize(actor.actor.name) === key)?.items ?? [])
         .map(item => `${normalize(item.name)}:${item.type}`)
     ]);
     for (const item of addition.items) {
-      if (item._id && existingItems.some(current => current.id === item._id)) {
-        throw new Error(`Jarvis Executor: ID de Item '${item._id}' já existe em '${addition.actor}'.`);
-      }
       const itemKey = `${normalize(item.name)}:${item.type}`;
       if (seenItems.has(itemKey)) throw new Error(`Jarvis Executor: Item '${item.name}' já existe em '${addition.actor}'. Não criaremos duplicata.`);
       seenItems.add(itemKey);
@@ -355,10 +424,16 @@ export function previewJarvisExecution(source, { mode = "auto", files = [] } = {
       doors: s.walls?.filter(w => ["door", "secret"].includes(w.type)).length ?? 0,
       positions: sceneGeometry[index].positions, pixels: sceneGeometry[index].pixels
     })), itemAdditions: additions.map(x => ({ actor: x.actor, items: x.items.length })),
+    appearanceProfiles: appearances.summaries, transformationProfiles: transformations.summaries,
+    integrations: {
+      ...(appearances.status ? { visage: { active: true, apiReady: true, version: appearances.status.version } } : {}),
+      ...(transformations.status ? { metamorph: { active: true, apiReady: true, version: transformations.status.version } } : {})
+    },
     images: uploadedAssets, references: Array.from(refs), warnings, errors: [],
     requiresConfirmation: true, rollbackAvailable: true,
     counts: { actors: actors.length, scenes: scenes.length, items: actors.reduce((n,a)=>n+(a.items?.length??0),0)
-      + additions.reduce((n,a)=>n+a.items.length,0), images: assets.length },
+      + additions.reduce((n,a)=>n+a.items.length,0), images: assets.length,
+      appearanceProfiles: appearanceProfiles.length, transformationProfiles: transformationProfiles.length },
     warning: "Cria documentos novos. Se algo falhar, NPCs e cenas novos serão removidos quando possível; arquivos de imagem enviados podem permanecer no armazenamento."
   } };
   planSnapshots.set(plan, { kind: "package", data: JSON.stringify(pkg), files: plan.files.slice() });
@@ -619,6 +694,10 @@ export async function runJarvisExecution(plan, api) {
       || (plan.data.scenes?.length && typeof api?.scenes?.build !== "function")) {
       throw new Error("Jarvis Executor: Importer V9 ou Scene Builder indisponível para este pacote.");
     }
+    if ((plan.data.appearanceProfiles?.length && typeof api?.appearance?.setProfile !== "function")
+      || (plan.data.transformationProfiles?.length && typeof api?.transformation?.setProfile !== "function")) {
+      throw new Error("Jarvis Executor: API de perfil Visage ou Metamorph indisponível para este pacote.");
+    }
     // Revalidate immediately before any mutation or upload, including names,
     // references and scene geometry, then track every new document by run ID.
     const verified = previewJarvisExecution(JSON.stringify(plan.data), { mode: "package", files: plan.files });
@@ -648,13 +727,31 @@ export async function runJarvisExecution(plan, api) {
       }
       for (const addition of resolved.itemAdditions ?? []) {
         operation = `adição de itens em '${addition.actor}'`;
-        const actor = createdActors.find(a => normalize(a.name) === normalize(addition.actor)) ?? findActor(addition.actor);
-        if (!actor) throw new Error(`Jarvis Executor: não foi possível localizar '${addition.actor}' após criação.`);
+        const actor = createdActors.find(a => normalize(a.name) === normalize(addition.actor));
+        if (!actor) throw new Error(`Jarvis Executor: não foi possível localizar o personagem novo '${addition.actor}' após criação.`);
         const items = await api.importer.importItems(actor, stampItems(addition.items, executionId), { sourceLabel: "Jarvis Executor" });
         if (!Array.isArray(items) || items.length !== addition.items.length || items.some(item => !item.id)) {
           throw new Error("Importer V9 não retornou todos os itens rastreáveis.");
         }
         addedItems.push({ actor, items });
+        await modifyHistory(executionId, ledgerSnapshot(createdActors, createdScenes, addedItems, images));
+      }
+      for (const profile of resolved.appearanceProfiles ?? []) {
+        operation = `registro do perfil Visage '${profile.key}' em '${profile.actor}'`;
+        const actor = createdActors.find(a => normalize(a.name) === normalize(profile.actor));
+        if (!actor) throw new Error(`Jarvis Executor: personagem novo '${profile.actor}' não localizado para Visage.`);
+        await api.appearance.setProfile(actor, profile.key, profile.visageId,
+          { mode: profile.mode ?? "identity", label: profile.label ?? null });
+        await modifyHistory(executionId, ledgerSnapshot(createdActors, createdScenes, addedItems, images));
+      }
+      for (const profile of resolved.transformationProfiles ?? []) {
+        operation = `registro da forma Metamorph '${profile.key}' em '${profile.actor}'`;
+        const actor = createdActors.find(a => normalize(a.name) === normalize(profile.actor));
+        const target = createdActors.find(a => normalize(a.name) === normalize(profile.targetActor))
+          ?? findActor(profile.targetActor);
+        if (!actor || !target) throw new Error(`Jarvis Executor: Actor de '${profile.key}' não localizado para Metamorph.`);
+        await api.transformation.setProfile(actor, profile.key, target,
+          { hpMode: profile.hpMode ?? "keep-original", label: profile.label ?? null });
         await modifyHistory(executionId, ledgerSnapshot(createdActors, createdScenes, addedItems, images));
       }
       for (const blueprint of resolved.scenes ?? []) {
@@ -674,6 +771,8 @@ export async function runJarvisExecution(plan, api) {
         kind: "package", executionId, name: resolved.name ?? "Pacote Jarvis",
         actors: createdActors.map(a => ({ id:a.id, name:a.name, items:a.items?.size ?? a.items?.length ?? null })),
         scenes: createdScenes.map(s => ({ id:s.id, name:s.name })), itemAdditions: addedItems.map(a=>a.items.length),
+        appearanceProfiles: resolved.appearanceProfiles?.length ?? 0,
+        transformationProfiles: resolved.transformationProfiles?.length ?? 0,
         images, created: ledger, rollbackAvailable: true,
         note: "Concluído. Os arquivos enviados ficam no armazenamento do Foundry, inclusive após reversão."
       };

@@ -375,6 +375,8 @@ function renderExecutorPreview(root, state) {
   const scenes = review.scenes ?? [];
   const additions = review.itemAdditions ?? [];
   const images = review.images ?? [];
+  const appearanceProfiles = review.appearanceProfiles ?? [];
+  const transformationProfiles = review.transformationProfiles ?? [];
   const counts = review.counts ?? {};
   const counter = (label, value) => `<span><strong>${Number(value ?? 0)}</strong> ${escapeHtml(label)}</span>`;
   const imageRows = images.slice(0, 8).map(image => {
@@ -382,12 +384,20 @@ function renderExecutorPreview(root, state) {
     return `<li>${source ? `<img src="${escapeHtml(source)}" alt="Prévia de ${escapeHtml(image.fileName ?? image.id)}" loading="lazy">` : `<span class="jarvis-executor-image-placeholder" aria-hidden="true">▧</span>`}
       <span>${escapeHtml(image.fileName ?? image.id)}<small>${escapeHtml(image.id)}</small></span></li>`;
   }).join("");
+  const appearanceRows = appearanceProfiles.slice(0, 8).map(profile =>
+    `<li>${escapeHtml(profile.actor)} · ${escapeHtml(profile.key)}${profile.label ? ` (${escapeHtml(profile.label)})` : ""} · Visage ${escapeHtml(profile.visageId)} · ${escapeHtml(profile.mode ?? "identity")}</li>`
+  ).join("");
+  const transformationRows = transformationProfiles.slice(0, 8).map(profile =>
+    `<li>${escapeHtml(profile.actor)} · ${escapeHtml(profile.key)}${profile.label ? ` (${escapeHtml(profile.label)})` : ""} → ${escapeHtml(profile.targetActor)} · PV: ${escapeHtml(profile.hpMode ?? "keep-original")}</li>`
+  ).join("");
   host.innerHTML = `<h3>Prévia de ${escapeHtml(review.name ?? "pacote Jarvis")}</h3>
     <p class="jarvis-executor-success">Pacote validado. Confira o conteúdo antes de executar.</p>
-    <div class="jarvis-executor-counts">${counter("personagem(ns)", actors.length)}${counter("cena(s)", scenes.length)}${counter("adição(ões) de itens", additions.length)}${counter("imagem(ns)", images.length)}${counter("parede(s)", counts.walls ?? scenes.reduce((sum, scene) => sum + Number(scene.walls ?? 0), 0))}${counter("token(s)", counts.tokens ?? scenes.reduce((sum, scene) => sum + Number(scene.tokens ?? 0), 0))}</div>
+    <div class="jarvis-executor-counts">${counter("personagem(ns)", actors.length)}${counter("cena(s)", scenes.length)}${counter("adição(ões) de itens", additions.length)}${counter("imagem(ns)", images.length)}${counter("parede(s)", counts.walls ?? scenes.reduce((sum, scene) => sum + Number(scene.walls ?? 0), 0))}${counter("token(s)", counts.tokens ?? scenes.reduce((sum, scene) => sum + Number(scene.tokens ?? 0), 0))}${counter("perfil(is) Visage", counts.appearanceProfiles ?? appearanceProfiles.length)}${counter("perfil(is) Metamorph", counts.transformationProfiles ?? transformationProfiles.length)}</div>
     ${actors.length ? `<h4>Personagens</h4><ul>${actors.map(actor => `<li>${escapeHtml(actor.name)} · ${Number(actor.items ?? 0)} item(ns), ${Number(actor.activities ?? 0)} atividade(s)</li>`).join("")}</ul>` : ""}
     ${scenes.length ? `<h4>Cenas e posições</h4><ul>${scenes.map(scene => `<li>${escapeHtml(scene.name)} · ${Number(scene.walls ?? 0)} parede(s), ${Number(scene.lights ?? 0)} luz(es), ${Number(scene.sounds ?? 0)} som(ns), ${Number(scene.tokens ?? 0)} token(s)${scenePositionMarkup(scene)}</li>`).join("")}</ul>` : ""}
     ${additions.length ? `<h4>Itens em fichas</h4><ul>${additions.map(row => `<li>${escapeHtml(row.actor)} · ${Number(row.items ?? 0)} item(ns)</li>`).join("")}</ul>` : ""}
+    ${appearanceProfiles.length ? `<h4>Perfis Visage</h4><p class="jarvis-console-hint">Serão registrados nos personagens novos, sem aplicar a aparência aos Tokens.</p><ul>${appearanceRows}</ul>${appearanceProfiles.length > 8 ? `<p class="jarvis-console-hint">Mais ${appearanceProfiles.length - 8} perfil(is) Visage no pacote.</p>` : ""}` : ""}
+    ${transformationProfiles.length ? `<h4>Perfis Metamorph</h4><p class="jarvis-console-hint">Serão registrados nos personagens novos, sem transformar Tokens.</p><ul>${transformationRows}</ul>${transformationProfiles.length > 8 ? `<p class="jarvis-console-hint">Mais ${transformationProfiles.length - 8} perfil(is) Metamorph no pacote.</p>` : ""}` : ""}
     ${images.length ? `<h4>Imagens</h4><ul class="jarvis-executor-images">${imageRows}</ul>${images.length > 8 ? `<p class="jarvis-console-hint">Mais ${images.length - 8} imagem(ns) no pacote.</p>` : ""}` : ""}
     ${issues}`;
 }

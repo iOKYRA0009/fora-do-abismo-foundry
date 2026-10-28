@@ -26,13 +26,13 @@ No Foundry VTT:
 
 O Foundry usa o mesmo Manifest URL para detectar atualizações futuras.
 
-## Jarvis 1.1.0 — candidata em desenvolvimento
+## Jarvis 1.2.0 — Central e Macro Executor
 
-A versão publicada pelo Manifest URL acima continua sendo **1.0.0**. A branch `feat/jarvis-1.1.0` contém uma candidata para validação; nenhuma release é criada ao enviar essa branch ao GitHub.
+Após ativar o módulo, clique em **Jarvis — Fora do Abismo** nos controles de **Tokens**. A Central organiza as funções em seis áreas: **Executor**, **Biblioteca**, **Personagens**, **Cenas**, **Aparências** e **Sistema**. O Mestre começa no Executor e vê as ações de administração. Jogadores começam na Biblioteca e só recebem as ações permitidas para seu papel e para os Actors que controlam. As ferramentas anteriores continuam disponíveis nas seções avançadas.
 
-Após ativar o módulo, clique em **Jarvis — Fora do Abismo** nos controles de **Tokens**. A janela única reúne personagens, itens e classes, mapas, aparências, compêndios, diagnóstico, jogadores e Macro. O Mestre vê todas as opções; jogadores e Trusted Players recebem ações compatíveis com suas permissões e com a propriedade do Actor.
+O Executor recebe JavaScript colado ou arquivos `.js`/`.txt`, além de pacotes JSON `jarvis-executor-1` com personagens, itens, habilidades, efeitos, cenas e imagens. Ele mostra uma prévia antes da execução e exige confirmação explícita do Mestre para JavaScript, que roda com as permissões do Mestre e não tem reversão automática. Para pacotes JSON, valida dados, imagens e geometria antes de criar documentos; o histórico permite reverter de forma conservadora documentos novos da execução. Imagens enviadas permanecem no armazenamento após a reversão. Pacotes JSON também registram perfis Visage e Metamorph para personagens criados no mesmo pacote quando os módulos opcionais estão ativos; os perfis não são aplicados automaticamente aos Tokens. Consulte [o guia do Executor](docs/MACRO-EXECUTOR.md).
 
-O Estúdio de Mapas revisa sugestões antes de criar cenas. Na Central, o Mestre também pode analisar e editar paredes, portas, luzes, sons e escuridão de cenas existentes, com prévia e histórico de desfazer compatível. Itens, classes e personagens usam documentos nativos D&D5e com modos simples e avançado. A aba Macros oferece comandos gerenciados por categoria e execução com permissões. Consulte [o guia da Central](docs/jarvis-console.md) e [o roteiro de validação no Foundry](docs/1.1.0-validacao-foundry.md).
+O Estúdio de Mapas revisa sugestões antes de criar cenas. Na Central, o Mestre também pode analisar e editar paredes, portas, luzes, sons e escuridão de cenas existentes, com prévia e histórico de desfazer compatível. Itens, classes e personagens usam documentos nativos D&D5e com modos simples e avançado. A Biblioteca oferece comandos gerenciados por categoria e execução conforme as permissões. Consulte [o guia da Central](docs/jarvis-console.md).
 
 Macro Script equivalente ao botão:
 
@@ -40,7 +40,7 @@ Macro Script equivalente ao botão:
 game.modules.get("fora-do-abismo-foundry")?.api?.ui?.open()
 ```
 
-> O Importer V9 mantém seu formato e as APIs anteriores. A candidata foi testada em Node com simulações do Foundry; fichas, cenas, áudio, visão e integrações opcionais ainda exigem validação em uma cópia do mundo no Foundry real.
+> O Importer V9 mantém seu formato e as APIs anteriores. A suíte Node passou em 212/212 testes. No Foundry V14 Build 369 com D&D5e 6.0.6, em mundo isolado, a navegação passou em 6/6 casos e o ensaio do Executor passou em 12 casos reais: criação de NPC, rolagem nativa, cena, imagens, perfis opcionais, rejeições, falha de upload e reversão. Jogador e Jogador Confiável não viram o Executor e tiveram as chamadas diretas da API recusadas. A renderização das camadas no canvas não foi confirmada no navegador sem interface; confira o mapa visualmente no Foundry ao atualizar.
 
 ## Publicação automática
 

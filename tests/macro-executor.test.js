@@ -93,6 +93,111 @@ test("executor rejects missing images, duplicate NPCs, non-V9 payload and existi
   assert.throws(() => previewJarvisExecution(JSON.stringify(packageData())), /já existe/);
 });
 
+test("item additions to an existing Actor are blocked before upload or mutation", () => {
+  const registry = setup();
+  let mutations = 0;
+  const priorItem = { id: "prior-item", name: "Item oficial", type: "feat", flags: { official: true } };
+  const prior = { id: "prior-actor", name: "Personagem oficial", items: { contents: [priorItem] },
+    flags: { official: true },
+    async update() { mutations += 1; },
+    async updateEmbeddedDocuments() { mutations += 1; },
+    async createEmbeddedDocuments() { mutations += 1; } };
+  registry.actors.push(prior);
+  const before = structuredClone({ flags: prior.flags, item: priorItem, scenes: registry.scenes });
+  const pkg = { schemaVersion: EXECUTOR_VERSION,
+    itemAdditions: [{ actor: prior.name, items: [{ name: "Item novo", type: "feat" }] }] };
+  assert.throws(() => previewJarvisExecution(JSON.stringify(pkg)), /não é seguro adicionar itens ao personagem existente/);
+  assert.equal(mutations, 0);
+  assert.equal(registry.actors.length, 1);
+  assert.equal(registry.actors[0], prior);
+  assert.deepEqual({ flags: prior.flags, item: priorItem, scenes: registry.scenes }, before);
+  assert.deepEqual(listJarvisExecutionHistory(), []);
+});
+
+test("item additions remain available for an Actor created in the same package", () => {
+  setup();
+  const pkg = { schemaVersion: EXECUTOR_VERSION, actors: [actorWithoutAssets("Personagem novo")],
+    itemAdditions: [{ actor: "Personagem novo", items: [{ name: "Item novo", type: "feat" }] }] };
+  const plan = previewJarvisExecution(JSON.stringify(pkg));
+  assert.deepEqual(plan.review.itemAdditions, [{ actor: "Personagem novo", items: 1 }]);
+});
+
+test("Visage and Metamorph profiles are reviewed, stored through existing APIs and removed with the new Actor", async () => {
+  const registry = setup();
+  game.modules = new Map([
+    ["visage", { active: true, version: "1.0", api: {} }],
+    ["metamorph", { active: true, version: "2.0", api: {} }]
+  ]);
+  const target = { id: "prior-target", name: "Lobo existente", flags: { official: true } };
+  registry.actors.push(target);
+  const pkg = { schemaVersion: EXECUTOR_VERSION, actors: [actorWithoutAssets("Novo herói")],
+    appearanceProfiles: [{ actor: "Novo herói", key: "Sombra", visageId: "skin-1", mode: "overlay", label: "Sombra" }],
+    transformationProfiles: [{ actor: "Novo herói", key: "Lobo", targetActor: target.name,
+      hpMode: "keep-original" }] };
+  const plan = previewJarvisExecution(JSON.stringify(pkg));
+  assert.equal(plan.review.counts.appearanceProfiles, 1);
+  assert.equal(plan.review.counts.transformationProfiles, 1);
+  assert.equal(plan.review.integrations.visage.version, "1.0");
+  assert.equal(plan.review.integrations.metamorph.version, "2.0");
+  assert.match(plan.review.warnings.join(" "), /sem aplicar skins automaticamente/);
+  const calls = [];
+  const api = { importer: { async importActor(payload) {
+    const actor = { id: "new-actor", name: payload.actor.name, flags: payload.actor.flags,
+      items: [], async delete() { registry.actors.splice(registry.actors.indexOf(this), 1); } };
+    registry.actors.push(actor);
+    return actor;
+  } },
+  appearance: { async setProfile(actor, key, visageId, options) {
+    calls.push(["visage", actor.id, key, visageId, options.mode]);
+  } },
+  transformation: { async setProfile(actor, key, targetActor, options) {
+    calls.push(["metamorph", actor.id, key, targetActor.id, options.hpMode]);
+  } } };
+  const result = await runJarvisExecution(plan, api);
+  assert.equal(result.appearanceProfiles, 1);
+  assert.equal(result.transformationProfiles, 1);
+  assert.deepEqual(calls, [
+    ["visage", "new-actor", "Sombra", "skin-1", "overlay"],
+    ["metamorph", "new-actor", "Lobo", "prior-target", "keep-original"]
+  ]);
+  const rollback = await rollbackJarvisExecution(result.executionId);
+  assert.equal(rollback.ok, true);
+  assert.deepEqual(registry.actors, [target]);
+  assert.deepEqual(target.flags, { official: true });
+});
+
+test("profile validation rejects malformed, duplicate, unavailable and existing-Actor writes before import", async () => {
+  const registry = setup();
+  let imports = 0;
+  const prior = { id: "prior", name: "Personagem oficial", items: { contents: [] } };
+  registry.actors.push(prior);
+  game.modules = new Map([
+    ["visage", { active: true, version: "1.0", api: {} }],
+    ["metamorph", { active: true, version: "2.0", api: {} }]
+  ]);
+  const base = { schemaVersion: EXECUTOR_VERSION, actors: [actorWithoutAssets("Novo herói")] };
+  assert.throws(() => previewJarvisExecution(JSON.stringify({ ...base,
+    appearanceProfiles: [{ actor: prior.name, key: "sombra", visageId: "skin-1" }] })), /personagem criado no mesmo pacote/);
+  assert.throws(() => previewJarvisExecution(JSON.stringify({ ...base,
+    appearanceProfiles: [{ actor: "Novo herói", key: "sombra", visageId: "skin-1", mode: "inexistente" }] })), /mode/);
+  assert.throws(() => previewJarvisExecution(JSON.stringify({ ...base,
+    appearanceProfiles: [{ actor: "Novo herói", key: "Sombra", visageId: "skin-1" },
+      { actor: "Novo herói", key: "sombra", visageId: "skin-2" }] })), /perfil duplicado/);
+  assert.throws(() => previewJarvisExecution(JSON.stringify({ ...base,
+    transformationProfiles: [{ actor: "Novo herói", key: "forma", targetActor: "Alvo ausente" }] })), /Actor alvo.*não encontrado/);
+  assert.throws(() => previewJarvisExecution(JSON.stringify({ ...base,
+    visageProfiles: [{ actor: "Novo herói", key: "sombra", visageId: "skin-1" }] })), /campo de integração.*desconhecido/);
+  const valid = { ...base, appearanceProfiles: [{ actor: "Novo herói", key: "sombra", visageId: "skin-1" }] };
+  const plan = previewJarvisExecution(JSON.stringify(valid));
+  game.modules.get("visage").active = false;
+  assert.throws(() => previewJarvisExecution(JSON.stringify(valid)), /Visage precisa estar ativo/);
+  await assert.rejects(runJarvisExecution(plan, { importer: { async importActor() { imports += 1; } },
+    appearance: { setProfile() { throw new Error("não deve executar"); } } }), /Visage precisa estar ativo/);
+  assert.equal(imports, 0);
+  assert.deepEqual(registry.actors, [prior]);
+  assert.deepEqual(listJarvisExecutionHistory(), []);
+});
+
 test("invalid images and missing file are rejected before execution", () => {
   setup();
   const pkg = packageData();

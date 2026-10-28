@@ -7,11 +7,11 @@ Fluxo: **importar → validar → visualizar → confirmar → executar → conf
 ## O que faz
 
 1. Recebe código **JavaScript** colado ou arquivo `.js`/`.txt`. Prévia exibe o código e seus riscos. Somente o Mestre ativo pode confirmar sua execução.
-2. Recebe um **pacote estruturado JSON** `jarvis-executor-1`, com NPCs V9, itens e Activities D&D5e, cenas Blueprint V1 (paredes, portas, luzes, sons, tokens), e imagens para Actors, itens e Activities.
+2. Recebe um **pacote estruturado JSON** `jarvis-executor-1`, com NPCs V9, itens e Activities D&D5e, cenas Blueprint V1 (paredes, portas, luzes, sons, tokens), imagens para Actors, itens e Activities, e perfis opcionais Visage/Metamorph.
 3. Aceita arrastar **JSON + arquivos de imagem** juntos para a área de importação, ou selecioná-los no campo de arquivos. Imagens podem ser fornecidas também em base64 dentro do JSON.
 4. Confere formato e conteúdo das imagens antes de enviá-las. Cria novos documentos sem substituir nomes já existentes. Em falhas posteriores, tenta remover apenas documentos criados nessa execução.
 5. Registra um histórico de execuções do Mestre, com IDs para reverter os documentos novos de um pacote JSON. **Uploads de imagens não são desfeitos**, inclusive quando a importação falha.
-6. Preserva as integrações existentes; para ações específicas do Visage/Metamorph use `jarvis.appearance` e `jarvis.transformation` numa macro JS (mesmas autorizações de uma Macro Script normal).
+6. Pode **registrar** perfis Visage/Metamorph em personagens novos do pacote quando os módulos opcionais estão ativos. Registrar um perfil não aplica aparência nem transforma um Token. Para aplicar ou remover uma forma depois, use as ações da Central ou `jarvis.appearance` e `jarvis.transformation` numa macro JS com autorização do Mestre.
 
 ### Por que JavaScript, não C++ ou Java?
 
@@ -98,6 +98,37 @@ Os arquivos `guarda.webp`, `espada.png` e `forja.png` devem ser selecionados jun
 `asset://<id>` é trocado pelo **caminho real enviado ao Foundry**, inclusive em ícones de habilidades e itens, tokens e fundos. Anexe todos os arquivos citados junto com o JSON ou use `mimeType` e `dataBase64` para ter um único arquivo. O Executor confere assinatura PNG/JPG/WebP/GIF, tamanho e, quando o navegador permite, decodificação. Não sobrescreve nomes já existentes no armazenamento.
 
 As posições de paredes, luzes, sons e tokens são dadas em **células da grade**. A prévia mostra a conversão para pixels e bloqueia coordenadas ausentes ou fora do mapa. O Scene Builder continua responsável pela criação da cena.
+
+### Perfis Visage e Metamorph no pacote JSON
+
+Adicione `appearanceProfiles` e/ou `transformationProfiles` no **objeto raiz** do pacote, ao lado de `actors` e `scenes`. Exemplo parcial:
+
+```json
+{
+  "appearanceProfiles": [
+    {
+      "actor": "GUARDA TESTE EXECUTOR",
+      "key": "armadura_sombria",
+      "visageId": "id-do-visage-existente",
+      "mode": "overlay",
+      "label": "Armadura Sombria"
+    }
+  ],
+  "transformationProfiles": [
+    {
+      "actor": "GUARDA TESTE EXECUTOR",
+      "key": "forma_lobo",
+      "targetActor": "FORMA LOBO EXISTENTE",
+      "hpMode": "keep-original",
+      "label": "Forma de Lobo"
+    }
+  ]
+}
+```
+
+`actor` deve nomear um personagem **novo criado em `actors` pelo mesmo pacote**; o Executor não modifica fichas existentes para registrar perfis. `targetActor` pode nomear outro personagem novo do pacote ou um Actor já existente no mundo. `visageId` é o identificador de uma aparência preparada no Visage; confira sua existência antes da execução, pois a prévia verifica a API ativa, mas não resolve esse identificador. `key` identifica o perfil na ficha e precisa ser única por personagem em cada lista; `label` é opcional.
+
+`mode` aceita `identity` (padrão) ou `overlay`. `hpMode` aceita `independent`, `keep-original` (padrão), `absolute` ou `percent`. Cada lista aceita até 40 entradas. A prévia mostra os contadores, o personagem, a chave e o alvo de cada perfil. Visage/Metamorph precisam estar ativos e com API disponível para validar e importar seus respectivos perfis. A execução **apenas registra** os perfis nos personagens novos: não aplica skins, não transforma Tokens e não altera o Actor usado como `targetActor`. Na reversão de um pacote, os perfis desaparecem junto com os personagens novos removidos.
 
 ## Segurança e limitações
 

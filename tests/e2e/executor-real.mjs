@@ -9,7 +9,8 @@ import { parseE2EOptions, assessFoundryPage } from "../../scripts/diagnostics/e2
 
 const WORLD = "jarvis-executor-audit";
 const MODULE = "fora-do-abismo-foundry";
-const PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlHd3wAAAAASUVORK5CYII=";
+// Generated 16px RGBA PNG; Chromium decodes this before FilePicker upload.
+const PNG = "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAJUlEQVR4nGOsCND4z0ABYKJE86gBEMDEQCFgGjWAYTQMGCgPAwAa7AIP2FsoaAAAAABJRU5ErkJggg==";
 
 async function playwright() {
   try { return await import("playwright-core"); }
@@ -67,7 +68,7 @@ async function main() {
     const { chromium } = await playwright();
     browser = await chromium.launch({ executablePath: edge(options.browserPath), headless: true });
     const page = await browser.newPage({ viewport: { width: 1366, height: 768 } });
-    page.on("pageerror", error => report.errors.push(`JS: ${error.message}`));
+    page.on("pageerror", error => report.errors.push(`JS: ${String(error.stack ?? error.message).slice(0, 1200)}`));
     await page.goto(options.baseUrl, { waitUntil: "domcontentloaded", timeout: 20_000 });
     let current = await state(page);
     let assessment = assessFoundryPage(current, WORLD);
@@ -155,12 +156,17 @@ async function main() {
         lights: [{ x: 5, y: 4, dim: 20, bright: 10 }],
         tokens: [{ actor: actorName, x: 4, y: 6, width: 1, height: 1 }] };
       const pkg = { schemaVersion: "jarvis-executor-1", name: `Jarvis E2E ${suffix}`,
-        assets, actors: [actor], scenes: [scene] };
+        assets, actors: [actor], scenes: [scene],
+        appearanceProfiles: [{ actor: actorName, key: "e2e-visual", visageId: `e2e-${suffix}`,
+          mode: "overlay", label: "Visual de ensaio" }],
+        transformationProfiles: [{ actor: actorName, key: "e2e-forma", targetActor: actorName,
+          hpMode: "keep-original", label: "Forma de ensaio" }] };
       const source = JSON.stringify(pkg);
       const plan = api.executor.preview(source, { mode: "package" });
       check("prévia", plan.review?.actors?.length === 1 && plan.review?.scenes?.length === 1
-        && plan.review?.images?.length === 5 && plan.review?.scenes?.[0]?.positions?.tokens?.[0]?.x === 400,
-      "NPC, mapa, cinco imagens e token em x=400 px.");
+        && plan.review?.images?.length === 5 && plan.review?.scenes?.[0]?.positions?.tokens?.[0]?.x === 400
+        && plan.review?.counts?.appearanceProfiles === 1 && plan.review?.counts?.transformationProfiles === 1,
+      "NPC, mapa, cinco imagens, perfis opcionais e token em x=400 px.");
       if (cases.at(-1).status !== "pass") return { cases, executionId: null };
       assertSafe();
       const execution = await api.executor.run(plan);
@@ -182,6 +188,17 @@ async function main() {
         && walls.some(wall => wall.door !== 0) && createdScene.lights?.size === 1
         && token?.actorId === createdActor?.id && token?.x === 400 && token?.y === 600),
       "Parede, porta, luz e token vinculados em coordenadas exatas.");
+      try {
+        await Promise.race([createdScene.view(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error("canvas não carregou em 10 segundos")), 10000))]);
+        const canvasOk = canvas?.ready === true && canvas?.scene?.id === createdScene.id
+          && canvas.walls?.placeables?.length >= 2 && canvas.lighting?.placeables?.length >= 1
+          && canvas.tokens?.placeables?.some(entry => entry.document?.actorId === createdActor.id);
+        cases.push({ id: "B canvas", status: canvasOk ? "pass" : "not-tested",
+          detail: canvasOk ? "Mapa, paredes, luz e token renderizados no canvas." : "Canvas não confirmou todas as camadas no navegador de teste." });
+      } catch (error) {
+        cases.push({ id: "B canvas", status: "not-tested", detail: `Canvas não confirmado: ${error.message}` });
+      }
       const images = execution.images ?? {};
       const background = createdScene?.tiles?.contents?.find(tile => tile.getFlag?.(moduleId, "sceneBackground"));
       check("C imagens", Boolean(Object.keys(images).length === 5
@@ -197,13 +214,19 @@ async function main() {
       try { transformation = api.transformation?.status?.() ?? null; } catch { /* optional integration */ }
       cases.push({ id: "D integrações", status: appearance && transformation ? "pass" : "not-tested",
         detail: `Visage: ${appearance?.active ?? "indisponível"}; Metamorph: ${transformation?.active ?? "indisponível"}.` });
+      const visualProfiles = api.appearance?.getProfiles?.(createdActor) ?? {};
+      const formProfiles = api.transformation?.getProfiles?.(createdActor) ?? {};
+      check("D perfis JSON", Boolean(execution.appearanceProfiles === 1 && execution.transformationProfiles === 1
+        && visualProfiles["e2e-visual"]?.visageId === `e2e-${suffix}`
+        && formProfiles["e2e-forma"]?.target), "Perfis Visage e Metamorph registrados no NPC novo.");
       const activity = activities.find(entry => entry.type === "attack" && typeof entry.rollAttack === "function");
       let roll = { status: "not-tested", detail: "API rollAttack não encontrada no D&D5e 6.0.6." };
       if (activity) {
         try {
-          const result = await Promise.race([activity.rollAttack({ configure: false, dialog: false }),
-            new Promise((_, reject) => setTimeout(() => reject(new Error("tempo excedido")), 5000))]);
-          roll = { status: result ? "pass" : "not-tested", detail: result ? "Activity de ataque rolou no Foundry." : "Activity não retornou rolagem." };
+          const result = await Promise.race([activity.rollAttack({}, { configure: false }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("tempo excedido")), 10000))]);
+          roll = { status: Array.isArray(result) && result.length ? "pass" : "not-tested",
+            detail: Array.isArray(result) && result.length ? "Activity de ataque rolou no Foundry." : "Activity não retornou rolagem." };
         } catch (error) { roll = { status: "not-tested", detail: `Rolagem não confirmada: ${error.message}` }; }
       }
       cases.push({ id: "A rolagem Activity", ...roll });
@@ -230,6 +253,31 @@ async function main() {
           cases.push({ id: "E reversão", status: "fail", detail: error.message });
         }
       }
+      const failureName = `JARVIS E2E ${suffix} Falha`;
+      const failing = { schemaVersion: "jarvis-executor-1", name: "Falha de upload E2E",
+        assets: [{ id: "portrait", fileName: "failure.png", mimeType: "image/png", dataBase64: png }],
+        actors: [{ schemaVersion: "9.0", actor: { name: failureName, type: "npc", img: asset("portrait"),
+          jarvis: { abilities: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 },
+            hp: { value: 1, max: 1 }, ac: 10 } },
+          items: [], effects: [] }] };
+      const picker = globalThis.foundry?.applications?.apps?.FilePicker ?? globalThis.FilePicker;
+      const originalUpload = picker?.upload;
+      let uploadFailed = false;
+      try {
+        assertSafe();
+        const failurePlan = api.executor.preview(JSON.stringify(failing), { mode: "package" });
+        picker.upload = async () => { throw new Error("Falha simulada E2E"); };
+        try { await api.executor.run(failurePlan); }
+        catch (error) { uploadFailed = /Falha simulada E2E/.test(String(error.message ?? error)); }
+      } catch (error) {
+        cases.push({ id: "E falha forçada de upload", status: "fail", detail: error.message });
+      } finally {
+        if (picker && originalUpload) picker.upload = originalUpload;
+      }
+      if (!cases.some(entry => entry.id === "E falha forçada de upload")) {
+        check("E falha forçada de upload", uploadFailed && !game.actors.contents.some(a => a.name === failureName),
+          "Falha simulada recusada; nenhum Actor do ensaio permaneceu.");
+      }
       return { cases, executionId: execution.executionId, imagesRemaining: rollback?.imagesRemaining ?? execution.images };
     }, { world: WORLD, moduleId: MODULE, png: PNG });
     report.cases = result.cases;
@@ -237,8 +285,6 @@ async function main() {
     report.imagesRemaining = result.imagesRemaining;
     report.cases.push({ id: "E permissões de jogador", status: "not-tested",
       detail: "Exige sessão separada com conta de jogador no mundo isolado." });
-    report.cases.push({ id: "E falha forçada de upload", status: "not-tested",
-      detail: "Não se altera FilePicker do Foundry real para simular falha." });
     report.status = report.cases.some(entry => entry.status === "fail") ? "fail" : "pass";
     report.reason = "Casos reais do Executor concluídos no mundo isolado.";
   } catch (error) {
