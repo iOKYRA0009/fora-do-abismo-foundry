@@ -4,6 +4,7 @@ import { validateImageTiles } from "../scripts/scenes/package/multi-image-tiles.
 import { calibrateExecutorScene } from "../scripts/scenes/package/scene-calibration.js";
 import { inspectExecutorSceneGeometry } from "../scripts/scenes/package/executor-scene-geometry.js";
 import { validateSceneBlueprint } from "../scripts/scenes/scene-blueprint-validator.js";
+import { JarvisSceneBuilder } from "../scripts/scenes/scene-builder.js";
 
 function mosaic(count = 3) {
   return {
@@ -45,7 +46,7 @@ test("three HD images become one continuous grid with stable wall and light coor
 
 test("four sectors accepted but fifth blocked", () => {
   assert.equal(validateImageTiles(mosaic(4).scene, {sourcePixels:true}).length, 4);
-  assert.throws(() => validateImageTiles(mosaic(5).scene, {sourcePixels:true}), /até 4/);
+  assert.throws(() => validateImageTiles(mosaic(5).scene, {sourcePixels:true}), /1 a 4/);
 });
 
 test("overlap, missing image dimensions, stretching and out-of-bounds are blocked", () => {
@@ -80,5 +81,37 @@ test("direct Scene Builder mosaic validates only grid-cell coordinates", () => {
     ]}};
   assert.equal(validateSceneBlueprint(direct), true);
   direct.scene.imageTiles[1].x = 9;
-  assert.throws(() => validateSceneBlueprint(direct), /sobrepõe/);
+  assert.throws(() => validateSceneBlueprint(direct), error => error.details?.some(x => /sobrepõe/.test(x)));
+});
+
+test("Scene Builder creates precisely three native background tiles and common walls and lights", async () => {
+  globalThis.game = { user: {isGM:true}, scenes:{find:() => null}, actors: {find:()=>null} };
+  globalThis.foundry = {utils:{deepClone:structuredClone}};
+  globalThis.CONST = { GRID_TYPES:{SQUARE:1}, WALL_DOOR_TYPES:{NONE:0,DOOR:1,SECRET:2},
+    WALL_DOOR_STATES:{CLOSED:0,OPEN:1,LOCKED:2}, EDGE_SENSE_TYPES:{NORMAL:20},
+    WALL_MOVEMENT_TYPES:{NORMAL:20} };
+  globalThis.ui = {notifications:{info(){},warn(){}}};
+  let embedded = {};
+  let sceneData;
+  globalThis.Scene = {implementation:{async create(data){
+    sceneData=data;
+    return {
+      id:"scene-3-tiles",name:data.name,
+      async createEmbeddedDocuments(type, docs) { embedded[type]=docs; return docs; },
+      async update(){},async view(){},async delete(){}
+    };
+  }}};
+  const payload=calibrateExecutorScene(mosaic()).blueprint;
+  await new JarvisSceneBuilder().build(payload,{view:false});
+  assert.equal(sceneData.width,4096);
+  assert.equal(sceneData.height,7680);
+  assert.equal(embedded.Tile.length,3);
+  assert.deepEqual(embedded.Tile.map(t => [t.x,t.y,t.width,t.height]), [
+    [2048,1280,4096,2560],[2048,3840,4096,2560],[2048,6400,4096,2560]
+  ]);
+  assert.deepEqual(embedded.Tile.map(t=>t.texture.src),["asset://sector0","asset://sector1","asset://sector2"]);
+  assert.equal(embedded.Wall.length,1);
+  assert.equal(embedded.AmbientLight.length,1);
+  assert.equal(embedded.AmbientLight[0].x,512);
+  assert.equal(embedded.AmbientLight[0].y,3000);
 });
