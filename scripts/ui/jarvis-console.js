@@ -1,6 +1,7 @@
 import { getJarvisAccess, visibleJarvisTabs, assertJarvisAccess } from "./jarvis-console-core.js";
 import { searchConsole } from "./console-search.js";
 import { TOOL_CATALOG } from "./console-tool-catalog.js";
+import { JarvisInputError } from "./console-input-error.js";
 import {
   loadConsolePreferences, recordConsoleRecent, setConsoleSidebarCollapsed,
   toggleConsoleFavorite
@@ -211,7 +212,7 @@ function fieldValue(root, name) { return field(root, name)?.value?.trim() ?? "";
 function selectedActor(root, { required = true, manage = false } = {}) {
   const actor = game.actors.get(fieldValue(root, "jarvis-actor"));
   if (!actor) {
-    if (required) throw new Error("Selecione um personagem acessível.");
+    if (required) throw new JarvisInputError("Selecione um personagem acessível.");
     return null;
   }
   const access = getJarvisAccess(game.user, actor);
@@ -223,7 +224,7 @@ function selectedActor(root, { required = true, manage = false } = {}) {
 function selectedToken(actor) {
   const token = canvas?.tokens?.controlled?.find(candidate => candidate.actor?.id === actor.id)
     ?? canvas?.tokens?.placeables?.find(candidate => candidate.actor?.id === actor.id);
-  if (!token) throw new Error(`Selecione o Token de ${actor.name} na cena ativa.`);
+  if (!token) throw new JarvisInputError(`Selecione o Token de ${actor.name} na cena ativa.`);
   return token;
 }
 
@@ -241,7 +242,7 @@ async function selectedTransformationToken(actor, state) {
       if (main?.id === actor.id || main === actor.id || main === actor.uuid) return token;
     } catch (_error) { /* The next token may still be the matching one. */ }
   }
-  throw new Error(`Selecione o Token de ${actor.name} na cena ativa.`);
+  throw new JarvisInputError(`Selecione o Token de ${actor.name} na cena ativa.`);
 }
 
 function requireGM() { assertJarvisAccess(game.user?.isGM, "Jarvis: esta ação exige um Mestre."); }
@@ -513,10 +514,12 @@ function contentSpec(root, kind) {
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || !parsed.data) {
       throw new Error("O JSON avançado precisa de um objeto data.");
     }
+    if (!String(name || parsed.data.name || "").trim()) throw new JarvisInputError("Informe um nome antes de criar ou visualizar o conteúdo.");
     return { ...parsed, kind, mode, name: name || parsed.data.name, type,
       destinationActorId: !actor && fieldValue(root, "item-destination") === "actor"
         ? selectedActor(root, { manage: true }).id : null };
   }
+  if (!name) throw new JarvisInputError("Informe um nome antes de criar ou visualizar o conteúdo.");
   if (actor) {
     const abilities = Object.fromEntries(["str", "dex", "con", "int", "wis", "cha"].map(key =>
       [key, fieldValue(root, `actor-${key}`) || "10"]));
@@ -971,7 +974,7 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
   if (action === "player-item-open") {
     const actor = selectedActor(root);
     const item = actor.items?.get?.(fieldValue(root, "player-item"));
-    if (!item) throw new Error("Selecione um Item do personagem ativo.");
+    if (!item) throw new JarvisInputError("Selecione um Item do personagem ativo.");
     item.sheet?.render(true);
     return setOutput(root, "Item aberto", `${item.name} · ${item.type}`);
   }
@@ -1358,13 +1361,20 @@ function bindDialog(dialog, state) {
     }
     catch (error) {
       const detail = Array.isArray(error?.details) ? `\n${error.details.join("\n")}` : "";
-      try { api().diagnostics?.capture?.recordFailure?.("action", error, action); }
-      catch { /* Diagnostics must never hide the original action error. */ }
-      refreshCaptureStatus(root);
-      setOutput(root, "Erro", `${error?.message ?? error}${detail}`);
-      ui.notifications?.error(`Jarvis: ${error?.message ?? error}`);
-      console.error(`${MODULE_ID} | Ação ${action} falhou`, error);
-      if (status) status.textContent = "Ação não concluída.";
+      if (error instanceof JarvisInputError) {
+        // Missing selections or required names are guidance, not runtime failures.
+        setOutput(root, "Preencha os campos", `${error.message}${detail}`);
+        ui.notifications?.warn(`Jarvis: ${error.message}`);
+        if (status) status.textContent = "Aguardando preenchimento.";
+      } else {
+        try { api().diagnostics?.capture?.recordFailure?.("action", error, action); }
+        catch { /* Diagnostics must never hide the original action error. */ }
+        refreshCaptureStatus(root);
+        setOutput(root, "Erro", `${error?.message ?? error}${detail}`);
+        ui.notifications?.error(`Jarvis: ${error?.message ?? error}`);
+        console.error(`${MODULE_ID} | Ação ${action} falhou`, error);
+        if (status) status.textContent = "Ação não concluída.";
+      }
     } finally { control.disabled = false; control.removeAttribute?.("aria-busy"); }
   });
   root.addEventListener("change", event => {
