@@ -387,4 +387,13 @@
   height: 100%;
   pointer-events: none;
 }
+.jarvis-console [data-jarvis-map-drag] {
+  pointer-events: visiblePainted;
+  cursor: grab;
+  touch-action: none;
+}
+.jarvis-console [data-jarvis-map-drag]:active { cursor: grabbing; }
+.jarvis-console [data-jarvis-map-svg] { user-select: none; }
+.jarvis-console .jarvis-executor-map-preview .jarvis-console-row { margin-top: .6rem; }
+
 .jarvis-console .jarvis-executor-map-missing { min-height: 120px; padding: 1rem; color: #b7b8bd; }
