@@ -534,7 +534,7 @@ function renderExecutorPreview(root, state) {
     ${transformationProfiles.length ? `<h4>Perfis Metamorph</h4><p class="jarvis-console-hint">Serão registrados nos personagens novos, sem transformar Tokens.</p><ul>${transformationRows}</ul>${transformationProfiles.length > 8 ? `<p class="jarvis-console-hint">Mais ${transformationProfiles.length - 8} perfil(is) Metamorph no pacote.</p>` : ""}` : ""}
     ${images.length ? `<h4>Imagens</h4><ul class="jarvis-executor-images">${imageRows}</ul>${images.length > 8 ? `<p class="jarvis-console-hint">Mais ${images.length - 8} imagem(ns) no pacote.</p>` : ""}` : ""}
     ${issues}`;
-  for (const viewport of host.querySelectorAll("[data-jarvis-map-viewport]")) {
+  for (const viewport of host.querySelectorAll?.("[data-jarvis-map-viewport]") ?? []) {
     const last = state.executorMapScroll?.[viewport.dataset.jarvisSceneIndex];
     if (last) { viewport.scrollLeft = last.left; viewport.scrollTop = last.top; }
   }
