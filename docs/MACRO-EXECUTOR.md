@@ -1,14 +1,17 @@
-# Jarvis Macro Executor V1
+# Jarvis Macro Executor
 
-Executor **dentro da Central Jarvis → Macros e automações**. Não substitui o Importer V9, o Scene Builder, o Visage, o Metamorph ou o editor nativo de macros.
+O Executor é a página inicial da **Central Jarvis para o Mestre**. A navegação também oferece Biblioteca, Personagens, Cenas, Aparências e Sistema. Ferramentas antigas continuam nas seções avançadas dessas áreas. Jogadores começam na Biblioteca e não recebem os controles de execução do Mestre.
+
+Fluxo: **importar → validar → visualizar → confirmar → executar → conferir**. Revise nomes, contadores, posições, imagens, avisos e o código antes de confirmar.
 
 ## O que faz
 
 1. Recebe código **JavaScript** colado ou arquivo `.js`/`.txt`. Prévia exibe o código e seus riscos. Somente o Mestre ativo pode confirmar sua execução.
 2. Recebe um **pacote estruturado JSON** `jarvis-executor-1`, com NPCs V9, itens e Activities D&D5e, cenas Blueprint V1 (paredes, portas, luzes, sons, tokens), e imagens para Actors, itens e Activities.
 3. Aceita arrastar **JSON + arquivos de imagem** juntos para a área de importação, ou selecioná-los no campo de arquivos. Imagens podem ser fornecidas também em base64 dentro do JSON.
-4. Cria novos documentos sem substituir nomes já existentes. Em falhas posteriores, tenta remover documentos criados nessa execução. **Uploads de imagens não são desfeitos**.
-5. Preserva as integrações existentes; para ações específicas do Visage/Metamorph use `jarvis.appearance` e `jarvis.transformation` numa macro JS (mesmas autorizações de uma Macro Script normal).
+4. Confere formato e conteúdo das imagens antes de enviá-las. Cria novos documentos sem substituir nomes já existentes. Em falhas posteriores, tenta remover apenas documentos criados nessa execução.
+5. Registra um histórico de execuções do Mestre, com IDs para reverter os documentos novos de um pacote JSON. **Uploads de imagens não são desfeitos**, inclusive quando a importação falha.
+6. Preserva as integrações existentes; para ações específicas do Visage/Metamorph use `jarvis.appearance` e `jarvis.transformation` numa macro JS (mesmas autorizações de uma Macro Script normal).
 
 ### Por que JavaScript, não C++ ou Java?
 
@@ -92,15 +95,18 @@ A API do Foundry VTT funciona no ambiente JavaScript do navegador. Usar JavaScri
 
 Os arquivos `guarda.webp`, `espada.png` e `forja.png` devem ser selecionados juntos com o JSON no Executor, ou representados com `mimeType` e `dataBase64` nas entradas `assets`.
 
-`asset://<id>` é trocado pelo **caminho real enviado ao Foundry**, inclusive em ícones de habilidades e itens, tokens e fundos. Os mapas e as posições dos tokens usam as coordenadas de células previstas pelo Scene Builder; as próprias regras de luz e paredes continuam sob o Scene Builder.
+`asset://<id>` é trocado pelo **caminho real enviado ao Foundry**, inclusive em ícones de habilidades e itens, tokens e fundos. Anexe todos os arquivos citados junto com o JSON ou use `mimeType` e `dataBase64` para ter um único arquivo. O Executor confere assinatura PNG/JPG/WebP/GIF, tamanho e, quando o navegador permite, decodificação. Não sobrescreve nomes já existentes no armazenamento.
+
+As posições de paredes, luzes, sons e tokens são dadas em **células da grade**. A prévia mostra a conversão para pixels e bloqueia coordenadas ausentes ou fora do mapa. O Scene Builder continua responsável pela criação da cena.
 
 ## Segurança e limitações
 
 - **Atenção:** JS executa com as permissões do Mestre, pode alterar o mundo. Prévia exibe o código, mas não consegue prever alterações arbitrárias nem desfazê-las.
-- O pacote JSON só admite documentos novos, não substitui Scenes ou Actors existentes. A reversão busca remover **documentos novos** em falhas, não transfere/recupera todos os uploads.
+- O pacote JSON só admite documentos novos, não substitui Scenes ou Actors existentes. A reversão confere a identidade da execução antes de remover documentos novos. Imagens enviadas permanecem no armazenamento e aparecem no histórico para revisão manual.
+- O histórico é vinculado ao Mestre e ao mundo. Não use a reversão para apagar alterações feitas depois por outra pessoa; confira os itens pulados e os avisos que ela apresentar.
 - A prévia é **estrutural** e não simula rolagens de ataque nem garante funcionamento em combate do D&D5e 6.0.6. Revise Activities importadas na ficha e teste rolagens num mundo isolado.
 - Arquivos de imagem: PNG, JPG, WebP e GIF, limite de 8 MB por imagem, 48 MB no total. Até 20 Actors, 10 Scenes e 40 assets.
-- V1 não importa ZIP automaticamente. Para evitar dependências, selecione JSON e imagens no mesmo campo de arquivos.
+- ZIP não é importado automaticamente. Selecione JSON e imagens no mesmo campo de arquivos ou incorpore as imagens no JSON.
 - Dependências como Visage e Metamorph devem estar instaladas e ativas para que scripts que as chamam funcionem.
 - Não execute pacotes desconhecidos diretamente no mundo principal. **Mundo de teste primeiro**.
 
@@ -113,6 +119,6 @@ console.log("Módulo Jarvis", mod.version);
 return await mod.diagnostics.run({ checkUpdates: false });
 ```
 
-No Macro Executor, o parâmetro `jarvis` já referencia `mod`. É possível usar diretamente `jarvis.importer`, `jarvis.scenes`, `jarvis.appearance` e `jarvis.transformation`.
+No Macro Executor, o parâmetro `jarvis` já referencia `mod`. É possível usar diretamente `jarvis.importer`, `jarvis.scenes`, `jarvis.appearance` e `jarvis.transformation`. O modo JavaScript exige uma confirmação explícita específica porque roda com todas as permissões do Mestre e **não tem reversão automática**. O próprio código deve conferir `jarvis.appearance.status()` e `jarvis.transformation.status()` antes de chamar integrações opcionais.
 
 **Resultado desejado para um teste real:** importar NPC com imagem, armas e Activity e um mapa com paredes, luz e token em uma execução; conferir as fichas e rolar os ataques no Foundry.

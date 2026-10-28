@@ -7,7 +7,7 @@ import { assessFoundryPage, parseE2EOptions } from "../../scripts/diagnostics/e2
 import { classifyDiagnosticSource } from "../../scripts/diagnostics/runtime-capture.js";
 
 const MODULE_ID = "fora-do-abismo-foundry";
-const BASE_CASES = ["abertura", "abas", "dashboard", "pesquisa", "layout-1366x768", "fechamento"];
+const BASE_CASES = ["abertura", "abas", "inicio", "pesquisa", "layout-1366x768", "fechamento"];
 const WRITE_CASES = [
   "favoritos", "macros: criar/executar/duplicar/editar/excluir/barra",
   "NPCs/personagens/itens/classes: criar/importar", "Activities/Active Effects/consumo/progressões",
@@ -65,13 +65,14 @@ async function pageState(page) {
 
 async function joinVerifiedWorld(page, options) {
   if (!options.user) return false;
-  const select = page.locator('select[name="userid"], select#userid').first();
-  if (await select.count() !== 1) return false;
+  await page.getByRole("button", { name: /join game session/i }).waitFor({ state: "visible", timeout: 20_000 });
+  const select = page.locator('select[name="userid"], select#userid, select#join-username').first();
+  if (await select.count() !== 1) throw new Error("Seletor de usuário não encontrado na página de entrada.");
   await select.selectOption({ label: options.user });
-  const password = page.locator('input[name="password"], input#password').first();
+  const password = page.locator('input[name="password"], input#password, input#join-password').first();
   if (await password.count()) await password.fill(process.env[options.passwordEnv] ?? "");
-  const submit = page.locator('button[type="submit"], button[name="join"]').first();
-  if (await submit.count() !== 1) return false;
+  const submit = page.getByRole("button", { name: /join game session/i }).first();
+  if (await submit.count() !== 1) throw new Error("Botão de entrada não encontrado.");
   await submit.click();
   await page.waitForURL(/\/game(?:\/|$)/, { timeout: 20_000 });
   await page.waitForFunction(() => globalThis.game?.ready === true, null, { timeout: 30_000 });
@@ -102,6 +103,9 @@ async function runSmoke(page, report) {
     const tabs = page.locator(".jarvis-console [data-jarvis-tab]");
     const ids = await tabs.evaluateAll(nodes => nodes.map(node => node.dataset.jarvisTab));
     if (!ids.length) throw new Error("Nenhuma aba encontrada.");
+    if (report.environment.role === "gm" && ids.join(",") !== "executor,library,characters,scenes,appearances,system") {
+      throw new Error(`Navegação do Mestre incompleta: ${ids.join(", ")}.`);
+    }
     for (const id of ids) {
       await page.locator(`.jarvis-console [data-jarvis-tab="${id}"]`).click();
       if (await page.locator(`.jarvis-console [data-jarvis-tab="${id}"]`).getAttribute("aria-selected") !== "true") {
@@ -114,12 +118,24 @@ async function runSmoke(page, report) {
     return `${ids.length} abas percorridas: ${ids.join(", ")}.`;
   });
 
-  await check("dashboard", async () => {
-    await page.locator('.jarvis-console [data-jarvis-tab="overview"]').click();
-    const title = page.locator('.jarvis-console [data-jarvis-panel="overview"] h2').first();
-    if (!/Central Jarvis/i.test(await title.innerText())) throw new Error("Resumo da Central ausente.");
-    if (!await page.locator(".jarvis-console [data-jarvis-favorites]").count()) throw new Error("Favoritos do dashboard ausentes.");
-    return "Dashboard, favoritos e estado do módulo presentes.";
+  await check("inicio", async () => {
+    const expected = report.environment.role === "gm" ? "executor" : "library";
+    await page.locator(`.jarvis-console [data-jarvis-tab="${expected}"]`).click();
+    if (!await page.locator(`.jarvis-console [data-jarvis-panel="${expected}"]`).isVisible()) {
+      throw new Error(`Página inicial ${expected} ausente.`);
+    }
+    if (expected === "executor") {
+      if (!await page.locator('.jarvis-console [name="executor-source"]').isVisible()) {
+        throw new Error("Editor do Executor ausente.");
+      }
+      if (!await page.locator('.jarvis-console [data-jarvis-executor-preview]').isVisible()) {
+        throw new Error("Prévia do Executor ausente.");
+      }
+    }
+    if (!await page.locator(".jarvis-console [data-jarvis-favorites]").count()) {
+      throw new Error("Favoritos da Biblioteca ausentes.");
+    }
+    return `${expected} disponível com favoritos preservados.`;
   });
 
   await check("pesquisa", async () => {
@@ -181,7 +197,9 @@ async function main() {
     await page.goto(options.baseUrl, { waitUntil: "domcontentloaded", timeout: 20_000 });
     let state = await pageState(page);
     let assessment = assessFoundryPage(state, options.world);
-    if (assessment.status === "not-tested" && state.worldId === options.world && /\/join(?:\/|$)/i.test(state.pathname)) {
+    // The join page does not expose game.world.id in Foundry V14. Joining is
+    // read-only; every Jarvis action remains gated on the world ID after login.
+    if (assessment.status === "not-tested" && /\/join(?:\/|$)/i.test(state.pathname) && options.user) {
       try {
         if (await joinVerifiedWorld(page, options)) {
           state = await pageState(page);

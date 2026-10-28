@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { previewJarvisExecution, runJarvisExecution, EXECUTOR_VERSION } from "../scripts/macros/macro-executor.js";
+import { previewJarvisExecution, runJarvisExecution, listJarvisExecutionHistory,
+  rollbackJarvisExecution, EXECUTOR_VERSION } from "../scripts/macros/macro-executor.js";
+
+const PNG_1PX = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlHd3wAAAAASUVORK5CYII=";
 
 function actorPayload(name = "Guarda") {
   return {
@@ -34,10 +37,17 @@ function packageData({ actor = true, scene = true, assets = true } = {}) {
     actors: actor ? [actorPayload()] : [],
     scenes: scene ? [sceneBlueprint()] : [],
     assets: assets ? [
-      { id:"portrait", fileName:"portrait.png", mimeType:"image/png", dataBase64:"AQIDBA==" },
-      { id:"sword", fileName:"sword.webp", mimeType:"image/webp", dataBase64:"AQIDBA==" }
+      { id:"portrait", fileName:"portrait.png", mimeType:"image/png", dataBase64:PNG_1PX },
+      { id:"sword", fileName:"sword.png", mimeType:"image/png", dataBase64:PNG_1PX }
     ] : []
   };
+}
+function actorWithoutAssets(name = "Guarda") {
+  const actor = actorPayload(name);
+  delete actor.actor.img;
+  delete actor.actor.prototypeToken;
+  actor.items = [];
+  return actor;
 }
 function setup() {
   const registry = { actors: [], scenes: [] };
@@ -57,7 +67,12 @@ test("unified executor previews NPC, Item/Activity icons, walls, lights and toke
   const plan = previewJarvisExecution(JSON.stringify(packageData()));
   assert.equal(plan.review.actors[0].items, 1);
   assert.equal(plan.review.actors[0].activities, 1);
-  assert.deepEqual(plan.review.scenes[0], { name:"Cena de Teste", walls:1, lights:1, sounds:0, tokens:1 });
+  assert.equal(plan.review.scenes[0].name, "Cena de Teste");
+  assert.equal(plan.review.scenes[0].walls, 1);
+  assert.equal(plan.review.scenes[0].tokens, 1);
+  assert.deepEqual(plan.review.scenes[0].positions.tokens[0], {
+    index:0, actor:"Guarda", x:400, y:600, width:null, height:null
+  });
   assert.equal(plan.review.images.length, 2);
   assert.deepEqual(registry.actors, []);
   assert.deepEqual(registry.scenes, []);
@@ -81,7 +96,7 @@ test("executor rejects missing images, duplicate NPCs, non-V9 payload and existi
 test("invalid images and missing file are rejected before execution", () => {
   setup();
   const pkg = packageData();
-  pkg.assets = [{ id:"portrait", fileName:"portrait.png" }, { id:"sword", fileName:"sword.webp" }];
+  pkg.assets = [{ id:"portrait", fileName:"portrait.png" }, { id:"sword", fileName:"sword.png" }];
   assert.throws(() => previewJarvisExecution(JSON.stringify(pkg)), /selecione o arquivo/);
   pkg.assets[0].dataBase64="%%";pkg.assets[0].mimeType="image/png";
   assert.throws(() => previewJarvisExecution(JSON.stringify(pkg)), /base64 inválido/);
@@ -134,13 +149,15 @@ test("if Scene Builder fails, executor rolls back newly imported Actor", async (
   const events = [];
   const api = {
     importer: { async importActor(payload) {
-      return { name:payload.actor.name, async delete() { events.push("actor deleted"); } };
+      return { id:"a-rollback", name:payload.actor.name, async delete() { events.push("actor deleted"); } };
     } },
     scenes: { async build() { throw new Error("A criação de cena falhou"); } }
   };
-  const plan = previewJarvisExecution(JSON.stringify({ ...packageData({ assets:false }), actors: [
-    { ...actorPayload(), actor: { name: "Guarda", type:"npc" }, items:[] }
-  ], scenes:[sceneBlueprint()] }));
+  const basicActor = actorPayload();
+  basicActor.items = [];
+  delete basicActor.actor.img;
+  delete basicActor.actor.prototypeToken;
+  const plan = previewJarvisExecution(JSON.stringify({ ...packageData({ assets:false }), actors: [basicActor], scenes:[sceneBlueprint()] }));
   await assert.rejects(runJarvisExecution(plan,api),/criação de cena falhou/);
   assert.deepEqual(events,["actor deleted"]);
 });
@@ -154,4 +171,94 @@ test("pasted JavaScript executes in GM context; players cannot preview or run it
   game.user={ id:"p",isGM:false };
   assert.throws(()=>previewJarvisExecution("return 1",{mode:"javascript"}),/Mestre/);
   await assert.rejects(runJarvisExecution(plan,{version:"demo"}),/Mestre/);
+});
+
+test("preview blocks incomplete actors and invalid scene coordinates before any upload", () => {
+  setup();
+  const incomplete = { schemaVersion: EXECUTOR_VERSION, actors: [{
+    schemaVersion: "9.0", actor: { name: "Sem atributos", type: "npc" }, items: []
+  }] };
+  assert.throws(() => previewJarvisExecution(JSON.stringify(incomplete)), /seis atributos/);
+  const invalid = { schemaVersion: EXECUTOR_VERSION, actors: [actorWithoutAssets()], scenes: [sceneBlueprint()] };
+  invalid.scenes[0].tokens[0].x = null;
+  assert.throws(() => previewJarvisExecution(JSON.stringify(invalid)), /células da grade/);
+  invalid.scenes[0].tokens[0].x = 12;
+  assert.throws(() => previewJarvisExecution(JSON.stringify(invalid)), /fora da área/);
+});
+
+test("attached image contents are checked before any file is uploaded", async () => {
+  setup();
+  let uploads = 0;
+  globalThis.foundry.applications = { apps: { FilePicker: {
+    browse: async () => ({ files: [] }), createDirectory: async () => ({}),
+    upload: async () => { uploads += 1; return { path: "jarvis-executor-assets/test.png" }; }
+  } } };
+  const actor = actorPayload();
+  actor.items = [];
+  const pkg = { schemaVersion: EXECUTOR_VERSION, actors: [actor], assets: [{ id: "portrait", fileName: "portrait.png" }] };
+  const file = { name: "portrait.png", type: "image/png", size: 4,
+    async arrayBuffer() { return Uint8Array.of(1,2,3,4).buffer; } };
+  const plan = previewJarvisExecution(JSON.stringify(pkg), { files: [file] });
+  assert.equal(plan.review.images[0].verified, false);
+  await assert.rejects(runJarvisExecution(plan, { importer: { importActor: async () => {} } }), /conteúdo inválido/);
+  assert.equal(uploads, 0);
+  assert.equal(listJarvisExecutionHistory()[0].status, "failed");
+});
+
+test("execution plans cannot be changed after review or executed twice", async () => {
+  setup();
+  const pkg = { schemaVersion: EXECUTOR_VERSION, actors: [actorWithoutAssets()] };
+  const tampered = previewJarvisExecution(JSON.stringify(pkg));
+  tampered.data.actors[0].actor.name = "Alterado";
+  await assert.rejects(runJarvisExecution(tampered, {}), /mudou depois da prévia/);
+  const wrongKind = previewJarvisExecution(JSON.stringify(pkg));
+  wrongKind.kind = "javascript";
+  await assert.rejects(runJarvisExecution(wrongKind, {}), /mudou depois da prévia/);
+  const script = previewJarvisExecution("return 3", { mode: "javascript" });
+  assert.equal((await runJarvisExecution(script, {})).output, 3);
+  await assert.rejects(runJarvisExecution(script, {}), /realize a prévia/);
+});
+
+test("structured execution records created IDs and rolls back only its tagged documents", async () => {
+  const registry = setup();
+  let flags = [];
+  game.user.getFlag = () => flags;
+  game.user.setFlag = async (_module, _key, value) => { flags = structuredClone(value); };
+  const prior = { id: "a-prior", name: "Personagem oficial", flags: {}, async delete() { throw new Error("não tocar"); } };
+  registry.actors.push(prior);
+  const pkg = { schemaVersion: EXECUTOR_VERSION, actors: [actorWithoutAssets()] };
+  const api = { importer: { async importActor(payload) {
+    const actor = { id: "a-new", name: payload.actor.name, flags: payload.actor.flags,
+      _stats: { modifiedTime: 100 }, items: [], async delete() {
+        registry.actors.splice(registry.actors.indexOf(this), 1);
+      } };
+    registry.actors.push(actor);
+    return actor;
+  } } };
+  const result = await runJarvisExecution(previewJarvisExecution(JSON.stringify(pkg)), api);
+  assert.equal(result.actors[0].id, "a-new");
+  assert.equal(listJarvisExecutionHistory()[0].status, "success");
+  assert.equal(listJarvisExecutionHistory()[0].actors[0].id, "a-new");
+  const reverted = await rollbackJarvisExecution(result.executionId);
+  assert.equal(reverted.ok, true);
+  assert.deepEqual(reverted.removed.actors, ["a-new"]);
+  assert.deepEqual(registry.actors, [prior]);
+  assert.equal(listJarvisExecutionHistory()[0].status, "rolled_back");
+});
+
+test("manual rollback preserves a created document changed after import", async () => {
+  const registry = setup();
+  const pkg = { schemaVersion: EXECUTOR_VERSION, actors: [actorWithoutAssets()] };
+  const api = { importer: { async importActor(payload) {
+    const actor = { id: "a-new", name: payload.actor.name, flags: payload.actor.flags,
+      _stats: { modifiedTime: 100 }, items: [], async delete() { throw new Error("must not delete"); } };
+    registry.actors.push(actor);
+    return actor;
+  } } };
+  const result = await runJarvisExecution(previewJarvisExecution(JSON.stringify(pkg)), api);
+  registry.actors[0]._stats.modifiedTime = 101;
+  const rollback = await rollbackJarvisExecution(result.executionId);
+  assert.equal(rollback.ok, false);
+  assert.match(rollback.skipped[0], /foi alterado/);
+  assert.equal(registry.actors.length, 1);
 });

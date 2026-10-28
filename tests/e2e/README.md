@@ -1,11 +1,11 @@
 # Auditoria E2E do Jarvis no Foundry real
 
-O runner `foundry-smoke.mjs` usa Playwright com Edge/Chromium e só executa ações quando confirma `game.world.id === "jarvis-rc3-audit"` dentro de `/game`. O slug precisa ser informado explicitamente. O mundo principal `fora-do-abismo` e qualquer outro mundo são recusados. O runner não inicia nem fecha o Foundry, não instala módulos e não altera documentos. Ele abre a Central, percorre as abas, confere o dashboard, pesquisa e tamanho da janela, e fecha a Central. Operações de escrita são relatadas como **NÃO TESTADO**.
+O runner `foundry-smoke.mjs` usa Playwright com Edge/Chromium e só executa ações depois de confirmar `game.world.id` no mundo isolado cujo slug foi informado. O mundo principal `fora-do-abismo` é recusado. O runner não inicia nem fecha o Foundry, não instala módulos e não altera documentos. Ele abre a Central, percorre as seis áreas para o Mestre, confere a página inicial do Executor, pesquisa e tamanho da janela, e fecha a Central. Operações de escrita são relatadas como **NÃO TESTADO**.
 
-Pré-requisitos: Foundry aberto no mundo **jarvis-rc3-audit**, cópia isolada já protegida por backup, Jarvis ativo e `playwright-core` instalado no projeto. O runner cria uma sessão de navegador separada. Para usar o Edge local no Windows:
+Pré-requisitos: Foundry aberto em um mundo isolado de auditoria, cópia já protegida por backup, Jarvis ativo e `playwright-core` disponível localmente. O runner cria uma sessão de navegador separada. Para usar o Edge local no Windows:
 
 ```powershell
-node tests/e2e/foundry-smoke.mjs --world jarvis-rc3-audit
+node tests/e2e/foundry-smoke.mjs --world jarvis-executor-audit --base-url http://127.0.0.1:30001 --user Gamemaster
 ```
 
 Se a cópia estiver na página de entrada e `game.world.id` estiver disponível, o runner pode entrar com `--user "Nome do mestre"`. A senha, quando necessária, deve vir de `JARVIS_TEST_PASSWORD` no ambiente, nunca da linha de comando. Se o slug não puder ser verificado, ele termina com **NÃO TESTADO**, sem tentar entrar. A opção `--browser CAMINHO` indica outro executável do Chromium. A opção `--report NOME.json` escolhe o nome do relatório; ele sempre fica na pasta temporária do Windows, em `JarvisE2E`, sem sobrescrever arquivo existente. Não envie o relatório publicamente sem revisá-lo: mensagens de erro podem conter nomes da campanha.
