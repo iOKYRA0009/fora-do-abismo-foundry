@@ -14,6 +14,9 @@ import { openMapStudio, registerMapStudioControl } from "./ui/map-studio.js";
 import { suggestRasterWalls } from "./scenes/raster-wall-assist.js";
 import { applyLightingPreset, listLightingPresets } from "./scenes/lighting-presets.js";
 import { auditScene } from "./scenes/scene-audit.js";
+import { captureSceneSnapshot, compareSceneSnapshot } from "./scenes/production-snapshot.js";
+import { inspectMosaicQuality } from "./scenes/package/mosaic-quality.js";
+import { listAtmosphereCues, previewAtmosphereCue, applyAtmosphereCue, restoreAtmosphereCue } from "./scenes/atmosphere-director.js";
 import { registerActivityAutomation } from "./automation/activity-automation.js";
 import {
   approveActivityAutomation,
@@ -238,6 +241,17 @@ Hooks.once("ready", runtimeCapture.guard("initialization", "ready", () => {
       lightingPresets: listLightingPresets,
       applyLightingPreset,
       audit: (scene = globalThis.canvas?.scene) => auditScene(scene),
+      production: {
+        capture: (scene = globalThis.canvas?.scene) => captureSceneSnapshot(scene),
+        compare: (snapshot, scene = globalThis.canvas?.scene) => compareSceneSnapshot(snapshot,scene)
+      },
+      quality: { inspectMosaic: inspectMosaicQuality },
+      director: {
+        list: listAtmosphereCues,
+        preview: (key,scene = globalThis.canvas?.scene) => previewAtmosphereCue(scene,key),
+        apply: (key,scene = globalThis.canvas?.scene) => applyAtmosphereCue(scene,key),
+        restore: (scene = globalThis.canvas?.scene) => restoreAtmosphereCue(scene)
+      },
       // API V1 mantida por compatibilidade.
       validate: payload => sceneBuilder.validate(payload),
       preview: payload => sceneBuilder.preview(payload),
