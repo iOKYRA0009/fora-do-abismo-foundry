@@ -2,8 +2,8 @@
   "id": "fora-do-abismo-foundry",
   "type": "module",
   "title": "Fora do Abismo — Jarvis Tools",
-  "description": "Central Jarvis para Foundry V14 com Macro Executor: executar scripts JS e pacotes JSON com NPCs V9, imagens de Itens/Activities, mapas, paredes, luzes e tokens; integrações e diagnósticos preservados (RC experimental).",
-  "version": "1.1.0-rc.5",
+  "description": "Jarvis Macro Executor para Foundry V14: JavaScript, pacotes JSON, personagens V9, itens, habilidades, ícones, cenas, paredes, luzes, tokens, skins e ferramentas de diagnóstico.",
+  "version": "1.1.0",
   "authors": [
     {
       "name": "iOKYRA0009",
