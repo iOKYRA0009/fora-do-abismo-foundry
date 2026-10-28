@@ -238,3 +238,8 @@ A beta.13 detecta dinamicamente o tipo real de **Execute Script** registrado em 
 ### beta.14 — Actors opcionais não entram sozinhos
 
 Por padrão, Actors marcados com `optional: true` ficam apenas no manifesto e **não são colocados na Scene**. Para incluí-los explicitamente, use `includeOptionalActors: true` no `preview`/`build`. Isso preserva decisões narrativas como aliados que só acompanham o grupo se a sessão justificar.
+
+
+## Mosaico de mapas HD — v1.3.0
+
+O Macro Executor agora pode importar até quatro imagens WEBP/PNG/JPG como **setores independentes de fundo em uma Scene com grid único**, com prévia para ajustar paredes, portas e luzes usando zoom e modo de movimentação. Leia [o guia de pacote e limites](docs/MULTI-MAP-ATLAS.md) antes de preparar mapas grandes. Tokens/NPCs podem ser adicionados depois.

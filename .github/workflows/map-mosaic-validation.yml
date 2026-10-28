@@ -1,0 +1,25 @@
+name: Map Mosaic 1.3.0 Validation
+
+on:
+  push:
+    branches:
+      - feature/map-mosaic-1.3.0
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check JavaScript syntax
+        run: find scripts -name '*.js' -print0 | xargs -0 -n1 node --check
+      - name: All unit and integration mock tests
+        run: node --test tests/*.test.js

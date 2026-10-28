@@ -419,7 +419,15 @@ function sceneOverlayMarkup(scene, plan, state, sceneIndex) {
     const target = standalone?index:structureLightIndices[index-baseLightCount];
     const kind = standalone?"light":"structure-light";
     if (target===undefined) return "";
-    return `<circle ${drag(kind,target)} cx="${light.x}" cy="${light.y}" r="${Math.max(9,gridSize*.18)}"
+    const original = standalone ? sourceScene.lights?.[target] : sourceScene.structures?.[target]?.light;
+    const values = original && typeof original === "object" ? original : {};
+    const distance = Math.max(1, Number(sourceScene.scene?.grid?.distance ?? 5));
+    const dimRadius = Math.max(0, Number(values.dim ?? (standalone ? 0 : 20))) * gridSize / distance;
+    const brightRadius = Math.max(0, Number(values.bright ?? (standalone ? 0 : 10))) * gridSize / distance;
+    return `<g class="jarvis-map-light-radii" pointer-events="none">
+        <circle cx="${light.x}" cy="${light.y}" r="${dimRadius}" fill="none" stroke="#f5cb4f" stroke-opacity="0.38" stroke-dasharray="7 7" stroke-width="3"/>
+        <circle cx="${light.x}" cy="${light.y}" r="${brightRadius}" fill="#f5cb4f" fill-opacity="0.045" stroke="#f5cb4f" stroke-opacity="0.5" stroke-width="2"/>
+      </g><circle ${drag(kind,target)} cx="${light.x}" cy="${light.y}" r="${Math.max(9,gridSize*.18)}"
       fill="#f5cb4f" fill-opacity="0.8" stroke="#fff4c4" stroke-width="3"><title>Mover luz ${index+1}</title></circle>`;
   }).join("");
   const tokens = (pixels.tokens ?? []).map((token,index)=>
@@ -428,21 +436,48 @@ function sceneOverlayMarkup(scene, plan, state, sceneIndex) {
       fill="#75d99b" fill-opacity="0.22" stroke="#75d99b" stroke-width="3">
       <title>Mover token ${index+1}</title></rect>`
   ).join("");
-  const source = src ? `<img src="${escapeHtml(src)}" alt="Mapa de ${escapeHtml(scene.name)}"/>`
+  const tiles = sourceScene.scene?.imageTiles ?? [];
+  const area = sourceScene.scene?.imagePlacement;
+  const tileMarkup = tiles.map((tile, index) => {
+    const key = String(tile.src ?? "").startsWith("asset://") ? tile.src.slice(8) : null;
+    const asset = key ? plan.review?.images?.find(row => row.id === key) : null;
+    const tileSrc = asset ? executorImageSource(asset, plan, state) : "";
+    const rect = tile.rect;
+    if (!tileSrc || !area?.width || !area?.height || !Array.isArray(rect)) return "";
+    const [x, y, w, h] = rect;
+    return `<img class="jarvis-map-sector" src="${escapeHtml(tileSrc)}" alt="Setor ${index + 1}" loading="lazy"
+      style="left:${100*x/area.width}%;top:${100*y/area.height}%;width:${100*w/area.width}%;height:${100*h/area.height}%"/>`;
+  }).join("");
+  const source = tiles.length ? tileMarkup
+    : src ? `<img class="jarvis-map-sector" src="${escapeHtml(src)}" alt="Mapa de ${escapeHtml(scene.name)}"
+        style="left:0;top:0;width:100%;height:100%"/>`
     : `<div class="jarvis-executor-map-missing">Sem imagem incorporada. Use os indicadores por coordenadas.</div>`;
-  return `<details class="jarvis-executor-map-preview" open><summary>Ajustar mapa antes de criar</summary>
-    <p class="jarvis-console-hint"><strong>Arraste</strong> paredes, construções, luzes ou tokens. As coordenadas são recalculadas automaticamente ao soltar. Nenhuma mudança é feita no mundo até confirmar a execução.</p>
-    <div class="jarvis-executor-map-frame">${source}
-      <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" data-jarvis-map-svg aria-label="Mapa editável com paredes, portas, luzes e tokens">
-        ${baseWalls}${structures}${lights}${tokens}
-      </svg>
+  const zoom = Math.max(1, Math.min(6, Number(state.executorMapZoom ?? 1)));
+  const panning = state.executorMapPanEnabled === true;
+  return `<details class="jarvis-executor-map-preview" open><summary>Ajustar mapa antes de criar (${tiles.length || (src ? 1 : 0)} setor(es))</summary>
+    <p class="jarvis-console-hint">Use <strong>Zoom</strong> para examinar paredes, portas e luzes. Ative <strong>Mover tela</strong> para arrastar o mapa sem alterar a geometria. Desative para arrastar os elementos. Os ajustes só serão criados após confirmar.</p>
+    <div class="jarvis-console-row jarvis-map-controls">
+      <button type="button" data-jarvis-map-zoom="-1" data-jarvis-scene-index="${sceneIndex}">− Zoom</button>
+      <button type="button" data-jarvis-map-zoom="1" data-jarvis-scene-index="${sceneIndex}">+ Zoom</button>
+      <button type="button" data-jarvis-map-zoom="fit" data-jarvis-scene-index="${sceneIndex}">Encaixar</button>
+      <button type="button" data-jarvis-map-pan-toggle aria-pressed="${panning}">${panning ? "✓ Mover tela" : "Mover tela"}</button>
+      <span data-jarvis-map-zoom-label>${Math.round(zoom*100)}%</span>
+    </div>
+    <div class="jarvis-executor-map-viewport" data-jarvis-map-viewport data-jarvis-scene-index="${sceneIndex}"
+      data-jarvis-map-pan-active="${panning}" tabindex="0" aria-label="Mapa com zoom e rolagem">
+      <div class="jarvis-executor-map-frame" data-jarvis-map-stage style="width:${zoom*100}%;aspect-ratio:${width}/${height}">
+        ${source}
+        <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" data-jarvis-map-svg aria-label="Mapa editável com paredes, portas, luzes e tokens">
+          ${baseWalls}${structures}${lights}${tokens}
+        </svg>
+      </div>
     </div>
     <div class="jarvis-console-row">
       <button type="button" data-jarvis-map-undo>Desfazer ajuste</button>
       <button type="button" data-jarvis-map-export>Baixar pacote ajustado</button>
     </div>
-    <p class="jarvis-console-hint">Laranja: paredes e construções · azul: portas · amarelo: luzes · verde: tokens. Selecione e arraste sem alterar as dimensões da cabana.</p>
-    ${scene.calibration ? `<p class="jarvis-console-hint">Calibrado: ${scene.calibration.source.width}×${scene.calibration.source.height} → ${width}×${height} pixels.</p>` : ""}
+    <p class="jarvis-console-hint">Laranja: paredes · azul: portas · amarelo: luzes · verde: tokens. A prévia permite examinar a geometria, mas não simula a visão de um jogador dentro do Foundry.</p>
+    ${scene.calibration ? `<p class="jarvis-console-hint">Atlas: ${scene.calibration.source.width}×${scene.calibration.source.height} → cena ${width}×${height} pixels.</p>` : ""}
   </details>`;
 }
 function renderExecutorPreview(root, state) {
@@ -499,6 +534,10 @@ function renderExecutorPreview(root, state) {
     ${transformationProfiles.length ? `<h4>Perfis Metamorph</h4><p class="jarvis-console-hint">Serão registrados nos personagens novos, sem transformar Tokens.</p><ul>${transformationRows}</ul>${transformationProfiles.length > 8 ? `<p class="jarvis-console-hint">Mais ${transformationProfiles.length - 8} perfil(is) Metamorph no pacote.</p>` : ""}` : ""}
     ${images.length ? `<h4>Imagens</h4><ul class="jarvis-executor-images">${imageRows}</ul>${images.length > 8 ? `<p class="jarvis-console-hint">Mais ${images.length - 8} imagem(ns) no pacote.</p>` : ""}` : ""}
     ${issues}`;
+  for (const viewport of host.querySelectorAll?.("[data-jarvis-map-viewport]") ?? []) {
+    const last = state.executorMapScroll?.[viewport.dataset.jarvisSceneIndex];
+    if (last) { viewport.scrollLeft = last.left; viewport.scrollTop = last.top; }
+  }
 }
 
 function renderExecutorHistory(root, rows) {
@@ -1602,6 +1641,35 @@ function queueGlobalSearch(root, state) {
 }
 
 async function handleNavigationClick(event, root, state) {
+  const zoomControl = event.target?.closest?.("[data-jarvis-map-zoom]");
+  if (zoomControl) {
+    const panel = zoomControl.closest(".jarvis-executor-map-preview");
+    const viewport = panel?.querySelector("[data-jarvis-map-viewport]");
+    const stage = panel?.querySelector("[data-jarvis-map-stage]");
+    if (!viewport || !stage) return true;
+    const before = Math.max(1, Number(state.executorMapZoom ?? 1));
+    const direction = zoomControl.dataset.jarvisMapZoom;
+    const after = direction === "fit" ? 1 : Math.max(1, Math.min(6,
+      Number((before + (direction === "1" ? 0.5 : -0.5)).toFixed(2))));
+    state.executorMapZoom = after;
+    stage.style.width = (after * 100) + "%";
+    viewport.scrollLeft = (viewport.scrollLeft + viewport.clientWidth / 2) * after / before - viewport.clientWidth / 2;
+    viewport.scrollTop = (viewport.scrollTop + viewport.clientHeight / 2) * after / before - viewport.clientHeight / 2;
+    panel.querySelector("[data-jarvis-map-zoom-label]").textContent = Math.round(after * 100) + "%";
+    (state.executorMapScroll ??= {})[viewport.dataset.jarvisSceneIndex] = { left: viewport.scrollLeft, top: viewport.scrollTop };
+    return true;
+  }
+  if (event.target?.closest?.("[data-jarvis-map-pan-toggle]")) {
+    state.executorMapPanEnabled = !state.executorMapPanEnabled;
+    for (const viewport of root.querySelectorAll("[data-jarvis-map-viewport]")) {
+      viewport.dataset.jarvisMapPanActive = String(state.executorMapPanEnabled);
+    }
+    for (const button of root.querySelectorAll("[data-jarvis-map-pan-toggle]")) {
+      button.textContent = state.executorMapPanEnabled ? "✓ Mover tela" : "Mover tela";
+      button.setAttribute("aria-pressed", String(state.executorMapPanEnabled));
+    }
+    return true;
+  }
   if (event.target?.closest?.("[data-jarvis-map-undo]")) {
     const previous=state.executorMapUndo?.at(-1);
     if (previous) {
@@ -1689,6 +1757,10 @@ async function setExecutorFiles(root, state, files) {
   if (display) display.textContent = files.length ? files.map(f => f.name).join(" · ") : "Sem arquivos selecionados.";
 }
 function updateExecutorMapSource(root, state, source, { remember = true } = {}) {
+  for (const viewport of root.querySelectorAll("[data-jarvis-map-viewport]")) {
+    (state.executorMapScroll ??= {})[viewport.dataset.jarvisSceneIndex] =
+      { left: viewport.scrollLeft, top: viewport.scrollTop };
+  }
   const previous = fieldValue(root, "executor-source");
   const mode = fieldValue(root, "executor-mode") || "auto";
   const files = state.executorFiles ?? Array.from(field(root, "executor-files")?.files ?? []);
@@ -1714,7 +1786,36 @@ function mapPointerPosition(event, drag) {
   };
 }
 
+function beginExecutorMapPan(event, state) {
+  if (!state.executorMapPanEnabled || event.button !== 0) return false;
+  const viewport = event.target?.closest?.("[data-jarvis-map-viewport]");
+  if (!viewport) return false;
+  state.executorMapPanning = {
+    viewport, id: event.pointerId, x: event.clientX, y: event.clientY,
+    left: viewport.scrollLeft, top: viewport.scrollTop
+  };
+  viewport.setPointerCapture?.(event.pointerId);
+  event.preventDefault();
+  return true;
+}
+function moveExecutorMapPan(event, state) {
+  const p = state.executorMapPanning;
+  if (!p || p.id !== event.pointerId) return false;
+  p.viewport.scrollLeft = p.left - (event.clientX - p.x);
+  p.viewport.scrollTop = p.top - (event.clientY - p.y);
+  event.preventDefault();
+  return true;
+}
+function endExecutorMapPan(event, state) {
+  const p = state.executorMapPanning;
+  if (!p || p.id !== event.pointerId) return false;
+  (state.executorMapScroll ??= {})[p.viewport.dataset.jarvisSceneIndex] =
+    { left: p.viewport.scrollLeft, top: p.viewport.scrollTop };
+  state.executorMapPanning = null;
+  return true;
+}
 function beginExecutorMapDrag(event, state) {
+  if (state.executorMapPanEnabled) return false;
   const target=event.target?.closest?.("[data-jarvis-map-drag]");
   if (!target || event.button !== 0 || !game.user?.isGM || state.executorPreview?.plan?.kind !== "package") return false;
   const svg=target.closest("[data-jarvis-map-svg]");
@@ -1829,10 +1930,10 @@ function bindDialog(dialog, state) {
       }
     } finally { control.disabled = false; control.removeAttribute?.("aria-busy"); }
   });
-  root.addEventListener("pointerdown", event => { beginExecutorMapDrag(event,state); });
-  root.addEventListener("pointermove", event => { updateExecutorMapDrag(event,state); });
-  root.addEventListener("pointerup", event => { finishExecutorMapDrag(event,root,state); });
-  root.addEventListener("pointercancel", event => { finishExecutorMapDrag(event,root,state,{cancel:true}); });
+  root.addEventListener("pointerdown", event => { if (!beginExecutorMapPan(event,state)) beginExecutorMapDrag(event,state); });
+  root.addEventListener("pointermove", event => { if (!moveExecutorMapPan(event,state)) updateExecutorMapDrag(event,state); });
+  root.addEventListener("pointerup", event => { if (!endExecutorMapPan(event,state)) finishExecutorMapDrag(event,root,state); });
+  root.addEventListener("pointercancel", event => { if (!endExecutorMapPan(event,state)) finishExecutorMapDrag(event,root,state,{cancel:true}); });
     root.addEventListener("drop", async event => {
     if (!event.target?.closest?.("[data-jarvis-executor-drop]")) return;
     event.preventDefault();

@@ -3,6 +3,7 @@ import {
   validateSceneBlueprint
 } from "./scene-blueprint-validator.js";
 import { inspectWallGeometry } from "./scene-geometry.js";
+import { validateImageTiles } from "./package/multi-image-tiles.js";
 
 const MODULE_ID = "fora-do-abismo-foundry";
 
@@ -169,6 +170,20 @@ function buildDrawingData(drawings = [], gridSize) {
 }
 
 function buildBackgroundTileData(scene = {}, gridSize) {
+  // All imageTiles share the Scene's grid, walls, lights and fog of war.
+  const mosaic = validateImageTiles(scene);
+  if (mosaic.length) return mosaic.map((tile, index) => {
+    const x = px(tile.rect[0], gridSize), y = px(tile.rect[1], gridSize);
+    const width = px(tile.rect[2], gridSize), height = px(tile.rect[3], gridSize);
+    return {
+      name: tile.name ?? `Jarvis — Setor ${index + 1}`,
+      x: x + width / 2, y: y + height / 2, width, height,
+      anchorX: 0.5, anchorY: 0.5, alpha: 1, rotation: 0,
+      hidden: false, locked: true, sort: -100000 + index, overhead: false,
+      texture: { src: tile.src, scaleX: 1, scaleY: 1 },
+      flags: { [MODULE_ID]: { sceneBackground: true, sector: index + 1, mosaic: true } }
+    };
+  });
   const preferred = String(scene.backgroundSrc ?? "").trim();
   const fallback = String(scene.backgroundFallbackSrc ?? "").trim();
   const src = preferred || fallback;

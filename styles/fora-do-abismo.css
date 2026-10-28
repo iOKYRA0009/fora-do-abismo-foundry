@@ -366,19 +366,32 @@
   margin: 0.65rem 0;
 }
 .jarvis-console .jarvis-executor-map-preview summary { cursor: pointer; color: #d9b46e; }
-.jarvis-console .jarvis-executor-map-frame {
+.jarvis-console .jarvis-executor-map-viewport {
   position: relative;
+  overflow: auto;
   width: 100%;
   max-width: 900px;
-  min-height: 100px;
-  margin-top: 0.6rem;
-  overflow: hidden;
+  height: min(65vh, 680px);
+  min-height: 230px;
   background: #202527;
+  border: 1px solid #69604e;
+  scrollbar-width: thin;
+  overscroll-behavior: contain;
 }
-.jarvis-console .jarvis-executor-map-frame img {
-  width: 100%;
-  height: auto;
+.jarvis-console .jarvis-executor-map-frame {
+  position: relative;
+  min-height: 1px;
+  margin: 0;
+  background: #202527;
+  flex: none;
+}
+.jarvis-console .jarvis-executor-map-frame img.jarvis-map-sector {
+  position: absolute;
   display: block;
+  object-fit: fill;
+  max-width: none;
+  pointer-events: none;
+  user-select: none;
 }
 .jarvis-console .jarvis-executor-map-frame svg {
   position: absolute;
@@ -387,6 +400,13 @@
   height: 100%;
   pointer-events: none;
 }
+.jarvis-console .jarvis-executor-map-viewport[data-jarvis-map-pan-active="true"] { cursor: grab; touch-action: none; }
+.jarvis-console .jarvis-executor-map-viewport[data-jarvis-map-pan-active="true"]:active { cursor: grabbing; }
+.jarvis-console .jarvis-executor-map-viewport[data-jarvis-map-pan-active="true"] [data-jarvis-map-drag] {
+  pointer-events: none;
+}
+.jarvis-console .jarvis-map-controls { gap: .35rem; flex-wrap: wrap; }
+.jarvis-console .jarvis-map-controls span { font-variant-numeric: tabular-nums; }
 .jarvis-console [data-jarvis-map-drag] {
   pointer-events: visiblePainted;
   cursor: grab;

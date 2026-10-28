@@ -6,6 +6,8 @@
  * lights at the matching pixels. Without an annotated footprint the engine
  * MUST NOT guess where opaque walls are in an arbitrary painted map.
  */
+import { validateImageTiles } from "./multi-image-tiles.js";
+
 const isNumber = n => typeof n === "number" && Number.isFinite(n);
 const point = p => Array.isArray(p) && p.length === 2 && p.every(isNumber);
 const clone = value => structuredClone(value);
@@ -16,7 +18,7 @@ export function calibrateExecutorScene(input) {
   const result = clone(input);
   const scene = result.scene ?? {};
   const image = scene.imagePlacement;
-  if (!image && !result.structures?.length) return { blueprint: result, calibration: null };
+  if (!image && !result.structures?.length && scene.imageTiles === undefined) return { blueprint: result, calibration: null };
   if (!image || !["width", "height"].every(k => isNumber(image[k]) && image[k] > 0)) {
     fail("scene.imagePlacement exige width e height positivos da imagem original.");
   }
@@ -31,6 +33,14 @@ export function calibrateExecutorScene(input) {
     fail(`a proporção do mapa (${image.width}×${image.height}) difere da cena (${width}×${height}); ajuste a grade ou o tamanho antes da importação.`);
   }
   const scaleX = columns / image.width, scaleY = rows / image.height;
+  const tiles = validateImageTiles(scene, { sourcePixels: true });
+  if (tiles.length) scene.imageTiles = tiles.map(tile => ({
+    src: tile.src, name: tile.name,
+    x: Number((tile.rect[0] * scaleX).toFixed(6)),
+    y: Number((tile.rect[1] * scaleY).toFixed(6)),
+    width: Number((tile.rect[2] * scaleX).toFixed(6)),
+    height: Number((tile.rect[3] * scaleY).toFixed(6))
+  }));
   const within = ([x, y]) => x >= 0 && y >= 0 && x <= image.width && y <= image.height;
   const toGrid = p => p.map((n, i) => Number((n * (i === 0 ? scaleX : scaleY)).toFixed(6)));
   const convertXY = (entry, label) => {
