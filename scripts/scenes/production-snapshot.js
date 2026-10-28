@@ -7,7 +7,12 @@ export const SNAPSHOT_SCHEMA = "jarvis-scene-snapshot-1";
 const MODULE = "Jarvis Registro";
 const collections = ["tiles","walls","lights","sounds"];
 const arr = x => Array.isArray(x) ? x : Array.isArray(x?.contents) ? x.contents : x?.values ? Array.from(x.values()) : [];
-const copy = x => x === undefined ? null : structuredClone(x);
+const copy = x => {
+  if (x === undefined) return null;
+  if (x && typeof x.toObject === "function") return copy(x.toObject());
+  try { return structuredClone(x); }
+  catch { return JSON.parse(JSON.stringify(x)); }
+};
 const pick = (obj, names) => Object.fromEntries(names.map(name => [name,copy(obj?.[name])]));
 const select = {
   tiles: ["x","y","width","height","rotation","elevation","overhead","occlusion","alpha","hidden","texture","sort"],
