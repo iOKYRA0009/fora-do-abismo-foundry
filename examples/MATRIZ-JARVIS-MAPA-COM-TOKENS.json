@@ -1,0 +1,90 @@
+{
+  "schemaVersion": "jarvis-executor-1",
+  "name": "MATRIZ - substituir pelo nome do pacote",
+  "assets": [
+    {
+      "id": "mapa",
+      "fileName": "mapa-da-nova-cena.webp"
+    }
+  ],
+  "actors": [],
+  "scenes": [
+    {
+      "schemaVersion": "1.0",
+      "scene": {
+        "name": "MATRIZ - substituir pelo nome unico da cena",
+        "columns": 25,
+        "rows": 20,
+        "grid": {
+          "size": 64,
+          "distance": 5,
+          "units": "ft"
+        },
+        "visualMode": true,
+        "backgroundSrc": "asset://mapa",
+        "imagePlacement": {
+          "width": 1600,
+          "height": 1280
+        },
+        "visionPreset": "limited",
+        "tokenVision": true,
+        "environment": {
+          "darknessLevel": 0.65,
+          "globalLight": {
+            "enabled": false
+          }
+        }
+      },
+      "structures": [
+        {
+          "name": "Cabana - alterar conforme arte",
+          "rect": [
+            638,
+            235,
+            350,
+            378
+          ],
+          "doors": [
+            {
+              "edge": 3,
+              "center": 0.25,
+              "width": 76,
+              "state": "closed"
+            }
+          ],
+          "light": {
+            "x": 675,
+            "y": 509,
+            "bright": 10,
+            "dim": 25,
+            "color": "#ffbf73"
+          }
+        }
+      ],
+      "lights": [
+        {
+          "name": "Fogueira - reposicionar conforme arte",
+          "x": 1073,
+          "y": 911,
+          "bright": 12,
+          "dim": 30,
+          "color": "#ff9f36"
+        }
+      ],
+      "tokens": [
+        {
+          "actor": "SUBSTITUIR_PELO_NOME_EXATO_DE_UM_ACTOR_EXISTENTE",
+          "x": 358,
+          "y": 240,
+          "width": 2,
+          "height": 2,
+          "disposition": "hostile",
+          "vision": {
+            "enabled": true,
+            "range": 60
+          }
+        }
+      ]
+    }
+  ]
+}
