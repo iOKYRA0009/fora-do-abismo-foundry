@@ -77,7 +77,7 @@ test("GM console button toggles player abilities and rejects direct player calls
   let enabled = false;
   game.modules.get(MODULE_ID).api.automation = {
     playersEnabled: () => enabled,
-    async setPlayersEnabled(value) { enabled = value; return enabled; }
+    async setPlayersEnabled(value) { enabled = value; return { enabled, approved: 2, skipped: 0 }; }
   };
   const { root } = actionRoot();
   const status = { textContent: "" };

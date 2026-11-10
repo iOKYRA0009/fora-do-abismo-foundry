@@ -106,6 +106,19 @@ function getAutomation(activity) {
   return activity?.flags?.[MODULE_ID]?.automation ?? null;
 }
 
+function values(collection) {
+  if (!collection) return [];
+  if (Array.isArray(collection)) return collection;
+  if (Array.isArray(collection.contents)) return collection.contents;
+  if (typeof collection.values === "function") return Array.from(collection.values());
+  return typeof collection === "object" ? Object.values(collection) : [];
+}
+
+export function listActivityAutomations(items) {
+  return values(items).flatMap(item => values(item?.system?.activities)
+    .filter(activity => getAutomation(activity)));
+}
+
 function digestActivity(activity) {
   const automation = getAutomation(activity);
   if (!automation || typeof automation !== "object" || Array.isArray(automation)) {
@@ -198,6 +211,40 @@ export async function approveActivityAutomation(activity) {
     next[identity.key] = digest;
   });
   return inspectActivityAutomation(activity);
+}
+
+/** Snapshot current GM-authorized content without exposing scripts in world settings. */
+export async function approveActivityAutomations(activities, { skipInvalid = false } = {}) {
+  requireActiveGm();
+  const records = [];
+  let skipped = 0;
+  for (const activity of activities) {
+    try {
+      const identity = getIdentity(activity);
+      if (!identity) throw new Error("Activity e Item precisam de UUIDs estáveis.");
+      records.push({ activity, key: identity.key, digest: digestActivity(activity) });
+    } catch (error) {
+      if (!skipInvalid) throw error;
+      skipped += 1;
+    }
+  }
+  if (!records.length) return { approved: 0, skipped };
+  let approved = 0;
+  await updateApprovals(next => {
+    for (const record of records) {
+      try {
+        if (digestActivity(record.activity) !== record.digest) {
+          throw new Error("Automação alterada durante a autorização.");
+        }
+        next[record.key] = record.digest;
+        approved += 1;
+      } catch (error) {
+        if (!skipInvalid) throw error;
+        skipped += 1;
+      }
+    }
+  });
+  return { approved, skipped };
 }
 
 export async function revokeActivityAutomation(activity) {

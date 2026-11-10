@@ -747,15 +747,15 @@ function renderContent() {
   const systemTools = gm ? section("system-tools", `
     <h3>Atalho da Central</h3><textarea readonly rows="2" name="macro-command">${escapeHtml(MACRO_COMMAND)}</textarea>
     <div class="jarvis-console-row">${button("macro-install", "Instalar atalho da Central")}${button("macro-copy", "Copiar código")}</div>
-    <h3>Scripts de Activities</h3><p>Automações com script devem ser inspecionadas e aprovadas pelo Mestre ativo.</p>
+    <h3>Habilidades Jarvis dos jogadores</h3><p>Ao ligar, as automações já presentes nos personagens ficam autorizadas. Novas habilidades importadas pelo Mestre também são autorizadas enquanto estiver ligado.</p>
     <div class="jarvis-console-row"><span data-jarvis-player-abilities-status>Jogadores: ${jarvis.automation?.playersEnabled?.() ? "ligado" : "desligado"}</span>
     ${button("automation-toggle-players", jarvis.automation?.playersEnabled?.() ? "Desligar uso pelos jogadores" : "Ligar uso pelos jogadores")}</div>
-    <p class="jarvis-console-hint">Quando ligado, jogadores usam habilidades aprovadas nas fichas que controlam. Scripts rodam com as permissões deles; efeitos em alvos que não controlam podem exigir ação do Mestre.</p>
-    <div class="jarvis-console-row">${button("automation-batch-preview", "Revisar habilidades do personagem")}${button("automation-batch-approve", "Aprovar habilidades revisadas")}</div>
-    <p class="jarvis-console-hint">Use o personagem ativo no topo da Central. A revisão em lote mostra o código e os efeitos de todas as Activities Jarvis dessa ficha antes de aprovar.</p>
+    <p class="jarvis-console-hint">Jogadores precisam controlar a ficha. Scripts rodam com as permissões deles; efeitos em outros personagens podem exigir ação do Mestre.</p>
+    <details class="jarvis-console-advanced"><summary>Inspeção avançada de uma Activity</summary>
     <div class="jarvis-console-row"><label>Item do personagem ativo<select name="automation-item"><option value="">Selecione</option></select></label><label>Activity<select name="automation-activity"><option value="">Selecione</option></select></label>
     ${button("automation-inspect", "Inspecionar")}${button("automation-approve", "Aprovar")}${button("automation-revoke", "Revogar")}</div>
     <label>Conteúdo completo para revisão<textarea readonly name="automation-source" rows="7" placeholder="Selecione uma Activity e clique em Inspecionar"></textarea></label>
+    </details>
   `) : "";
 
   const executorPage = gm ? panel("executor", `
@@ -914,20 +914,6 @@ function selectedAutomation(root) {
   return { actor, item, activity };
 }
 
-function actorAutomations(actor, jarvis) {
-  return values(actor.items).flatMap(item => activitiesOf(item)
-    .filter(activity => activity.flags?.[MODULE_ID]?.automation)
-    .map(activity => ({ item, activity, inspection: jarvis.automation.inspect(activity),
-      embeddedEffects: values(item.effects).map(effect => effect.toObject?.() ?? effect) })));
-}
-
-function automationBatchSource(rows) {
-  return JSON.stringify(rows.map(({ item, activity, embeddedEffects }) => ({
-    item: item.name, activity: activity.name, uuid: activity.uuid,
-    automation: activity.flags[MODULE_ID].automation, embeddedEffects
-  })), null, 2);
-}
-
 function templateSpec(root) {
   const name = fieldValue(root, "map-name");
   const columns = Number(fieldValue(root, "map-columns"));
@@ -946,52 +932,18 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
   if (action === "pack-focus") return selectTab(root, "library");
   if (action === "automation-toggle-players") {
     requireGM();
-    const enabled = await jarvis.automation.setPlayersEnabled(!jarvis.automation.playersEnabled());
+    const report = await jarvis.automation.setPlayersEnabled(!jarvis.automation.playersEnabled());
+    const enabled = report.enabled;
+    if (report.skipped) ui.notifications?.warn?.(
+      `Jarvis: ${report.skipped} automação(ões) inválida(s) não foram autorizadas. Veja o resultado na Central.`
+    );
     const status = root.querySelector?.("[data-jarvis-player-abilities-status]");
     if (status) status.textContent = `Jogadores: ${enabled ? "ligado" : "desligado"}`;
     const control = root.querySelector?.('[data-jarvis-action="automation-toggle-players"]');
     if (control) control.textContent = enabled ? "Desligar uso pelos jogadores" : "Ligar uso pelos jogadores";
-    return setOutput(root, "Habilidades Jarvis dos jogadores", enabled ? "Uso ligado." : "Uso desligado.");
-  }
-  if (["automation-batch-preview", "automation-batch-approve"].includes(action)) {
-    requireGM();
-    const actor = selectedActor(root);
-    const rows = actorAutomations(actor, jarvis);
-    if (!rows.length) throw new JarvisInputError(`Nenhuma Activity com automação Jarvis encontrada em ${actor.name}.`);
-    const source = automationBatchSource(rows);
-    const sourceField = field(root, "automation-source");
-    const summary = rows.map(({ item, activity, inspection }) => ({
-      item: item.name, activity: activity.name, approved: inspection.approved, reason: inspection.reason
-    }));
-    if (action === "automation-batch-preview"
-      || state.automationBatchPreview?.actorId !== actor.id
-      || state.automationBatchPreview?.source !== source) {
-      if (sourceField) sourceField.value = source;
-      state.automationBatchPreview = { actorId: actor.id, source };
-      return setOutput(root, `Revise ${rows.length} automação(ões) de ${actor.name} antes de aprovar`, summary);
-    }
-    const invalid = rows.filter(({ inspection }) => !["approved", "approval-required"].includes(inspection.reason));
-    if (invalid.length) {
-      throw new Error(`${invalid.length} automação(ões) de ${actor.name} não podem ser aprovadas. Confira UUIDs, conteúdo e tamanho na prévia.`);
-    }
-    const pending = rows.filter(({ inspection }) => !inspection.approved);
-    if (!pending.length) return setOutput(root, "Automações já aprovadas", summary);
-    if (!await confirmAction("Aprovar habilidades do personagem",
-      `Aprovar ${pending.length} automação(ões) revisada(s) de ${actor.name}? Scripts e Effects poderão ser executados pelo dono da ficha quando o uso pelos jogadores estiver ligado.`)) return;
-    if (automationBatchSource(actorAutomations(actor, jarvis)) !== source) {
-      state.automationBatchPreview = null;
-      throw new Error("As automações mudaram durante a confirmação. Revise novamente antes de aprovar.");
-    }
-    let approved = 0;
-    for (const { activity } of pending) {
-      try { await jarvis.automation.approve(activity); approved += 1; }
-      catch (error) {
-        state.automationBatchPreview = null;
-        throw new Error(`Aprovação interrompida após ${approved} de ${pending.length} automações. Revise ${activity.name}: ${error.message}`, { cause: error });
-      }
-    }
-    state.automationBatchPreview = null;
-    return setOutput(root, "Habilidades aprovadas", { character: actor.name, approved, total: rows.length });
+    return setOutput(root, "Habilidades Jarvis dos jogadores", enabled
+      ? `Uso ligado. ${report.approved} automação(ões) autorizada(s). ${report.skipped} ignorada(s) por dados inválidos.`
+      : "Uso desligado.");
   }
 
   if (action === "actor-open") {

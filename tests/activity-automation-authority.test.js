@@ -107,7 +107,7 @@ test("Player and Trusted clients cannot use executable Jarvis Activities without
   delete globalThis.__jarvisPlayerAutomation;
 });
 
-test("GM toggle lets an owner use multiple approved Jarvis abilities and stops them when off", async () => {
+test("GM toggle authorizes existing abilities without per-Activity review and stops them when off", async () => {
   const { pre, post, settings } = automationHooks;
   game.user = { id: "gm-1", isGM: true };
   game.users.activeGM = { id: "gm-1" };
@@ -116,14 +116,22 @@ test("GM toggle lets an owner use multiple approved Jarvis abilities and stops t
     post: "globalThis.__jarvisOwnerCalls.push('post');"
   });
   guarded.item.actor.testUserPermission = (user, level) => user.id === "player-1" && level === "OWNER";
-  await approveActivityAutomation(guarded);
   const second = activity({ pre: "globalThis.__jarvisOwnerCalls.push('second');" });
   second.uuid = "Actor.actor-1.Item.item-2.Activity.activity-2";
   second.item.uuid = "Actor.actor-1.Item.item-2";
-  second.item.actor.testUserPermission = guarded.item.actor.testUserPermission;
-  await approveActivityAutomation(second);
+  second.item.actor = guarded.item.actor;
+  guarded.item.system = { activities: [guarded] };
+  second.item.system = { activities: [second] };
+  guarded.item.actor.type = "character";
+  guarded.item.actor.items = [guarded.item, second.item];
+  game.actors = [guarded.item.actor];
+  assert.equal(inspectActivityAutomation(guarded).approved, false);
+  assert.equal(inspectActivityAutomation(second).approved, false);
   assert.equal(settings.get("allowPlayerJarvisAbilities"), false);
-  await setPlayerAbilitiesEnabled(true);
+  const report = await setPlayerAbilitiesEnabled(true);
+  assert.deepEqual(report, { enabled: true, approved: 2, skipped: 0 });
+  assert.equal(inspectActivityAutomation(guarded).approved, true);
+  assert.equal(inspectActivityAutomation(second).approved, true);
   assert.equal(settings.get("allowPlayerJarvisAbilities"), true);
 
   globalThis.__jarvisOwnerCalls = [];
@@ -147,6 +155,7 @@ test("GM toggle lets an owner use multiple approved Jarvis abilities and stops t
   assert.equal(pre(guarded, {}), false);
   game.user = { id: "gm-1", isGM: true };
   delete globalThis.__jarvisOwnerCalls;
+  delete game.actors;
 });
 
 test("post-script removal by name leaves unrelated Active Effects intact", async () => {
