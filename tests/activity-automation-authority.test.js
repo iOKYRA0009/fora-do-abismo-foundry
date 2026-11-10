@@ -107,7 +107,7 @@ test("Player and Trusted clients cannot use executable Jarvis Activities without
   delete globalThis.__jarvisPlayerAutomation;
 });
 
-test("GM toggle lets an owner use approved Jarvis abilities and stops them when off", async () => {
+test("GM toggle lets an owner use multiple approved Jarvis abilities and stops them when off", async () => {
   const { pre, post, settings } = automationHooks;
   game.user = { id: "gm-1", isGM: true };
   game.users.activeGM = { id: "gm-1" };
@@ -117,6 +117,11 @@ test("GM toggle lets an owner use approved Jarvis abilities and stops them when 
   });
   guarded.item.actor.testUserPermission = (user, level) => user.id === "player-1" && level === "OWNER";
   await approveActivityAutomation(guarded);
+  const second = activity({ pre: "globalThis.__jarvisOwnerCalls.push('second');" });
+  second.uuid = "Actor.actor-1.Item.item-2.Activity.activity-2";
+  second.item.uuid = "Actor.actor-1.Item.item-2";
+  second.item.actor.testUserPermission = guarded.item.actor.testUserPermission;
+  await approveActivityAutomation(second);
   assert.equal(settings.get("allowPlayerJarvisAbilities"), false);
   await setPlayerAbilitiesEnabled(true);
   assert.equal(settings.get("allowPlayerJarvisAbilities"), true);
@@ -127,9 +132,10 @@ test("GM toggle lets an owner use approved Jarvis abilities and stops them when 
   unapproved.item.actor.testUserPermission = guarded.item.actor.testUserPermission;
   assert.equal(pre(unapproved, {}), false);
   assert.equal(pre(guarded, {}), undefined);
+  assert.equal(pre(second, {}), undefined);
   post(guarded, {}, {});
   await settlePost();
-  assert.deepEqual(globalThis.__jarvisOwnerCalls, ["pre", "post"]);
+  assert.deepEqual(globalThis.__jarvisOwnerCalls, ["pre", "second", "post"]);
 
   game.user = { id: "other-player", isGM: false };
   assert.equal(pre(guarded, {}), false);
