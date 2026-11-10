@@ -6,6 +6,9 @@ import {
   approveActivityAutomation, inspectActivityAutomation, registerActivityAutomationSettings,
   revokeActivityAutomation, sha256Text
 } from "../scripts/automation/automation-approval.js";
+import {
+  registerPlayerAbilitySetting, setPlayerAbilitiesEnabled
+} from "../scripts/automation/player-ability-setting.js";
 
 const MODULE_ID = "fora-do-abismo-foundry";
 
@@ -50,6 +53,7 @@ function setup() {
   globalThis.fromUuid = async () => null;
 
   registerActivityAutomationSettings();
+  registerPlayerAbilitySetting();
   registerActivityAutomation();
   registerActivityAutomation();
   assert.equal(callbacks.get("dnd5e.preUseActivity")?.length, 1);
@@ -98,9 +102,45 @@ test("Player and Trusted clients cannot use executable Jarvis Activities without
   await settlePost();
   assert.equal(globalThis.__jarvisPlayerAutomation, 0);
   assert.equal(warnings.length - startWarnings, 4);
-  assert.ok(warnings.slice(startWarnings).every(message => /Mestre ativo.*cancelado/.test(message)));
+  assert.ok(warnings.slice(startWarnings).every(message => /Mestre.*habilitar.*Uso cancelado/.test(message)));
   game.user = { id: "gm-1", isGM: true };
   delete globalThis.__jarvisPlayerAutomation;
+});
+
+test("GM toggle lets an owner use approved Jarvis abilities and stops them when off", async () => {
+  const { pre, post, settings } = automationHooks;
+  game.user = { id: "gm-1", isGM: true };
+  game.users.activeGM = { id: "gm-1" };
+  const guarded = activity({
+    pre: "globalThis.__jarvisOwnerCalls.push('pre');",
+    post: "globalThis.__jarvisOwnerCalls.push('post');"
+  });
+  guarded.item.actor.testUserPermission = (user, level) => user.id === "player-1" && level === "OWNER";
+  await approveActivityAutomation(guarded);
+  assert.equal(settings.get("allowPlayerJarvisAbilities"), false);
+  await setPlayerAbilitiesEnabled(true);
+  assert.equal(settings.get("allowPlayerJarvisAbilities"), true);
+
+  globalThis.__jarvisOwnerCalls = [];
+  game.user = { id: "player-1", isGM: false };
+  const unapproved = activity({ pre: "globalThis.__jarvisOwnerCalls.push('unapproved');" });
+  unapproved.item.actor.testUserPermission = guarded.item.actor.testUserPermission;
+  assert.equal(pre(unapproved, {}), false);
+  assert.equal(pre(guarded, {}), undefined);
+  post(guarded, {}, {});
+  await settlePost();
+  assert.deepEqual(globalThis.__jarvisOwnerCalls, ["pre", "post"]);
+
+  game.user = { id: "other-player", isGM: false };
+  assert.equal(pre(guarded, {}), false);
+  await assert.rejects(setPlayerAbilitiesEnabled(false), /Mestre ativo/);
+
+  game.user = { id: "gm-1", isGM: true };
+  await setPlayerAbilitiesEnabled(false);
+  game.user = { id: "player-1", isGM: false };
+  assert.equal(pre(guarded, {}), false);
+  game.user = { id: "gm-1", isGM: true };
+  delete globalThis.__jarvisOwnerCalls;
 });
 
 test("post-script removal by name leaves unrelated Active Effects intact", async () => {

@@ -5,6 +5,7 @@ import {
   removeAppliedEmbeddedEffectFromActor
 } from "./embedded-effect-engine.js";
 import { inspectActivityAutomation } from "./automation-approval.js";
+import { playerAbilitiesEnabled } from "./player-ability-setting.js";
 
 const MODULE_ID = "fora-do-abismo-foundry";
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
@@ -23,13 +24,14 @@ function warnUnapproved(activity, reason, phase) {
   );
 }
 
-function isActiveGm() {
+function canExecute(activity) {
   const user = game.user;
   const activeGm = game.users?.activeGM;
-  // Activity hooks run locally on every connected client. Fail closed when
-  // Foundry has not elected an active GM, rather than evaluating flag code on
-  // a player or allowing two GM clients to apply the same effects.
-  return Boolean(user?.isGM && user.id && activeGm?.id === user.id);
+  if (!user?.id) return false;
+  if (user.isGM) return activeGm?.id === user.id;
+  const actor = activity?.item?.actor ?? activity?.actor;
+  return playerAbilitiesEnabled()
+    && Boolean(actor?.testUserPermission?.(user, "OWNER"));
 }
 
 function getAutomation(activity) {
@@ -251,7 +253,7 @@ async function runPost(activity, usageConfig, results) {
 
   try {
     for (const config of getEffectConfigs(automation)) {
-      if (!isActiveGm() || !inspectActivityAutomation(activity).approved) return undefined;
+      if (!canExecute(activity) || !inspectActivityAutomation(activity).approved) return undefined;
       await applyConfiguredEffect(activity, config);
     }
   } catch (error) {
@@ -262,7 +264,7 @@ async function runPost(activity, usageConfig, results) {
 
   const script = automation?.post;
   if (!script) return undefined;
-  if (!isActiveGm() || !inspectActivityAutomation(activity).approved) return undefined;
+  if (!canExecute(activity) || !inspectActivityAutomation(activity).approved) return undefined;
 
   try {
     return await executePostScript(script, scope, `${label} / post`);
@@ -278,11 +280,11 @@ export function registerActivityAutomation() {
   hooksRegistered = true;
 
   Hooks.on("dnd5e.preUseActivity", (activity, usageConfig) => {
-    if (!isActiveGm()) {
+    if (!canExecute(activity)) {
       if (!hasExecutableAutomation(getAutomation(activity))) return undefined;
       ui.notifications?.warn?.(
         `Jarvis: '${activity?.item?.name ?? "Item"} / ${activity?.name ?? "Activity"}' usa automação Jarvis. ` +
-        "Peça ao Mestre ativo para executar esta Activity; o uso neste cliente foi cancelado."
+        "O Mestre precisa habilitar o uso pelos jogadores e aprovar a automação; a ficha também precisa estar sob seu controle. Uso cancelado."
       );
       return false;
     }
@@ -292,7 +294,7 @@ export function registerActivityAutomation() {
   });
 
   Hooks.on("dnd5e.postUseActivity", (activity, usageConfig, results) => {
-    if (!isActiveGm()) return undefined;
+    if (!canExecute(activity)) return undefined;
     void runPost(activity, usageConfig, results);
     return undefined;
   });

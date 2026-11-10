@@ -77,6 +77,7 @@ export const TOOL_CATALOG = Object.freeze([
   { id: "managed-macro-import", label: "Importar macros gerenciadas", tab: "library", gmOnly: true },
   { id: "macro-copy", label: "Copiar código da Central", tab: "system", gmOnly: true },
   { id: "automation-inspect", label: "Inspecionar Activity", tab: "system", gmOnly: true },
+  { id: "automation-toggle-players", label: "Ligar ou desligar habilidades Jarvis dos jogadores", tab: "system", gmOnly: true },
   { id: "automation-approve", label: "Aprovar automação", tab: "system", gmOnly: true },
   { id: "automation-revoke", label: "Revogar automação", tab: "system", gmOnly: true },
   { id: "framework-test", label: "Testar templates e skins", tab: "system", gmOnly: true },

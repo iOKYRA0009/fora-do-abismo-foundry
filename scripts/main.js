@@ -18,6 +18,7 @@ import { captureSceneSnapshot, compareSceneSnapshot } from "./scenes/production-
 import { inspectMosaicQuality } from "./scenes/package/mosaic-quality.js";
 import { listAtmosphereCues, previewAtmosphereCue, applyAtmosphereCue, restoreAtmosphereCue } from "./scenes/atmosphere-director.js";
 import { registerActivityAutomation } from "./automation/activity-automation.js";
+import { playerAbilitiesEnabled, registerPlayerAbilitySetting, setPlayerAbilitiesEnabled } from "./automation/player-ability-setting.js";
 import {
   approveActivityAutomation,
   inspectActivityAutomation,
@@ -114,6 +115,7 @@ Hooks.once("init", runtimeCapture.guard("initialization", "init", () => {
   registerHybridFeatureLayout();
   registerMacroFileDrop();
   registerActivityAutomationSettings();
+  registerPlayerAbilitySetting();
   registerJarvisConsoleControl();
   registerUniversalVttControl();
   registerMapStudioControl();
@@ -170,7 +172,9 @@ Hooks.once("ready", runtimeCapture.guard("initialization", "ready", () => {
     automation: {
       inspect: inspectActivityAutomation,
       approve: approveActivityAutomation,
-      revoke: revokeActivityAutomation
+      revoke: revokeActivityAutomation,
+      playersEnabled: playerAbilitiesEnabled,
+      setPlayersEnabled: setPlayerAbilitiesEnabled
     },
     effects: {
       applyEmbedded: applyEmbeddedEffect,
