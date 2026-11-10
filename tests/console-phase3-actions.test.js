@@ -158,3 +158,32 @@ test("Activity approval requires the GM to inspect its automation first", async 
   await executeJarvisConsoleAction("automation-approve", root, state);
   assert.deepEqual(calls, ["approve"]);
 });
+
+test("batch approval reviews every Activity of one Actor and rejects a stale preview", async () => {
+  const approved = [];
+  const first = { id: "one", uuid: "Actor.a.Item.i.Activity.one", name: "Alvorada",
+    flags: { "fora-do-abismo-foundry": { automation: { pre: "return true;" } } } };
+  const second = { id: "two", uuid: "Actor.a.Item.i.Activity.two", name: "Raízes",
+    flags: { "fora-do-abismo-foundry": { automation: { post: "await actor.update({});" } } } };
+  const item = { id: "item", name: "Relíquia", system: { activities: new Map([["one", first], ["two", second]]) },
+    effects: [], uuid: "Actor.a.Item.i" };
+  const actor = { id: "a", name: "Personagem", items: new Map([["item", item]]),
+    testUserPermission: () => true };
+  setup({ automation: {
+    inspect: activity => ({ approved: approved.includes(activity.uuid),
+      reason: approved.includes(activity.uuid) ? "approved" : "approval-required" }),
+    async approve(activity) { approved.push(activity.uuid); return { approved: true }; }
+  } }, { actors: [actor] });
+  const { root, fields } = rootFor({ "jarvis-actor": "a", "automation-source": "" });
+  const state = {};
+  await executeJarvisConsoleAction("automation-batch-preview", root, state);
+  assert.match(fields["automation-source"].value, /Alvorada/);
+  assert.match(fields["automation-source"].value, /Raízes/);
+  second.flags["fora-do-abismo-foundry"].automation.post = "await actor.update({ hp: 1 });";
+  await executeJarvisConsoleAction("automation-batch-approve", root, state);
+  assert.deepEqual(approved, []);
+  await executeJarvisConsoleAction("automation-batch-approve", root, state);
+  assert.deepEqual(approved, [first.uuid, second.uuid]);
+  game.user = { id: "player", isGM: false };
+  await assert.rejects(executeJarvisConsoleAction("automation-batch-approve", root, state), /Mestre/);
+});

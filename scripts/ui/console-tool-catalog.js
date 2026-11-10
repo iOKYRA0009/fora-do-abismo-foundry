@@ -78,6 +78,8 @@ export const TOOL_CATALOG = Object.freeze([
   { id: "macro-copy", label: "Copiar código da Central", tab: "system", gmOnly: true },
   { id: "automation-inspect", label: "Inspecionar Activity", tab: "system", gmOnly: true },
   { id: "automation-toggle-players", label: "Ligar ou desligar habilidades Jarvis dos jogadores", tab: "system", gmOnly: true },
+  { id: "automation-batch-preview", label: "Revisar habilidades Jarvis do personagem", tab: "system", gmOnly: true },
+  { id: "automation-batch-approve", label: "Aprovar habilidades Jarvis revisadas", tab: "system", gmOnly: true },
   { id: "automation-approve", label: "Aprovar automação", tab: "system", gmOnly: true },
   { id: "automation-revoke", label: "Revogar automação", tab: "system", gmOnly: true },
   { id: "framework-test", label: "Testar templates e skins", tab: "system", gmOnly: true },
