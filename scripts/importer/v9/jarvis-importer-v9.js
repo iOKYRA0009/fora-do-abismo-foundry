@@ -11,6 +11,8 @@ import {
 } from "../compat/legacy-item-rehydrator.js";
 import { applyActorProgressions } from "../../progression/progression-engine.js";
 import { stampActorProvenance } from "../../provenance/content-provenance.js";
+import { approveActivityAutomations, listActivityAutomations } from "../../automation/automation-approval.js";
+import { playerAbilitiesEnabled } from "../../automation/player-ability-setting.js";
 import {
   DEFAULT_RULES_PROFILE,
   setActorRulesProfile
@@ -65,6 +67,9 @@ export class JarvisImporterV9 {
         actor,
         payload.actor?.jarvis?.rulesProfile ?? DEFAULT_RULES_PROFILE
       );
+      if (playerAbilitiesEnabled()) {
+        await approveActivityAutomations(listActivityAutomations(actor.items));
+      }
     } catch (error) {
       console.error(`${MODULE_ID} | Falha ao finalizar importação de ${actor.name}`, error);
       try {
@@ -115,6 +120,9 @@ export class JarvisImporterV9 {
     try {
       created = await this.#createItems(actor, itemData);
       await stampActorProvenance(actor);
+      if (playerAbilitiesEnabled()) {
+        await approveActivityAutomations(listActivityAutomations(created));
+      }
     } catch (error) {
       const newIds = Array.from(actor.items ?? [], item => item.id).filter(id => id && !existingIds.has(id));
       if (newIds.length) {

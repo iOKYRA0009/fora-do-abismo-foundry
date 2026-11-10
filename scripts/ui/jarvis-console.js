@@ -747,10 +747,15 @@ function renderContent() {
   const systemTools = gm ? section("system-tools", `
     <h3>Atalho da Central</h3><textarea readonly rows="2" name="macro-command">${escapeHtml(MACRO_COMMAND)}</textarea>
     <div class="jarvis-console-row">${button("macro-install", "Instalar atalho da Central")}${button("macro-copy", "Copiar código")}</div>
-    <h3>Scripts de Activities</h3><p>Automações com script devem ser inspecionadas e aprovadas pelo Mestre ativo.</p>
+    <h3>Habilidades Jarvis dos jogadores</h3><p>Ao ligar, as automações já presentes nos personagens ficam autorizadas. Novas habilidades importadas pelo Mestre também são autorizadas enquanto estiver ligado.</p>
+    <div class="jarvis-console-row"><span data-jarvis-player-abilities-status>Jogadores: ${jarvis.automation?.playersEnabled?.() ? "ligado" : "desligado"}</span>
+    ${button("automation-toggle-players", jarvis.automation?.playersEnabled?.() ? "Desligar uso pelos jogadores" : "Ligar uso pelos jogadores")}</div>
+    <p class="jarvis-console-hint">Jogadores precisam controlar a ficha. Scripts rodam com as permissões deles; efeitos em outros personagens podem exigir ação do Mestre.</p>
+    <details class="jarvis-console-advanced"><summary>Inspeção avançada de uma Activity</summary>
     <div class="jarvis-console-row"><label>Item do personagem ativo<select name="automation-item"><option value="">Selecione</option></select></label><label>Activity<select name="automation-activity"><option value="">Selecione</option></select></label>
     ${button("automation-inspect", "Inspecionar")}${button("automation-approve", "Aprovar")}${button("automation-revoke", "Revogar")}</div>
     <label>Conteúdo completo para revisão<textarea readonly name="automation-source" rows="7" placeholder="Selecione uma Activity e clique em Inspecionar"></textarea></label>
+    </details>
   `) : "";
 
   const executorPage = gm ? panel("executor", `
@@ -925,6 +930,21 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
   const jarvis = api();
   if (action === "clear-output") return clearOutput(root);
   if (action === "pack-focus") return selectTab(root, "library");
+  if (action === "automation-toggle-players") {
+    requireGM();
+    const report = await jarvis.automation.setPlayersEnabled(!jarvis.automation.playersEnabled());
+    const enabled = report.enabled;
+    if (report.skipped) ui.notifications?.warn?.(
+      `Jarvis: ${report.skipped} automação(ões) inválida(s) não foram autorizadas. Veja o resultado na Central.`
+    );
+    const status = root.querySelector?.("[data-jarvis-player-abilities-status]");
+    if (status) status.textContent = `Jogadores: ${enabled ? "ligado" : "desligado"}`;
+    const control = root.querySelector?.('[data-jarvis-action="automation-toggle-players"]');
+    if (control) control.textContent = enabled ? "Desligar uso pelos jogadores" : "Ligar uso pelos jogadores";
+    return setOutput(root, "Habilidades Jarvis dos jogadores", enabled
+      ? `Uso ligado. ${report.approved} automação(ões) autorizada(s). ${report.skipped} ignorada(s) por dados inválidos.`
+      : "Uso desligado.");
+  }
 
   if (action === "actor-open") {
     const actor = selectedActor(root);

@@ -72,6 +72,30 @@ test("player starts in the Library without arbitrary code execution controls", a
   assert.doesNotMatch(html, /name="executor-source"/);
 });
 
+test("GM console button toggles player abilities and rejects direct player calls", async () => {
+  setup();
+  let enabled = false;
+  game.modules.get(MODULE_ID).api.automation = {
+    playersEnabled: () => enabled,
+    async setPlayersEnabled(value) { enabled = value; return { enabled, approved: 2, skipped: 0 }; }
+  };
+  const { root } = actionRoot();
+  const status = { textContent: "" };
+  const control = { textContent: "" };
+  const originalQuery = root.querySelector;
+  root.querySelector = selector => ({
+    "[data-jarvis-player-abilities-status]": status,
+    '[data-jarvis-action="automation-toggle-players"]': control
+  })[selector] ?? originalQuery(selector);
+  await executeJarvisConsoleAction("automation-toggle-players", root);
+  assert.equal(enabled, true);
+  assert.equal(status.textContent, "Jogadores: ligado");
+  assert.equal(control.textContent, "Desligar uso pelos jogadores");
+  game.user = { id: "player", isGM: false };
+  await assert.rejects(executeJarvisConsoleAction("automation-toggle-players", root), /Mestre/);
+  assert.equal(enabled, true);
+});
+
 test("JavaScript requires a fresh preview, an explicit risk checkbox, and confirmation", async () => {
   const calls = [];
   setup({

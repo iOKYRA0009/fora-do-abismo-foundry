@@ -54,7 +54,7 @@ O Mestre pode criar, editar, duplicar, remover e importar descritores JSON de ma
 
 O arrastar de arquivos `.txt`/`.js` e o editor nativo do Foundry continuam disponíveis fora dessa biblioteca. A biblioteca gerenciada não executa texto JavaScript livre enviado por jogadores.
 
-Automações Jarvis em Activities precisam de aprovação explícita do Mestre ativo. Na aba Macros, selecione personagem, Item e Activity; **Inspecionar** mostra script e nomes dos Active Effects embutidos. Depois, **Aprovar** grava somente o resumo criptográfico do conteúdo revisado. Qualquer alteração de script ou Effect invalida a aprovação. **Revogar** remove a autorização. Consulte [a política de execução](activity-automation-approval.md): scripts Jarvis rodam apenas no cliente do Mestre ativo ao usar a Activity, mesmo que outro usuário tenha acesso à ficha.
+Em **Sistema → Habilidades Jarvis dos jogadores**, o Mestre pode ligar ou desligar em uma ação o uso das Activities Jarvis pelos donos das fichas. Ao ligar, o módulo autoriza as automações atuais dos personagens; novas importações pelo Mestre entram automaticamente enquanto estiver ligado. A inspeção individual de Item e Activity permanece em **Inspeção avançada**, junto com **Aprovar** e **Revogar** para ajustes manuais. Alterações no script ou Effect invalidam o registro anterior. Consulte [a política de execução](activity-automation-approval.md) para os limites de permissão dos scripts.
 
 ## Permissões e recuperação
 
