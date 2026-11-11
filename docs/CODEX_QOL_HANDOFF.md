@@ -1,6 +1,6 @@
 # Jarvis Tools 1.5.0 QoL — handoff de desenvolvimento
 
-Atualizado em 2026-11-11. A versão **1.5.0 definitiva** está preparada para publicação e para os testes manuais do proprietário no Foundry. A tag `v1.4.1` permanece intacta; `git merge-base --is-ancestor v1.4.1 HEAD` passou, confirmando que a 1.5.0 contém a 1.4.1. Os schemas permanecem `9.0`, `jarvis-executor-1` e `1.0`.
+Atualizado em 2026-11-11. A versão **1.5.0 definitiva foi publicada** e está disponível para atualização no Foundry. Os testes manuais no mundo serão feitos pelo proprietário. A tag `v1.4.1` permanece intacta; `git merge-base --is-ancestor v1.4.1 origin/main` passou, confirmando que a 1.5.0 contém a 1.4.1. Os schemas permanecem `9.0`, `jarvis-executor-1` e `1.0`.
 
 ## Objetivo completo
 
@@ -9,9 +9,11 @@ Entregar Jarvis Tools 1.5.0 com importações V9 seguras, detecção de duplicat
 ## Estado Git
 
 - Repositório: `https://github.com/iOKYRA0009/fora-do-abismo-foundry`.
-- Branch local: `feat/jarvis-tools-1.5.0-qol`, criada de `main` em `61ece6b` (Jarvis 1.4.1).
-- Último commit de release preparado: `1b3ee3a` — `release: prepare Jarvis Tools 1.5.0 for Foundry update`. Checkpoints de código: `12d6389`, `5362e42`, `385d1f4`, `ff05844`.
-- PR: https://github.com/iOKYRA0009/fora-do-abismo-foundry/pull/36 . Publicação pendente no momento deste checkpoint; verificar estado do PR e da release antes de retomar.
+- Branch de desenvolvimento: `feat/jarvis-tools-1.5.0-qol`, criada de `main` em `61ece6b` (Jarvis 1.4.1). PR #36 integrado por squash em `ab30bec6f1c8f9eaf89016dffa00fb7c4826be42`.
+- Release: https://github.com/iOKYRA0009/fora-do-abismo-foundry/releases/tag/v1.5.0 . Tag `v1.5.0` aponta para `ab30bec6f1c8f9eaf89016dffa00fb7c4826be42`.
+- Workflow de publicação: https://github.com/iOKYRA0009/fora-do-abismo-foundry/actions/runs/43024731075 — **success**. Manifesto e ZIP presentes.
+- Checkpoints de código anteriores ao squash: `12d6389`, `5362e42`, `385d1f4`, `ff05844`.
+- PR: https://github.com/iOKYRA0009/fora-do-abismo-foundry/pull/36 — integrado.
 - Para ver o último commit inclusive este handoff: `git log -1 --oneline`.
 - Diretório local: `C:\Users\Roger\.codex\.chatgpt-projects\g-p-6a70840fbf8081919fb2119ad103500d\jarvis-qol-150`.
 
@@ -50,6 +52,7 @@ Entregar Jarvis Tools 1.5.0 com importações V9 seguras, detecção de duplicat
 
 - `node --test tests/*.test.js`: **260 passaram, 0 falharam** em 2026-11-11.
 - `git diff --check`: passou.
+- `releases/latest/download/module.json` retornou versão **1.5.0**, com download fixado em `v1.5.0`. ZIP de 930220 bytes verificado com `module.json` 1.5.0, scripts de habilidades da 1.4.1, novos módulos de revisão e três mapas WEBP.
 - Foundry local em `http://127.0.0.1:30000`: conexão recusada. Testes E2E e testes reais no mundo **NÃO TESTADOS**.
 - `node_modules/playwright-core` não está instalado neste checkout. O comando E2E também requer URL/mundo de homologação e navegador configurados.
 - Integrações DAE, Tidy5e, Nik's Tweaks, Visage e Metamorph **NÃO TESTADAS** neste checkpoint.
@@ -67,7 +70,7 @@ Entregar Jarvis Tools 1.5.0 com importações V9 seguras, detecção de duplicat
 
 ## Próxima tarefa exata
 
-Conferir PR #36 e release `v1.5.0`; se a workflow publicar com sucesso, verificar `module.json` e ZIP na release e instruir o proprietário a atualizar pelo Foundry. Depois receber o resultado dos testes manuais e corrigir regressões sem alterar `v1.4.1` nem republicar silenciosamente `v1.5.0`.
+Receber os resultados dos testes manuais do proprietário no Foundry. Para qualquer regressão, reproduzir em branch própria, corrigir e publicar uma nova versão (por exemplo, 1.5.1). Não alterar `v1.4.1` nem substituir silenciosamente os assets de `v1.5.0`.
 
 ## Comandos para retomar
 
