@@ -26,13 +26,19 @@ No Foundry VTT:
 
 O Foundry usa o mesmo Manifest URL para detectar atualizações futuras.
 
-### Atualização Jarvis Tools 1.5.1 — correção de autorização em tokens
+### Atualização Jarvis Tools 1.5.2 — Activities sem aprovação
 
-Em **Add-on Modules**, use **Update** no Jarvis Tools e confirme que o Foundry mostra **1.5.1**. Recarregue o mundo depois de atualizar. Esta correção inclui integralmente as versões 1.4.1 e 1.5.0, que permanecem disponíveis nas respectivas tags.
+Em **Add-on Modules**, atualize o Jarvis Tools e confira a versão **1.5.2**. Recarregue o mundo e as páginas dos jogadores. O Jarvis não exige mais aprovação de automações nem apresenta o botão de liberar habilidades. Ao usar uma Activity, o script e os efeitos Jarvis rodam no cliente de quem a acionou, respeitando as permissões normais do Foundry. O uso nativo da Activity não é cancelado por falta de aprovação. Veja [notas da correção](docs/QUALITY-1.5.2.md).
+
+A 1.5.2 inclui as alterações das versões 1.4.1, 1.5.0 e 1.5.1; as tags anteriores permanecem intactas. O registro antigo de aprovações fica no mundo, sem ser consultado pela versão atual.
+
+### Histórico: Jarvis Tools 1.5.1 — autorização em tokens
+
+Esta correção incluía as versões 1.4.1 e 1.5.0. A autorização descrita abaixo foi removida na 1.5.2.
 
 Activities usadas a partir de tokens não vinculados agora herdam a autorização da ficha original quando script e efeitos são idênticos. Ao ligar **Uso pelos jogadores**, o Mestre também autoriza as automações próprias dos tokens já existentes. Se o conteúdo for alterado depois, é preciso religar o controle ou aprovar a Activity novamente. O aviso de bloqueio mostra o motivo da recusa. Veja [notas da correção](docs/QUALITY-1.5.1.md).
 
-### Atualização Jarvis Tools 1.5.0 — Quality of Life
+### Histórico: Jarvis Tools 1.5.0 — Quality of Life
 
 Em **Add-on Modules**, use **Update All** ou **Update** no Jarvis Tools e confirme que o Foundry mostra **1.5.0**. Se o módulo foi instalado manualmente, instale pelo Manifest URL acima para receber as próximas atualizações. Faça backup do mundo antes de atualizar e recarregue o Foundry depois. A versão 1.5.0 não migra nem substitui fichas existentes automaticamente.
 
@@ -44,9 +50,9 @@ Esta é uma atualização cumulativa: **inclui integralmente a 1.4.1**, inclusiv
 
 Após ativar o módulo, clique em **Jarvis — Fora do Abismo** nos controles de **Tokens**. A Central organiza as funções em seis áreas: **Executor**, **Biblioteca**, **Personagens**, **Cenas**, **Aparências** e **Sistema**. O Mestre começa no Executor e vê as ações de administração. Jogadores começam na Biblioteca e só recebem as ações permitidas para seu papel e para os Actors que controlam. As ferramentas anteriores continuam disponíveis nas seções avançadas.
 
-### Uso de habilidades Jarvis pelos jogadores — v1.4.1
+### Uso de habilidades Jarvis pelos jogadores — histórico da v1.4.1
 
-Na Central, abra **Sistema → Habilidades Jarvis dos jogadores** e clique em **Ligar uso pelos jogadores**. O mesmo botão permite desligar depois. O controle começa desligado e só o Mestre ativo pode mudá-lo. Ao ligar, o módulo autoriza as automações existentes nos personagens; novas habilidades importadas pelo Mestre enquanto estiver ligado também são autorizadas. Não é preciso revisar Item por Item no Foundry. Alterações posteriores no script ou nos Effects anulam a autorização até o Mestre religar o controle ou aprovar a Activity na inspeção avançada. O jogador precisa ter permissão **OWNER** na ficha. O script roda no cliente dele, com suas próprias permissões do Foundry. Efeitos em Actors que o jogador não controla podem exigir ação do Mestre.
+Na v1.4.1, a Central oferecia um botão de aprovação para habilidades Jarvis dos jogadores. Esse controle foi removido na 1.5.2. O script roda no cliente de quem usa a Activity, com suas próprias permissões do Foundry. Efeitos em Actors que o jogador não controla podem exigir ação do Mestre.
 
 A versão anterior permanece na [release v1.4.0](https://github.com/iOKYRA0009/fora-do-abismo-foundry/releases/tag/v1.4.0). Para voltar, instale manualmente o manifesto ou o ZIP dessa release e mantenha a atualização automática desativada até corrigir o problema. Faça backup do mundo no Foundry antes de uma restauração, pois trocar o módulo não reverte alterações já feitas nas fichas.
 
