@@ -10,7 +10,7 @@ export async function openUniversalVttImporter() {
       window: { title: "Jarvis — importar mapa Universal VTT" },
       content: `
         <div class="jarvis-uvtt-import">
-          <label>Arquivo .dd2vtt ou .uvtt <input type="file" name="map" accept=".dd2vtt,.uvtt,.json" required></label>
+          <label>Arquivo .dd2vtt, .df2vtt ou .uvtt <input type="file" name="map" accept=".dd2vtt,.df2vtt,.uvtt,.json" required></label>
           <label>Nome da cena <input type="text" name="name" placeholder="Nome do mapa" required></label>
           <label><input type="checkbox" name="objects"> Incluir obstáculos de objetos como paredes</label>
           <p>A próxima tela mostrará as paredes, portas, luzes e alertas antes da criação.</p>

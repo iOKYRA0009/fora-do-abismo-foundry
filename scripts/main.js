@@ -19,6 +19,13 @@ import { captureSceneSnapshot, compareSceneSnapshot } from "./scenes/production-
 import { inspectMosaicQuality } from "./scenes/package/mosaic-quality.js";
 import { listAtmosphereCues, previewAtmosphereCue, applyAtmosphereCue, restoreAtmosphereCue } from "./scenes/atmosphere-director.js";
 import { registerActivityAutomation } from "./automation/activity-automation.js";
+import { registerSocketBridge, socketBridgeStatus } from "./integrations/socketlib-bridge.js";
+import { listPartnerStatus } from "./integrations/partner-status.js";
+import { tagSceneObject, findSceneObjects, playSceneCue, stopSceneCue,
+  applyTokenFx, removeTokenFx, playWeather, stopWeather, listWeatherPresets } from "./integrations/partner-scene.js";
+import { createLootPile, sendLanguageMessage } from "./integrations/partner-content.js";
+import { inspectAdvancedEffect, openAdvancedEffectEditor, registerTidyBridge } from "./integrations/partner-effects.js";
+import { openBattlemapImporter } from "./integrations/partner-maps.js";
 import { getAppearanceChoreographyStatus, registerAppearanceEffectAutomation } from "./automation/appearance-effect-automation.js";
 import {
   applyEmbeddedEffect,
@@ -103,6 +110,8 @@ import {
 
 const MODULE_ID = "fora-do-abismo-foundry";
 const runtimeCapture = installJarvisRuntimeCapture();
+registerSocketBridge();
+registerTidyBridge();
 
 Hooks.once("init", runtimeCapture.guard("initialization", "init", () => {
   console.log(`${MODULE_ID} | Inicializando Jarvis Tools`);
@@ -168,7 +177,21 @@ Hooks.once("ready", runtimeCapture.guard("initialization", "ready", () => {
       prepareEmbedded: prepareEmbeddedEffectForActor,
       removeApplied: removeAppliedEmbeddedEffect,
       removeAppliedFromActor: removeAppliedEmbeddedEffectFromActor,
-      resolveEmbedded: resolveEmbeddedEffect
+      resolveEmbedded: resolveEmbeddedEffect,
+      remoteStatus: socketBridgeStatus
+    },
+    partners: {
+      list: listPartnerStatus,
+      socketlib: { status: socketBridgeStatus },
+      tagger: { tag: tagSceneObject, find: findSceneObjects },
+      sequencer: { play: playSceneCue, stop: stopSceneCue },
+      dae: { inspect: inspectAdvancedEffect, openEditor: openAdvancedEffectEditor },
+      itemPiles: { create: createLootPile },
+      tokenMagic: { apply: applyTokenFx, remove: removeTokenFx },
+      fxmaster: { list: listWeatherPresets, play: playWeather, stop: stopWeather },
+      polyglot: { send: sendLanguageMessage },
+      battlemap: { open: openBattlemapImporter },
+      tidy: { active: () => Boolean(game.modules?.get?.("tidy5e-sheet")?.active) }
     },
     appearance: {
       status: getAppearanceStatus,

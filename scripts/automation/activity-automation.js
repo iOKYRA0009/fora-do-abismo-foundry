@@ -4,6 +4,7 @@ import {
   removeAppliedEmbeddedEffect,
   removeAppliedEmbeddedEffectFromActor
 } from "./embedded-effect-engine.js";
+import { applyConfiguredEffectViaGm } from "../integrations/socketlib-bridge.js";
 const MODULE_ID = "fora-do-abismo-foundry";
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 let hooksRegistered = false;
@@ -23,6 +24,10 @@ function getSelectedTargetActors() {
   return Array.from(game.user?.targets ?? [])
     .map(token => token?.actor ?? token?.document?.actor ?? null)
     .filter(Boolean);
+}
+
+function getSelectedTargets() {
+  return Array.from(game.user?.targets ?? []).filter(token => token?.actor ?? token?.document?.actor);
 }
 
 function buildScope(activity, usageConfig, results = null) {
@@ -173,24 +178,33 @@ function runPre(activity, usageConfig) {
   }
 }
 
-async function applyConfiguredEffect(activity, config) {
+async function applyConfiguredEffect(activity, config, effectIndex) {
   const options = typeof config === "string" ? { effectName: config } : { ...(config ?? {}) };
   const targetMode = options.target ?? "self";
   delete options.target;
 
   if (targetMode === "self") return applyEmbeddedEffect(activity, options);
   if (targetMode === "selected") {
-    const targets = getSelectedTargetActors();
+    const targets = getSelectedTargets();
     if (targets.length !== 1) {
       throw new Error(`Effect target='selected' exige exatamente 1 alvo. Alvos atuais: ${targets.length}.`);
     }
-    return applyEmbeddedEffectToActor(activity, targets[0], options);
+    const token = targets[0];
+    const actor = token.actor ?? token.document.actor;
+    return game.user?.isGM || actor.testUserPermission?.(game.user, "OWNER")
+      ? applyEmbeddedEffectToActor(activity, actor, options)
+      : applyConfiguredEffectViaGm(activity, token, effectIndex);
   }
   if (targetMode === "selected-all") {
-    const targets = getSelectedTargetActors();
+    const targets = getSelectedTargets();
     if (!targets.length) throw new Error("Effect target='selected-all' exige ao menos 1 alvo.");
     const created = [];
-    for (const target of targets) created.push(await applyEmbeddedEffectToActor(activity, target, options));
+    for (const token of targets) {
+      const actor = token.actor ?? token.document.actor;
+      created.push(await (game.user?.isGM || actor.testUserPermission?.(game.user, "OWNER")
+        ? applyEmbeddedEffectToActor(activity, actor, options)
+        : applyConfiguredEffectViaGm(activity, token, effectIndex)));
+    }
     return created;
   }
 
@@ -205,8 +219,8 @@ async function runPost(activity, usageConfig, results) {
   const scope = buildScope(activity, usageConfig, results);
 
   try {
-    for (const config of getEffectConfigs(automation)) {
-      await applyConfiguredEffect(activity, config);
+    for (const [index, config] of getEffectConfigs(automation).entries()) {
+      await applyConfiguredEffect(activity, config, index);
     }
   } catch (error) {
     console.error(`${MODULE_ID} | Falha no Jarvis Effect Engine ${label}`, error);
