@@ -46,13 +46,6 @@ function values(collection) {
   return typeof collection.values === "function" ? Array.from(collection.values()) : [];
 }
 
-function activitiesOf(item) {
-  const collection = item?.system?.activities;
-  const listed = values(collection);
-  return listed.length ? listed : collection && typeof collection === "object"
-    ? Object.values(collection).filter(row => row && typeof row === "object") : [];
-}
-
 function options(entries, label = entry => entry.label ?? entry.name ?? entry.key, value = entry => entry.id ?? entry.key) {
   return entries.map(entry => `<option value="${escapeHtml(value(entry))}">${escapeHtml(label(entry))}</option>`).join("");
 }
@@ -141,28 +134,6 @@ function refreshActorRelatedOptions(root) {
       item => `${item.name} · ${item.type}`, item => item.id)}`;
     playerItems.value = items.some(item => item.id === previous) ? previous : "";
   }
-  const automationItems = field(root, "automation-item");
-  if (automationItems) {
-    const previous = automationItems.value;
-    const items = visible ? values(visible.items).filter(item => activitiesOf(item).length).slice(0, 500) : [];
-    automationItems.innerHTML = `<option value="">Selecione</option>${options(items,
-      item => `${item.name} · ${item.id}`, item => item.id)}`;
-    automationItems.value = items.some(item => item.id === previous) ? previous : "";
-  }
-  refreshAutomationActivityOptions(root);
-}
-
-function refreshAutomationActivityOptions(root) {
-  const select = field(root, "automation-activity");
-  if (!select) return;
-  const actor = game.actors?.get?.(fieldValue(root, "jarvis-actor"));
-  const item = actor && getJarvisAccess(game.user, actor).canViewActor
-    ? actor.items?.get?.(fieldValue(root, "automation-item")) : null;
-  const rows = activitiesOf(item).slice(0, 100);
-  const previous = select.value;
-  select.innerHTML = `<option value="">Selecione</option>${options(rows,
-    row => `${row.name ?? "Activity"} · ${row.id ?? row._id}`, row => row.id ?? row._id)}`;
-  select.value = rows.some(row => (row.id ?? row._id) === previous) ? previous : "";
 }
 
 function refreshSceneDocumentOptions(root) {
@@ -751,15 +722,6 @@ function renderContent() {
   const systemTools = gm ? section("system-tools", `
     <h3>Atalho da Central</h3><textarea readonly rows="2" name="macro-command">${escapeHtml(MACRO_COMMAND)}</textarea>
     <div class="jarvis-console-row">${button("macro-install", "Instalar atalho da Central")}${button("macro-copy", "Copiar código")}</div>
-    <h3>Habilidades Jarvis dos jogadores</h3><p>Ao ligar, as automações já presentes nos personagens ficam autorizadas. Novas habilidades importadas pelo Mestre também são autorizadas enquanto estiver ligado.</p>
-    <div class="jarvis-console-row"><span data-jarvis-player-abilities-status>Jogadores: ${jarvis.automation?.playersEnabled?.() ? "ligado" : "desligado"}</span>
-    ${button("automation-toggle-players", jarvis.automation?.playersEnabled?.() ? "Desligar uso pelos jogadores" : "Ligar uso pelos jogadores")}</div>
-    <p class="jarvis-console-hint">Jogadores precisam controlar a ficha. Scripts rodam com as permissões deles; efeitos em outros personagens podem exigir ação do Mestre.</p>
-    <details class="jarvis-console-advanced"><summary>Inspeção avançada de uma Activity</summary>
-    <div class="jarvis-console-row"><label>Item do personagem ativo<select name="automation-item"><option value="">Selecione</option></select></label><label>Activity<select name="automation-activity"><option value="">Selecione</option></select></label>
-    ${button("automation-inspect", "Inspecionar")}${button("automation-approve", "Aprovar")}${button("automation-revoke", "Revogar")}</div>
-    <label>Conteúdo completo para revisão<textarea readonly name="automation-source" rows="7" placeholder="Selecione uma Activity e clique em Inspecionar"></textarea></label>
-    </details>
   `) : "";
 
   const executorPage = gm ? panel("executor", `
@@ -906,18 +868,6 @@ function managedMacroSpec(root) {
     description: fieldValue(root, "managed-description"), params: source ? JSON.parse(source) : {} };
 }
 
-function selectedAutomation(root) {
-  const actor = selectedActor(root);
-  const item = actor.items?.get?.(fieldValue(root, "automation-item"));
-  if (!item) throw new Error("Selecione um Item do personagem ativo.");
-  const activityId = fieldValue(root, "automation-activity");
-  const activity = item.system?.activities?.get?.(activityId)
-    ?? activitiesOf(item).find(row => row.id === activityId || row._id === activityId)
-    ?? item.system?.activities?.[activityId];
-  if (!activity) throw new Error("Activity não encontrada neste Item. Confira o ID na ficha nativa.");
-  return { actor, item, activity };
-}
-
 function templateSpec(root) {
   const name = fieldValue(root, "map-name");
   const columns = Number(fieldValue(root, "map-columns"));
@@ -934,22 +884,6 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
   const jarvis = api();
   if (action === "clear-output") return clearOutput(root);
   if (action === "pack-focus") return selectTab(root, "library");
-  if (action === "automation-toggle-players") {
-    requireGM();
-    const report = await jarvis.automation.setPlayersEnabled(!jarvis.automation.playersEnabled());
-    const enabled = report.enabled;
-    if (report.skipped) ui.notifications?.warn?.(
-      `Jarvis: ${report.skipped} automação(ões) inválida(s) não foram autorizadas. Veja o resultado na Central.`
-    );
-    const status = root.querySelector?.("[data-jarvis-player-abilities-status]");
-    if (status) status.textContent = `Jogadores: ${enabled ? "ligado" : "desligado"}`;
-    const control = root.querySelector?.('[data-jarvis-action="automation-toggle-players"]');
-    if (control) control.textContent = enabled ? "Desligar uso pelos jogadores" : "Ligar uso pelos jogadores";
-    return setOutput(root, "Habilidades Jarvis dos jogadores", enabled
-      ? `Uso ligado. ${report.approved} automação(ões) autorizada(s). ${report.skipped} ignorada(s) por dados inválidos.`
-      : "Uso desligado.");
-  }
-
   if (action === "actor-open") {
     const actor = selectedActor(root);
     actor.sheet?.render(true);
@@ -1553,36 +1487,6 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
     refreshDashboard(root, state);
     return setOutput(root, "Macro removida", removed);
   }
-  if (["automation-inspect", "automation-approve", "automation-revoke"].includes(action)) {
-    requireGM();
-    const { item, activity } = selectedAutomation(root);
-    const inspection = jarvis.automation.inspect(activity);
-    const automation = activity.flags?.[MODULE_ID]?.automation ?? null;
-    const embeddedEffects = values(item.effects).map(effect => effect.toObject?.() ?? effect);
-    const fullSource = JSON.stringify({ automation, embeddedEffects }, null, 2);
-    const sourceField = field(root, "automation-source");
-    if (action === "automation-inspect") {
-      if (sourceField) sourceField.value = fullSource;
-      state.automationPreview = { uuid: activity.uuid, source: fullSource };
-      return setOutput(root, `Automação · ${item.name}`, { inspection, automation,
-        embeddedEffects: embeddedEffects.map(effect => effect.name) });
-    }
-    if (action === "automation-approve") {
-      if (state.automationPreview?.uuid !== activity.uuid
-        || state.automationPreview?.source !== fullSource) {
-        if (sourceField) sourceField.value = fullSource;
-        state.automationPreview = { uuid: activity.uuid, source: fullSource };
-        return setOutput(root, "Revise a automação antes de aprovar", { inspection, automation,
-          embeddedEffects: embeddedEffects.map(effect => effect.name) });
-      }
-      if (!await confirmAction("Aprovar automação", `Aprovar script e efeitos de '${item.name}' / '${activity.name}'? Qualquer mudança posterior revoga esta aprovação.`)) return;
-      state.automationPreview = null;
-      return setOutput(root, "Automação aprovada", await jarvis.automation.approve(activity));
-    }
-    if (!await confirmAction("Revogar automação", `Revogar a aprovação de '${item.name}' / '${activity.name}'?`)) return;
-    state.automationPreview = null;
-    return setOutput(root, "Aprovação revogada", await jarvis.automation.revoke(activity));
-  }
   if (action === "executor-preview" || action === "executor-run") {
     requireGM();
     const source = fieldValue(root, "executor-source");
@@ -2134,7 +2038,6 @@ function bindDialog(dialog, state) {
       refreshActorRelatedOptions(root);
     }
     if (event.target?.matches?.('[name="managed-macro"]')) populateManagedMacroForm(root);
-    if (event.target?.matches?.('[name="automation-item"]')) refreshAutomationActivityOptions(root);
     if (event.target?.matches?.('[name="scene-edit-type"]')) refreshSceneDocumentOptions(root);
     if (event.target?.matches?.('[name="scene-edit-existing"]')) {
       const id = field(root, "scene-edit-id");

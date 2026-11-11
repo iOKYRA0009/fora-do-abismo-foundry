@@ -135,26 +135,3 @@ test("player area reports only Items of an accessible selected Actor", async () 
   assert.match(content.textContent, /Arco/);
   assert.match(content.textContent, /"value": 9/);
 });
-
-test("Activity approval requires the GM to inspect its automation first", async () => {
-  const calls = [];
-  const activity = { id: "act", uuid: "Actor.a.Item.i.Activity.act", name: "Ritual",
-    flags: { "fora-do-abismo-foundry": { automation: { pre: "return true;" } } } };
-  const item = { id: "item", name: "Relíquia", system: { activities: new Map([["act", activity]]) },
-    effects: [], uuid: "Actor.a.Item.i" };
-  const actor = { id: "a", name: "Mago", items: new Map([["item", item]]),
-    testUserPermission: () => true };
-  const api = { automation: {
-    inspect: () => ({ approved: false }),
-    async approve() { calls.push("approve"); return { approved: true }; }
-  } };
-  setup(api, { actors: [actor] });
-  const { root, content } = rootFor({ "jarvis-actor": "a", "automation-item": "item",
-    "automation-activity": "act" });
-  const state = {};
-  await executeJarvisConsoleAction("automation-approve", root, state);
-  assert.deepEqual(calls, []);
-  assert.match(content.textContent, /return true/);
-  await executeJarvisConsoleAction("automation-approve", root, state);
-  assert.deepEqual(calls, ["approve"]);
-});

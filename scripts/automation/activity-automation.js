@@ -4,42 +4,9 @@ import {
   removeAppliedEmbeddedEffect,
   removeAppliedEmbeddedEffectFromActor
 } from "./embedded-effect-engine.js";
-import { inspectActivityAutomation } from "./automation-approval.js";
-import { playerAbilitiesEnabled } from "./player-ability-setting.js";
-
 const MODULE_ID = "fora-do-abismo-foundry";
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 let hooksRegistered = false;
-const warnedUnapproved = new Set();
-
-function warnUnapproved(activity, reason, phase) {
-  const key = `${activity?.uuid ?? activity?.name ?? "unknown"}|${reason}|${phase}`;
-  if (warnedUnapproved.has(key)) return;
-  warnedUnapproved.add(key);
-  const cause = {
-    "unstable-uuid": "Activity ou Item sem identificador estável",
-    "too-large": "automação acima do limite de 128 KiB",
-    "invalid-automation": "dados de automação inválidos",
-    "settings-unavailable": "registro de aprovações indisponível",
-    "approval-required": "esta Activity ainda precisa de aprovação"
-  }[reason] ?? "aprovação ausente";
-  ui.notifications?.warn?.(
-    `Jarvis: automação de '${activity?.item?.name ?? "Item"} / ${activity?.name ?? "Activity"}' ` +
-    (phase === "pre"
-      ? `não aprovada (${cause}); uso cancelado até revisão pelo Mestre ativo.`
-      : `não aprovada (${cause}); efeitos e script Jarvis não foram executados.`)
-  );
-}
-
-function canExecute(activity) {
-  const user = game.user;
-  const activeGm = game.users?.activeGM;
-  if (!user?.id) return false;
-  if (user.isGM) return activeGm?.id === user.id;
-  const actor = activity?.item?.actor ?? activity?.actor;
-  return playerAbilitiesEnabled()
-    && Boolean(actor?.testUserPermission?.(user, "OWNER"));
-}
 
 function getAutomation(activity) {
   return activity?.flags?.[MODULE_ID]?.automation ?? null;
@@ -50,14 +17,6 @@ function getEffectConfigs(automation) {
   const input = automation.effects ?? automation.effect ?? [];
   if (Array.isArray(input)) return input.filter(Boolean);
   return input ? [input] : [];
-}
-
-function hasExecutableAutomation(automation) {
-  return Boolean(
-    String(automation?.pre ?? "").trim()
-    || String(automation?.post ?? "").trim()
-    || getEffectConfigs(automation).length
-  );
 }
 
 function getSelectedTargetActors() {
@@ -203,14 +162,6 @@ function runPre(activity, usageConfig) {
   const automation = getAutomation(activity);
   const script = automation?.pre;
   if (!script) return undefined;
-  const approval = inspectActivityAutomation(activity);
-  if (!approval.approved) {
-    warnUnapproved(activity, approval.reason, "pre");
-    // A pre script may enforce cost or prerequisites. Allowing the activity
-    // to proceed without an approved pre check could spend or grant resources
-    // under different rules from those authored by the GM.
-    return false;
-  }
 
   const label = `${activity?.item?.name ?? "Item"} / ${activity?.name ?? "Activity"} / pre`;
   try {
@@ -249,18 +200,12 @@ async function applyConfiguredEffect(activity, config) {
 async function runPost(activity, usageConfig, results) {
   const automation = getAutomation(activity);
   if (!automation) return undefined;
-  const approval = inspectActivityAutomation(activity);
-  if (!approval.approved) {
-    warnUnapproved(activity, approval.reason, "post");
-    return undefined;
-  }
 
   const label = `${activity?.item?.name ?? "Item"} / ${activity?.name ?? "Activity"}`;
   const scope = buildScope(activity, usageConfig, results);
 
   try {
     for (const config of getEffectConfigs(automation)) {
-      if (!canExecute(activity) || !inspectActivityAutomation(activity).approved) return undefined;
       await applyConfiguredEffect(activity, config);
     }
   } catch (error) {
@@ -271,7 +216,6 @@ async function runPost(activity, usageConfig, results) {
 
   const script = automation?.post;
   if (!script) return undefined;
-  if (!canExecute(activity) || !inspectActivityAutomation(activity).approved) return undefined;
 
   try {
     return await executePostScript(script, scope, `${label} / post`);
@@ -287,21 +231,12 @@ export function registerActivityAutomation() {
   hooksRegistered = true;
 
   Hooks.on("dnd5e.preUseActivity", (activity, usageConfig) => {
-    if (!canExecute(activity)) {
-      if (!hasExecutableAutomation(getAutomation(activity))) return undefined;
-      ui.notifications?.warn?.(
-        `Jarvis: '${activity?.item?.name ?? "Item"} / ${activity?.name ?? "Activity"}' usa automação Jarvis. ` +
-        "O Mestre precisa habilitar o uso pelos jogadores e aprovar a automação; a ficha também precisa estar sob seu controle. Uso cancelado."
-      );
-      return false;
-    }
     const result = runPre(activity, usageConfig);
     if (result === false) return false;
     return undefined;
   });
 
   Hooks.on("dnd5e.postUseActivity", (activity, usageConfig, results) => {
-    if (!canExecute(activity)) return undefined;
     void runPost(activity, usageConfig, results);
     return undefined;
   });

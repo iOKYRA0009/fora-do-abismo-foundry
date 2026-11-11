@@ -18,13 +18,6 @@ import { captureSceneSnapshot, compareSceneSnapshot } from "./scenes/production-
 import { inspectMosaicQuality } from "./scenes/package/mosaic-quality.js";
 import { listAtmosphereCues, previewAtmosphereCue, applyAtmosphereCue, restoreAtmosphereCue } from "./scenes/atmosphere-director.js";
 import { registerActivityAutomation } from "./automation/activity-automation.js";
-import { playerAbilitiesEnabled, registerPlayerAbilitySetting, setPlayerAbilitiesEnabled } from "./automation/player-ability-setting.js";
-import {
-  approveActivityAutomation,
-  inspectActivityAutomation,
-  registerActivityAutomationSettings,
-  revokeActivityAutomation
-} from "./automation/automation-approval.js";
 import { getAppearanceChoreographyStatus, registerAppearanceEffectAutomation } from "./automation/appearance-effect-automation.js";
 import {
   applyEmbeddedEffect,
@@ -114,8 +107,6 @@ Hooks.once("init", runtimeCapture.guard("initialization", "init", () => {
   console.log(`${MODULE_ID} | Inicializando Jarvis Tools`);
   registerHybridFeatureLayout();
   registerMacroFileDrop();
-  registerActivityAutomationSettings();
-  registerPlayerAbilitySetting();
   registerJarvisConsoleControl();
   registerUniversalVttControl();
   registerMapStudioControl();
@@ -169,13 +160,6 @@ Hooks.once("ready", runtimeCapture.guard("initialization", "ready", () => {
       import: importManagedMacros, execute: executeManagedMacro, installHotbar: installManagedMacroHotbar
     },
     progression: { applyActor: applyActorProgressions },
-    automation: {
-      inspect: inspectActivityAutomation,
-      approve: approveActivityAutomation,
-      revoke: revokeActivityAutomation,
-      playersEnabled: playerAbilitiesEnabled,
-      setPlayersEnabled: setPlayerAbilitiesEnabled
-    },
     effects: {
       applyEmbedded: applyEmbeddedEffect,
       applyEmbeddedToActor: applyEmbeddedEffectToActor,
