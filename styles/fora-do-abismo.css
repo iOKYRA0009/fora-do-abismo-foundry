@@ -299,6 +299,16 @@
 .jarvis-console .jarvis-console-row > button.jarvis-primary { font-weight: 700; border-color: #c7a975; }
 .jarvis-console .jarvis-console-row > button[data-jarvis-action$="preview"] { border-color: #827d70; }
 .jarvis-console .jarvis-console-row > button[data-jarvis-action$="import"] { font-weight: 650; }
+.jarvis-import-review { margin: 0.7rem 0 1.2rem; padding: 0.85rem 1rem; border: 1px solid var(--jarvis-border); border-radius: 7px; background: #1b222b; }
+.jarvis-import-review h4 { margin: 0 0 0.4rem; color: var(--jarvis-accent); }
+.jarvis-import-review details { margin-block: 0.5rem; }
+.jarvis-import-review summary { cursor: pointer; }
+.jarvis-import-review ul { margin: 0.35rem 0; padding-left: 1.4rem; }
+.jarvis-import-review li { margin-block: 0.25rem; }
+.jarvis-import-review small { display: block; color: var(--jarvis-muted); }
+.jarvis-review-ready { color: #a8d8a8; font-weight: 650; }
+.jarvis-review-blocked { color: #f0afa0; font-weight: 650; }
+.jarvis-review-warnings { border-left: 3px solid #c5a46b; padding-left: 0.7rem; }
 @media (max-width: 820px) {
   .jarvis-console-layout { grid-template-columns: 58px minmax(0, 1fr); }
   .jarvis-console-tab { justify-content: center; }

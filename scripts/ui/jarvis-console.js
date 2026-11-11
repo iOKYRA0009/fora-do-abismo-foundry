@@ -4,6 +4,7 @@ import { TOOL_CATALOG } from "./console-tool-catalog.js";
 import { JarvisInputError } from "./console-input-error.js";
 import { importJarvisActorWithImage } from "./actor-import-with-image.js";
 import { summarizeExecution } from "../macros/execution-report.js";
+import { renderImportReview } from "./import-review-view.js";
 import { moveExecutorMapElement } from "./executor-map-edit.js";
 import { inspectMosaicQuality } from "../scenes/package/mosaic-quality.js";
 import {
@@ -634,6 +635,7 @@ function renderContent() {
     <label>Retrato do NPC (opcional, PNG/JPG/WebP até 6 MB): <input name="actor-image-file" type="file" accept="image/png,image/jpeg,image/webp"></label>
     <p class="jarvis-console-hint">O Jarvis envia o retrato para Dados do Usuário e define a imagem da ficha e do Token. O JSON V9 contém atributos, equipamentos, ataques e Effects.</p>
       <div class="jarvis-console-row">${button("actor-import-preview", "Revisar importação V9")}${button("actor-import", "Confirmar criação")}${button("actor-progression", "Aplicar progressão da ficha")}${button("actor-compare", "Comparar JSON com a ficha")}</div>
+      <section class="jarvis-import-review" data-jarvis-actor-review aria-live="polite"><p class="jarvis-console-hint">Revise o JSON antes de confirmar.</p></section>
       <h3>Manutenção da ficha</h3><div class="jarvis-console-row"><label>Regras alvo<select name="actor-rules-target"><option value="2024">D&D 2024</option><option value="2014">D&D 2014</option></select></label>
       ${button("actor-rules-set", "Salvar perfil de regras")}${button("actor-provenance-stamp", "Registrar origem dos Items")}${button("actor-jack-sync", "Sincronizar almas de Jack")}</div>` : ""}
   `);
@@ -653,6 +655,7 @@ function renderContent() {
     <h3>Adicionar Items de um JSON V9 à ficha</h3><p>Selecione o personagem ativo. Aceita uma lista de Items ou um objeto com a chave <code>items</code>.</p>
     <input name="items-json-file" type="file" accept=".json,application/json"><textarea name="items-json" rows="4" placeholder='{"items":[{"name":"Novo item","type":"feat"}]}'></textarea>
     <div class="jarvis-console-row">${button("items-import-preview", "Revisar Items V9")}${button("items-import", "Confirmar Items na ficha")}</div>
+    <section class="jarvis-import-review" data-jarvis-items-review aria-live="polite"><p class="jarvis-console-hint">Revise os Items antes de confirmar.</p></section>
   `) : "";
 
   const maps = gm ? section("maps", `
@@ -984,6 +987,7 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
     const review = jarvis.importer.previewActor(payload, { imageFile });
     if (action === "actor-import-preview") {
       state.actorImportPreview = { fingerprint };
+      renderImportReview(root, "actor", review);
       return setOutput(root, "Revisão da importação V9", review);
     }
     if (state.actorImportPreview?.fingerprint !== fingerprint) {
@@ -992,6 +996,7 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
     if (!review.canImport) throw new JarvisInputError(review.warnings.join(" "));
     if (!await confirmAction("Criar Actor V9", `Criar '${review.actor.name}' com ${review.items.length} Item(s) e ${review.effects.length} efeito(s)? ${review.warnings.join(" ")}`)) return;
     state.actorImportPreview = null;
+    renderImportReview(root, "actor", null);
     const actor = await importJarvisActorWithImage(json, {
       imageFile,
       importer: jarvis.importer,
@@ -1101,6 +1106,7 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
     const review = jarvis.importer.previewItems(actor, items);
     if (action === "items-import-preview") {
       state.itemsImportPreview = { fingerprint };
+      renderImportReview(root, "items", review);
       return setOutput(root, "Revisão dos Items V9", review);
     }
     if (state.itemsImportPreview?.fingerprint !== fingerprint) {
@@ -1109,6 +1115,7 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
     if (!review.canImport) throw new JarvisInputError(review.warnings.join(" "));
     if (!await confirmAction("Importar Items", `Adicionar ${items.length} Item(s) à ficha de ${actor.name}?`)) return;
     state.itemsImportPreview = null;
+    renderImportReview(root, "items", null);
     const created = await jarvis.importer.importItems(actor, items, { sourceLabel: "Central Jarvis" });
     return setOutput(root, "Items importados", `${created.length} Item(s) criados em ${actor.name}.`);
   }
@@ -2106,6 +2113,12 @@ function bindDialog(dialog, state) {
     if (event.target?.closest?.("[data-jarvis-executor-drop]")) event.preventDefault();
   });
   root.addEventListener("change", event => {
+    if (event.target?.matches?.('[name="actor-json-file"], [name="actor-image-file"], [name="items-json-file"]')) {
+      const kind = event.target.name === "items-json-file" ? "items" : "actor";
+      if (kind === "actor") state.actorImportPreview = null;
+      else state.itemsImportPreview = null;
+      renderImportReview(root, kind, null);
+    }
     if (event.target?.matches?.('[name="executor-files"]')) {
       void setExecutorFiles(root, state, Array.from(event.target.files ?? [])).catch(error =>
         ui.notifications?.error?.(`Jarvis Executor: ${error.message}`));
@@ -2115,6 +2128,8 @@ function bindDialog(dialog, state) {
       renderExecutorPreview(root, state);
     }
     if (event.target?.matches?.('[name="jarvis-actor"]')) {
+      state.itemsImportPreview = null;
+      renderImportReview(root, "items", null);
       refreshDashboard(root, state);
       refreshActorRelatedOptions(root);
     }
@@ -2127,6 +2142,12 @@ function bindDialog(dialog, state) {
     }
   });
   root.addEventListener("input", event => {
+    if (event.target?.matches?.('[name="actor-json"], [name="items-json"]')) {
+      const kind = event.target.name === "actor-json" ? "actor" : "items";
+      if (kind === "actor") state.actorImportPreview = null;
+      else state.itemsImportPreview = null;
+      renderImportReview(root, kind, null);
+    }
     if (event.target?.matches?.("[data-jarvis-global-search]")) queueGlobalSearch(root, state);
     if (event.target?.matches?.('[name="executor-source"]')) {
       state.executorMapUndo = [];
