@@ -1,4 +1,5 @@
 import { validateJarvisActorPayload } from "../validators/payload-validator.js";
+import { reviewActorImport, reviewItemImport } from "./import-review.js";
 import {
   buildGenerationDescriptor,
   resolveDocumentImage
@@ -21,6 +22,14 @@ import {
 const MODULE_ID = "fora-do-abismo-foundry";
 
 export class JarvisImporterV9 {
+  previewActor(payload, options = {}) {
+    return reviewActorImport(payload, options);
+  }
+
+  previewItems(actor, items) {
+    return reviewItemImport(items, actor);
+  }
+
   async importActor(payload, { renderSheet = true } = {}) {
     validateJarvisActorPayload(payload);
 
@@ -29,6 +38,10 @@ export class JarvisImporterV9 {
     }
 
     Dnd5eV6Adapter.assertRuntime();
+    const review = this.previewActor(payload);
+    if (!review.canImport) {
+      throw new Error(`Importação de '${payload.actor.name}' bloqueada: ${review.warnings.join(" ")}`);
+    }
 
     const actorData = Dnd5eV6Adapter.adaptActor(payload.actor);
     const { items: resolvedItems, report: rehydrationReport } = await rehydrateLegacyOfficialItems(
@@ -109,6 +122,10 @@ export class JarvisImporterV9 {
     if (!Array.isArray(sourceItems) || !sourceItems.length) return [];
 
     Dnd5eV6Adapter.assertRuntime();
+    const review = this.previewItems(actor, sourceItems);
+    if (!review.canImport) {
+      throw new Error(`Importação de Items em '${actor.name}' bloqueada: ${review.warnings.join(" ")}`);
+    }
 
     const { items: resolvedItems, report } = await rehydrateLegacyOfficialItems(sourceItems);
     const itemData = Dnd5eV6Adapter.adaptItems(resolvedItems);

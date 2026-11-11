@@ -69,3 +69,10 @@ test("global search includes only accessible Items, scenes and managed macros", 
       { id: "macro-hidden", name: "Espada secreta", category: "personagens", visibility: "gm" }] });
   assert.deepEqual(results.map(row => row.id), ["item-visible", "macro-visible"]);
 });
+
+test("an exact label outranks an earlier substring result", async () => {
+  globalThis.game = { user: { id: "gm", isGM: true } };
+  const results = await searchConsole("espada", { access: { gm: true }, limit: 2,
+    tools: [{ id: "long", label: "Criar espada" }, { id: "exact", label: "Espada" }] });
+  assert.deepEqual(results.map(row => row.id), ["exact", "long"]);
+});
