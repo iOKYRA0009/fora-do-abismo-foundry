@@ -1,5 +1,11 @@
 import { getJarvisAccess, visibleJarvisTabs, assertJarvisAccess } from "./jarvis-console-core.js";
-import { searchConsole } from "./console-search.js";
+import { searchConsole, searchCompendiumPack } from "./console-search.js";
+import {
+  glossaryOverrides, localizedImportData, saveGlossaryOverrides
+} from "../translation/compendium-language.js";
+import {
+  applyCompendiumSync, previewCompendiumSync, trackCompendiumImport
+} from "../translation/compendium-sync.js";
 import { TOOL_CATALOG } from "./console-tool-catalog.js";
 import { JarvisInputError } from "./console-input-error.js";
 import { importJarvisActorWithImage } from "./actor-import-with-image.js";
@@ -678,9 +684,15 @@ function renderContent() {
 
   const compendiums = section("compendiums", `
     <h2>Compêndios e módulos</h2><p>Consulte conteúdo de módulos ativos sem carregar documentos inteiros até abrir ou importar um resultado.</p>
-    <div class="jarvis-console-row"><label>Compêndio<select name="pack"><option value="">Selecione</option>${packOptions}</select></label><label>Buscar<input name="pack-query" maxlength="100" placeholder="Nome ou tipo"></label>${button("pack-search", "Buscar")}</div>
+    <p class="jarvis-console-hint">Babele: ${game.modules?.get?.("babele")?.active ? "ativo" : "não ativo"}. A busca aceita nomes em inglês e português. O glossário fornece rascunhos quando não há tradução.</p>
+    <div class="jarvis-console-row"><label>Compêndio<select name="pack"><option value="">Selecione</option>${packOptions}</select></label><label>Buscar<input name="pack-query" maxlength="100" placeholder="Nome em português ou inglês"></label>${button("pack-search", "Buscar")}</div>
     <div class="jarvis-console-results" data-jarvis-pack-results aria-live="polite"></div>
     <p class="jarvis-console-hint">Mestres podem importar Items para o mundo ou personagem. Jogadores de confiança podem adicionar Items oficiais D&D5e ao próprio personagem.</p>
+    ${gm ? `<h3>Glossário de D&D</h3><p class="jarvis-console-hint">Adicione termos próprios em JSON. Exemplo: {"Fireball":"Bola de Fogo"}. O Babele tem prioridade; descrições sem tradução recebem só substituições literais, para revisão.</p>
+    <textarea name="translation-glossary" rows="4" spellcheck="false" aria-label="Termos próprios de tradução">${escapeHtml(JSON.stringify(glossaryOverrides(), null, 2))}</textarea>
+    <div class="jarvis-console-row">${button("translation-glossary-save", "Salvar glossário")}${button("pack-sync-preview", "Ver atualizações")}${button("pack-sync-apply", "Aplicar atualizações revisadas")}</div>
+    <div class="jarvis-console-results" data-jarvis-sync-results aria-live="polite"></div>
+    <p class="jarvis-console-hint">A sincronização abrange Items importados pela Central a partir desta versão. Edições feitas na ficha são preservadas; conflitos precisam de revisão manual.</p>` : ""}
   `);
 
   const diagnostics = gm ? section("diagnostics", `
@@ -1339,21 +1351,52 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
     return setOutput(root, "Item aberto", `${item.name} · ${item.type}`);
   }
 
+  if (action === "translation-glossary-save") {
+    requireGM();
+    const terms = await saveGlossaryOverrides(JSON.parse(fieldValue(root, "translation-glossary") || "{}"));
+    state.syncPreview = null;
+    return setOutput(root, "Glossário salvo", `${Object.keys(terms).length} termo(s) próprio(s). Faça a busca novamente para ver os novos nomes.`);
+  }
+  if (action === "pack-sync-preview" || action === "pack-sync-apply") {
+    requireGM();
+    const pack = visiblePacks().find(candidate => candidate.collection === fieldValue(root, "pack"));
+    if (!pack || pack.documentName !== "Item") throw new JarvisInputError("Selecione um compêndio de Items visível.");
+    if (action === "pack-sync-preview") {
+      state.syncPreview = await previewCompendiumSync(pack);
+      const rows = state.syncPreview.rows;
+      const host = root.querySelector("[data-jarvis-sync-results]");
+      if (host) host.innerHTML = rows.length
+        ? `<p>${rows.length} Item(s) importado(s) encontrado(s). ${state.syncPreview.truncated ? `${state.syncPreview.truncated} além do limite de 200. ` : ""}Atualizações são aplicadas somente aos campos sem edição local.</p><ol>${rows.map(row =>
+          `<li>${escapeHtml(row.item.name)} · ${escapeHtml(row.status)}${Object.keys(row.updates).length ? ` · mudar: ${escapeHtml(Object.keys(row.updates).join(", "))}` : ""}${row.conflicts.length ? ` · revisar: ${escapeHtml(row.conflicts.join(", "))}` : ""}</li>`).join("")}</ol>`
+        : "<p>Nenhum Item rastreado deste compêndio. Importe pela Central para ativar a sincronização futura.</p>";
+      return setOutput(root, "Prévia de atualização", {
+        atualizar: rows.filter(row => row.status === "atualizar").length,
+        conflitos: rows.filter(row => row.conflicts.length).length,
+        atuais: rows.filter(row => row.status === "atual").length,
+        fontesAusentes: rows.filter(row => row.status === "fonte-ausente").length
+      });
+    }
+    if (!state.syncPreview || state.syncPreview.packId !== pack.collection) {
+      throw new JarvisInputError("Faça a prévia deste compêndio antes de aplicar.");
+    }
+    const count = state.syncPreview.rows.filter(row => row.status === "atualizar").length;
+    if (!count) return setOutput(root, "Atualização", "Nenhuma mudança segura para aplicar.");
+    if (!await confirmAction("Atualizar Items importados", `Aplicar mudanças seguras em até ${count} Item(s)? Campos editados por você serão preservados.`)) return;
+    const result = await applyCompendiumSync(state.syncPreview, pack);
+    state.syncPreview = null;
+    return setOutput(root, "Atualização concluída", result);
+  }
   if (action === "pack-search") {
     const pack = visiblePacks().find(candidate => candidate.collection === fieldValue(root, "pack"));
     if (!pack) throw new Error("Selecione um compêndio visível.");
-    const query = fieldValue(root, "pack-query").toLocaleLowerCase("pt-BR");
-    const index = await pack.getIndex({ fields: ["type", "img"] });
-    state.packRows = values(index).filter(entry => !query ||
-      `${entry.name ?? ""} ${entry.type ?? ""}`.toLocaleLowerCase("pt-BR").includes(query)).slice(0, 100)
-      .map(entry => ({ pack, id: entry._id ?? entry.id, name: entry.name, type: entry.type ?? pack.documentName }));
+    state.packRows = await searchCompendiumPack(pack, fieldValue(root, "pack-query"));
     const host = root.querySelector("[data-jarvis-pack-results]");
     host.innerHTML = state.packRows.length ? `<p>${state.packRows.length} resultado(s), limite de 100.</p><ol>${state.packRows.map((row, index) =>
-      `<li><span>${escapeHtml(row.name)} <small>${escapeHtml(row.type)}</small></span><div><button type="button" data-jarvis-index="${index}" data-jarvis-action="pack-open">Abrir</button>${getJarvisAccess(game.user).gm || getJarvisAccess(game.user).trusted ? `<button type="button" data-jarvis-index="${index}" data-jarvis-action="pack-import">Adicionar</button>` : ""}</div></li>`).join("")}</ol>`
+      `<li><span>${escapeHtml(row.name)} <small>${escapeHtml(row.type)}${row.originalName !== row.name ? ` · ${escapeHtml(row.originalName)}` : ""}</small></span><div><button type="button" data-jarvis-index="${index}" data-jarvis-action="pack-open">Abrir</button><button type="button" data-jarvis-index="${index}" data-jarvis-action="pack-draft">Rascunho PT-BR</button>${getJarvisAccess(game.user).gm || getJarvisAccess(game.user).trusted ? `<button type="button" data-jarvis-index="${index}" data-jarvis-action="pack-import">Adicionar</button>` : ""}</div></li>`).join("")}</ol>`
       : "<p>Nenhum resultado encontrado.</p>";
     return setOutput(root, "Compêndio", `${pack.title ?? pack.collection}: ${state.packRows.length} resultado(s).`);
   }
-  if (action === "pack-open" || action === "pack-import") {
+  if (action === "pack-open" || action === "pack-draft" || action === "pack-import") {
     const index = Number(state.actionIndex);
     const row = state.packRows?.[index];
     if (!row || !visiblePacks().includes(row.pack)) throw new Error("Resultado de compêndio não está mais disponível.");
@@ -1363,6 +1406,14 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
       document.sheet?.render(true);
       return setOutput(root, "Compêndio", `Aberto: ${document.name}.`);
     }
+    if (action === "pack-draft") {
+      const draft = localizedImportData(document.toObject());
+      return setOutput(root, "Rascunho PT-BR", {
+        original: row.originalName, nome: draft.name,
+        descricao: draft.system?.description?.value ?? "Sem descrição.",
+        aviso: "Glossário literal; revise a linguagem antes de usar como regra. Dados e fórmulas não são alterados."
+      });
+    }
     const actor = selectedActor(root, { required: false });
     const access = getJarvisAccess(game.user, actor);
     assertJarvisAccess(access.gm || access.canManageActor, "A importação exige Mestre ou jogador de confiança proprietário.");
@@ -1370,7 +1421,8 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
       assertJarvisAccess(row.pack.metadata?.packageName === "dnd5e" && document.documentName === "Item",
         "Jogadores de confiança só podem importar Items dos compêndios oficiais D&D5e.");
     }
-    const data = document.toObject();
+    const data = document.documentName === "Item"
+      ? localizedImportData(document.toObject()) : document.toObject();
     delete data._id;
     delete data.folder;
     let created;
@@ -1382,6 +1434,10 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
       created = await Actor.create(data);
     }
     if (!created) throw new Error("O Foundry não criou o documento importado.");
+    if (document.documentName === "Item") {
+      try { await trackCompendiumImport(created, row.pack, row.id, data); }
+      catch (error) { console.warn(`${MODULE_ID} | Item importado sem rastreamento de atualização.`, error); }
+    }
     created.sheet?.render(true);
     const destination = document.documentName === "Item" && actor ? `a ${actor.name}` : "ao mundo";
     return setOutput(root, "Compêndio importado", `${created.name} foi adicionado ${destination}.`);

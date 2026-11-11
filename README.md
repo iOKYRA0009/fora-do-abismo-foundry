@@ -26,6 +26,12 @@ No Foundry VTT:
 
 O Foundry usa o mesmo Manifest URL para detectar atualizações futuras.
 
+### Atualização Jarvis Tools 1.5.3 — Compêndios em PT-BR
+
+Na **Central → Biblioteca → Compêndios**, a busca aceita nomes em português e inglês, inclusive nomes traduzidos pelo Babele. O Mestre pode acrescentar termos ao glossário de D&D e conferir um **Rascunho PT-BR** antes de importar. Quando o Babele estiver ativo, sua tradução tem prioridade; o glossário é um recurso complementar e só substitui termos literais nas descrições que não receberam tradução.
+
+Items importados pela Central a partir da 1.5.3 guardam a origem e uma base de comparação. **Ver atualizações** mostra mudanças e conflitos; **Aplicar atualizações revisadas** atualiza apenas campos que continuam iguais à importação. Edições locais são preservadas. O Babele continua sendo um módulo separado e opcional. Consulte [as notas da versão](docs/QUALITY-1.5.3.md). Esta atualização inclui as versões 1.4.1, 1.5.0, 1.5.1 e 1.5.2, sem alterar as tags anteriores.
+
 ### Atualização Jarvis Tools 1.5.2 — Activities sem aprovação
 
 Em **Add-on Modules**, atualize o Jarvis Tools e confira a versão **1.5.2**. Recarregue o mundo e as páginas dos jogadores. O Jarvis não exige mais aprovação de automações nem apresenta o botão de liberar habilidades. Ao usar uma Activity, o script e os efeitos Jarvis rodam no cliente de quem a acionou, respeitando as permissões normais do Foundry. O uso nativo da Activity não é cancelado por falta de aprovação. Veja [notas da correção](docs/QUALITY-1.5.2.md).
