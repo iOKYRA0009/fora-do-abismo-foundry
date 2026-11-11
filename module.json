@@ -2,8 +2,8 @@
   "id": "fora-do-abismo-foundry",
   "type": "module",
   "title": "Fora do Abismo — Jarvis Tools",
-  "description": "Jarvis Tools V14: mosaicos HD, inspeção de qualidade, snapshots técnicos de Scene e direção de atmosfera com restauração.",
-  "version": "1.4.1",
+  "description": "Jarvis Tools V14: Central Jarvis, importação V9 com revisão, Executor com relatórios, cenas e ferramentas de qualidade.",
+  "version": "1.5.0",
   "authors": [
     {
       "name": "iOKYRA0009",

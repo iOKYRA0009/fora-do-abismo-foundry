@@ -86,7 +86,7 @@ export function reviewActorImport(payload, { actors = globalThis.game?.actors, i
   const items = payload.items ?? [];
   const conflicts = findItemConflicts(items);
   const warnings = [];
-  if (existing.length) warnings.push(`Já existe ${payload.actor.type} com nome '${payload.actor.name}'. A importação criaria outra ficha.`);
+  if (existing.length) warnings.push(`Já existe Actor correspondente a '${payload.actor.name}' por nome ou identificador estável. A importação criaria outra ficha.`);
   if (conflicts.length) warnings.push(`${conflicts.length} Item(s) repetido(s) no JSON.`);
   if (items.some(item => ["class", "subclass"].includes(item.type))) {
     warnings.push("Classe, subclasse e Advancement exigem revisão e conclusão na ficha nativa D&D5e.");

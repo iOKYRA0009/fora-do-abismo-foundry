@@ -26,6 +26,14 @@ No Foundry VTT:
 
 O Foundry usa o mesmo Manifest URL para detectar atualizações futuras.
 
+### Atualização Jarvis Tools 1.5.0 — Quality of Life
+
+Em **Add-on Modules**, use **Update All** ou **Update** no Jarvis Tools e confirme que o Foundry mostra **1.5.0**. Se o módulo foi instalado manualmente, instale pelo Manifest URL acima para receber as próximas atualizações. Faça backup do mundo antes de atualizar e recarregue o Foundry depois. A versão 1.5.0 não migra nem substitui fichas existentes automaticamente.
+
+Na Central, a importação V9 agora exige **Revisar importação V9 → Confirmar criação**; a inclusão de Items exige **Revisar Items V9 → Confirmar Items na ficha**. A prévia aponta conflitos, atributos, Activities, efeitos e avisos. O Executor oferece **Histórico e recuperação → Baixar relatório**. Consulte [notas da versão e roteiro de verificação](docs/QUALITY-1.5.0.md).
+
+Compatibilidade declarada: Foundry V14 e D&D5e 6.0.0–6.0.6. A suíte automatizada passou em 260 testes Node; a validação no Foundry real será feita no mundo do proprietário após a atualização. Os schemas V9, Executor e Scene Package não mudaram.
+
 ## Jarvis 1.2.2 — Macro Executor e ajuste visual antes de criar
 
 Após ativar o módulo, clique em **Jarvis — Fora do Abismo** nos controles de **Tokens**. A Central organiza as funções em seis áreas: **Executor**, **Biblioteca**, **Personagens**, **Cenas**, **Aparências** e **Sistema**. O Mestre começa no Executor e vê as ações de administração. Jogadores começam na Biblioteca e só recebem as ações permitidas para seu papel e para os Actors que controlam. As ferramentas anteriores continuam disponíveis nas seções avançadas.
