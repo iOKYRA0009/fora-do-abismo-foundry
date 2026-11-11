@@ -1,5 +1,7 @@
 # Jarvis Tools 1.5.0 — Quality of Life
 
+Esta release é cumulativa sobre a tag `v1.4.1`. O código e as funções da 1.4.1, incluindo a liberação das habilidades Jarvis para jogadores, permanecem no pacote 1.5.0. A tag anterior não é alterada.
+
 ## Atualização
 
 1. Faça backup do mundo no Foundry.

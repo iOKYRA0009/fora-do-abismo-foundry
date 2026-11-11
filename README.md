@@ -32,7 +32,7 @@ Em **Add-on Modules**, use **Update All** ou **Update** no Jarvis Tools e confir
 
 Na Central, a importação V9 agora exige **Revisar importação V9 → Confirmar criação**; a inclusão de Items exige **Revisar Items V9 → Confirmar Items na ficha**. A prévia aponta conflitos, atributos, Activities, efeitos e avisos. O Executor oferece **Histórico e recuperação → Baixar relatório**. Consulte [notas da versão e roteiro de verificação](docs/QUALITY-1.5.0.md).
 
-Compatibilidade declarada: Foundry V14 e D&D5e 6.0.0–6.0.6. A suíte automatizada passou em 260 testes Node; a validação no Foundry real será feita no mundo do proprietário após a atualização. Os schemas V9, Executor e Scene Package não mudaram.
+Esta é uma atualização cumulativa: **inclui integralmente a 1.4.1**, inclusive o controle de habilidades Jarvis dos jogadores. A tag `v1.4.1` permanece disponível. Compatibilidade declarada: Foundry V14 e D&D5e 6.0.0–6.0.6. A suíte automatizada passou em 260 testes Node; a validação no Foundry real será feita no mundo do proprietário após a atualização. Os schemas V9, Executor e Scene Package não mudaram.
 
 ## Jarvis 1.2.2 — Macro Executor e ajuste visual antes de criar
 

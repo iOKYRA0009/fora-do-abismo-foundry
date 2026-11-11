@@ -1,6 +1,6 @@
 # Jarvis Tools 1.5.0 QoL — handoff de desenvolvimento
 
-Atualizado em 2026-11-11. Esta iniciativa **não está concluída**. O manifesto continua em 1.4.1 até a validação final; os schemas permanecem `9.0`, `jarvis-executor-1` e `1.0`.
+Atualizado em 2026-11-11. A versão **1.5.0 definitiva** está preparada para publicação e para os testes manuais do proprietário no Foundry. A tag `v1.4.1` permanece intacta; `git merge-base --is-ancestor v1.4.1 HEAD` passou, confirmando que a 1.5.0 contém a 1.4.1. Os schemas permanecem `9.0`, `jarvis-executor-1` e `1.0`.
 
 ## Objetivo completo
 
@@ -10,8 +10,8 @@ Entregar Jarvis Tools 1.5.0 com importações V9 seguras, detecção de duplicat
 
 - Repositório: `https://github.com/iOKYRA0009/fora-do-abismo-foundry`.
 - Branch local: `feat/jarvis-tools-1.5.0-qol`, criada de `main` em `61ece6b` (Jarvis 1.4.1).
-- Último commit de código concluído: `12d6389` — `feat(importer): warn on incomplete Activities and match Actor origin`. Checkpoints anteriores: `5362e42`, `385d1f4`, `ff05844`.
-- PR em rascunho: https://github.com/iOKYRA0009/fora-do-abismo-foundry/pull/36 . Ainda não está pronto para revisão final.
+- Último commit de release preparado: `1b3ee3a` — `release: prepare Jarvis Tools 1.5.0 for Foundry update`. Checkpoints de código: `12d6389`, `5362e42`, `385d1f4`, `ff05844`.
+- PR: https://github.com/iOKYRA0009/fora-do-abismo-foundry/pull/36 . Publicação pendente no momento deste checkpoint; verificar estado do PR e da release antes de retomar.
 - Para ver o último commit inclusive este handoff: `git log -1 --oneline`.
 - Diretório local: `C:\Users\Roger\.codex\.chatgpt-projects\g-p-6a70840fbf8081919fb2119ad103500d\jarvis-qol-150`.
 
@@ -35,6 +35,7 @@ Entregar Jarvis Tools 1.5.0 com importações V9 seguras, detecção de duplicat
 8. Painel de revisão V9 renderizado por módulo independente, com HTML escapado, seções legíveis e invalidação quando JSON, arquivo ou Actor selecionado mudam.
 9. Busca local prioriza nome exato, início do nome e início de palavra sem alterar cache/cancelamento dos compêndios. O validador bloqueia consumo duplicado do mesmo recurso em uma Activity.
 10. Prévia avisa sobre dano, salvaguarda e usos de Activity incompletos. Actor renomeado ainda é detectado por `_id` ou `flags.core.sourceId` quando disponível.
+11. Manifesto 1.5.0, README e `docs/QUALITY-1.5.0.md` preparados com instalação, compatibilidade, roteiro de teste e recuperação. A 1.4.1 está contida por ancestralidade Git e não foi modificada.
 
 ## Pendente, em ordem
 
@@ -42,8 +43,8 @@ Entregar Jarvis Tools 1.5.0 com importações V9 seguras, detecção de duplicat
 2. **P1:** refatorar gradualmente `jarvis-console.js` em módulos de renderização e comandos, preservando 6 áreas e 86 ações originais. Analisar ApplicationV2 e HandlebarsApplicationMixin no contexto da UI atual, sem migração arriscada sem teste no Foundry.
 3. **P1:** revisar busca por relevância/contexto e estados de carregamento, conclusão, erro e vazio. Medir abertura, abas, busca, JSON, prévia, importação em lote, pacotes grandes e memória antes/depois em ambiente Foundry. Nenhum ganho de desempenho foi reivindicado.
 4. **P1:** diagnósticos por documento e Activity em execuções reais, pré-voo mais detalhado, histórico e relatórios. O relatório atual marca Activity como NÃO TESTADO.
-5. **P2:** acabamento visual e de acessibilidade com teste de teclado e viewport, documentação de instalação/recuperação, atualização de versão/changelog e PR. Manter configurações anteriores.
-6. **Testes Foundry obrigatórios:** Actor novo e duplicado, preservação de ficha, Items/Activities/consumo, falhas, permissões Mestre/jogador, busca, histórico, Scenes com paredes/portas/luzes/tokens, integrações opcionais e regressão das ações. Registrar PASSOU/FALHOU/MANUAL/NÃO TESTADO.
+5. **P2:** acabamento visual e de acessibilidade depende de observação em mundo real. Manter configurações anteriores.
+6. **Testes Foundry pelo proprietário:** Actor novo e duplicado, preservação de ficha, Items/Activities/consumo, falhas, permissões Mestre/jogador, busca, histórico, Scenes com paredes/portas/luzes/tokens e integrações opcionais. Registrar PASSOU/FALHOU/MANUAL/NÃO TESTADO e corrigir regressões relatadas em atualização posterior.
 
 ## Testes e bloqueios
 
@@ -66,7 +67,7 @@ Entregar Jarvis Tools 1.5.0 com importações V9 seguras, detecção de duplicat
 
 ## Próxima tarefa exata
 
-Revisar o código V9 e casos de Activities reais; adicionar testes para consumo/recuperação e duplicatas por identificador estável; depois modularizar um bloco autocontido da Central. Verificar o estado remoto de `main` antes de editar e não recomeçar do zero.
+Conferir PR #36 e release `v1.5.0`; se a workflow publicar com sucesso, verificar `module.json` e ZIP na release e instruir o proprietário a atualizar pelo Foundry. Depois receber o resultado dos testes manuais e corrigir regressões sem alterar `v1.4.1` nem republicar silenciosamente `v1.5.0`.
 
 ## Comandos para retomar
 
