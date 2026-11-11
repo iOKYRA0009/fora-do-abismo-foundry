@@ -8,4 +8,6 @@ Por padrão, somente o Mestre ativo executa automações Jarvis. O Mestre pode l
 
 O controle global registra os hashes das Activities de personagens atuais. Actors do tipo `character` e Actors controlados por jogadores entram nessa autorização. Activities sem UUID estável ou com dados inválidos são ignoradas e aparecem na contagem de falhas do botão. A importação pelo Mestre autoriza Activities válidas quando o controle já estiver ligado.
 
+Em tokens não vinculados, a Activity tem UUID próprio. Uma cópia sem alteração herda a aprovação da ficha original quando o hash de automação e efeitos ainda coincide nos dois documentos. Ao ligar o controle, o Mestre também autoriza Activities existentes em tokens não vinculados nas cenas. Mudanças posteriores no token exigem nova aprovação.
+
 Ao aprovar, revise especialmente código de Itens que jogadores podem editar. Alterar flags depois da aprovação cancela imediatamente a execução; scripts legados continuam guardados no Item para revisão, sem migração destrutiva.

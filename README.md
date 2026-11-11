@@ -26,6 +26,12 @@ No Foundry VTT:
 
 O Foundry usa o mesmo Manifest URL para detectar atualizações futuras.
 
+### Atualização Jarvis Tools 1.5.1 — correção de autorização em tokens
+
+Em **Add-on Modules**, use **Update** no Jarvis Tools e confirme que o Foundry mostra **1.5.1**. Recarregue o mundo depois de atualizar. Esta correção inclui integralmente as versões 1.4.1 e 1.5.0, que permanecem disponíveis nas respectivas tags.
+
+Activities usadas a partir de tokens não vinculados agora herdam a autorização da ficha original quando script e efeitos são idênticos. Ao ligar **Uso pelos jogadores**, o Mestre também autoriza as automações próprias dos tokens já existentes. Se o conteúdo for alterado depois, é preciso religar o controle ou aprovar a Activity novamente. O aviso de bloqueio mostra o motivo da recusa. Veja [notas da correção](docs/QUALITY-1.5.1.md).
+
 ### Atualização Jarvis Tools 1.5.0 — Quality of Life
 
 Em **Add-on Modules**, use **Update All** ou **Update** no Jarvis Tools e confirme que o Foundry mostra **1.5.0**. Se o módulo foi instalado manualmente, instale pelo Manifest URL acima para receber as próximas atualizações. Faça backup do mundo antes de atualizar e recarregue o Foundry depois. A versão 1.5.0 não migra nem substitui fichas existentes automaticamente.

@@ -12,8 +12,13 @@ function values(collection) {
 
 function playerCharacterActors() {
   const players = values(game.users).filter(user => !user.isGM);
-  return values(game.actors).filter(actor => actor.type === "character"
+  const eligible = actor => actor && (actor.type === "character"
     || players.some(user => actor.testUserPermission?.(user, "OWNER")));
+  const worldActors = values(game.actors);
+  const tokenActors = values(game.scenes).flatMap(scene => values(scene.tokens)
+    .filter(token => token.actor && !token.actorLink)
+    .map(token => token.actor));
+  return Array.from(new Set([...worldActors, ...tokenActors].filter(eligible)));
 }
 
 function requireActiveGm() {
