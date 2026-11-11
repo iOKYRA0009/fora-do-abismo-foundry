@@ -8,7 +8,7 @@ export class PayloadValidationError extends Error {
 
 const IMAGE_SOURCES = new Set(["foundry", "generate", "custom"]);
 const ACTIVITY_TYPES = new Set([
-  "attack", "save", "utility", "heal", "check", "damage", "summon", "enchant", "cast", "forward"
+  "attack", "save", "utility", "heal", "check", "damage", "summon", "enchant", "cast", "forward", "teleport", "transform"
 ]);
 const RESOURCE_SLOTS = new Set(["primary", "secondary", "tertiary"]);
 
@@ -215,6 +215,19 @@ function validateItemSemantic(jarvis, path, errors, depth = 0) {
 
   if (jarvis.spellcasting !== undefined && !isObject(jarvis.spellcasting)) {
     errors.push(`${path}.spellcasting deve ser um objeto.`);
+  }
+  if (jarvis.grants !== undefined) {
+    if (jarvis.progression?.length) errors.push(`${path}: grants nativos e progression Jarvis não podem coexistir na mesma classe.`);
+    if (!Array.isArray(jarvis.grants)) errors.push(`${path}.grants deve ser uma lista.`);
+    else jarvis.grants.forEach((grant, index) => {
+      const label = `${path}.grants[${index}]`;
+      if (!isObject(grant) || !Number.isInteger(grant.level) || grant.level < 1 || grant.level > 20) {
+        errors.push(`${label}.level deve ser inteiro entre 1 e 20.`);
+      }
+      if (!Array.isArray(grant?.uuids) || !grant.uuids.length || grant.uuids.some(uuid => typeof uuid !== "string" || !uuid.startsWith("Compendium."))) {
+        errors.push(`${label}.uuids precisa de UUIDs de Items de compêndio.`);
+      }
+    });
   }
 
   validateProgression(jarvis.progression, `${path}.progression`, errors, depth);

@@ -1,4 +1,5 @@
 import { validateJarvisActorPayload } from "../importer/validators/payload-validator.js";
+import { compileActorBlueprintV91 } from "../importer/v9/blueprint-v91.js";
 
 const IMAGE_MIMES = Object.freeze({
   "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp"
@@ -56,17 +57,21 @@ export async function uploadJarvisActorImage(file, { picker = filePicker() } = {
  * Leaves imported Items and Activities to the transaction-safe V9 importer.
  */
 export async function importJarvisActorWithImage(jsonText, {
-  imageFile = null, importer, picker = filePicker(), renderSheet = true
+  imageFile = null, tokenFile = null, importer, picker = filePicker(), renderSheet = true
 } = {}) {
   if (!importer?.importActor) throw new Error("Jarvis Importer V9 indisponível.");
   let payload;
   try { payload = JSON.parse(jsonText); }
   catch (error) { throw new Error(`JSON V9 inválido: ${error.message}`); }
+  payload = compileActorBlueprintV91(payload);
   validateJarvisActorPayload(payload);
 
   // Never mutate the caller's payload while applying the imported portrait.
   const copy = structuredClone(payload);
+  const review = importer.previewActor?.(copy);
+  if (review && !review.canImport) throw new Error(`Importação bloqueada: ${[...review.errors, ...review.warnings].join(" ")}`);
   let imagePath = null;
+  let tokenPath = null;
   if (imageFile) {
     imagePath = await uploadJarvisActorImage(imageFile, { picker });
     copy.actor.img = imagePath;
@@ -75,10 +80,22 @@ export async function importJarvisActorWithImage(jsonText, {
     copy.actor.prototypeToken.texture ??= {};
     copy.actor.prototypeToken.texture.src = imagePath;
   }
+  if (tokenFile) {
+    try { tokenPath = await uploadJarvisActorImage(tokenFile, { picker }); }
+    catch (cause) {
+      if (!imagePath) throw cause;
+      throw new Error(`Token não enviado: ${cause.message}. O retrato enviado permanece em '${imagePath}' para revisão manual.`, { cause });
+    }
+    copy.actor.prototypeToken ??= {};
+    copy.actor.prototypeToken.texture ??= {};
+    copy.actor.prototypeToken.texture.src = tokenPath;
+  }
   try {
     return await importer.importActor(copy, { renderSheet });
   } catch (cause) {
-    if (!imagePath) throw cause;
-    throw new Error(`Importação falhou: ${cause.message ?? cause}. O retrato enviado permanece em '${imagePath}' para revisão manual.`, { cause });
+    if (!imagePath && !tokenPath) throw cause;
+    const uploaded = tokenPath ? `imagens enviadas permanecem em '${[imagePath, tokenPath].filter(Boolean).join("', '")}'`
+      : `retrato enviado permanece em '${imagePath}'`;
+    throw new Error(`Importação falhou: ${cause.message ?? cause}. O ${uploaded} para revisão manual.`, { cause });
   }
 }

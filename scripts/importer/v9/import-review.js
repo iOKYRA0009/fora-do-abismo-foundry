@@ -1,4 +1,5 @@
 import { validateJarvisActorPayload } from "../validators/payload-validator.js";
+import { inspectActorMechanics } from "./mechanics-review.js";
 
 const MODULE_ID = "fora-do-abismo-foundry";
 const key = value => String(value ?? "").trim().toLocaleLowerCase("pt-BR");
@@ -80,24 +81,28 @@ function itemWarnings(items) {
   return warnings;
 }
 
-export function reviewActorImport(payload, { actors = globalThis.game?.actors, imageFile = null } = {}) {
+export function reviewActorImport(payload, { actors = globalThis.game?.actors, imageFile = null, tokenFile = null } = {}) {
   validateJarvisActorPayload(payload);
   const existing = values(actors).filter(actor => actorMatches(payload.actor, actor));
   const items = payload.items ?? [];
   const conflicts = findItemConflicts(items);
   const warnings = [];
+  const mechanics = inspectActorMechanics(payload);
   if (existing.length) warnings.push(`Já existe Actor correspondente a '${payload.actor.name}' por nome ou identificador estável. A importação criaria outra ficha.`);
   if (conflicts.length) warnings.push(`${conflicts.length} Item(s) repetido(s) no JSON.`);
-  if (items.some(item => ["class", "subclass"].includes(item.type))) {
-    warnings.push("Classe, subclasse e Advancement exigem revisão e conclusão na ficha nativa D&D5e.");
+  for (const item of items.filter(row => ["class", "subclass"].includes(row.type))) {
+    if (!item.jarvis?.grants?.length && !item.system?.advancement?.length && !item.jarvis?.progression?.length) {
+      warnings.push(`${item.name}: classe/subclasse sem progressão definida; configure Advancement na ficha nativa.`);
+    }
   }
   if (imageFile) warnings.push("O retrato enviado pode permanecer no armazenamento mesmo se a criação da ficha falhar.");
+  if (tokenFile) warnings.push("O token enviado pode permanecer no armazenamento mesmo se a criação da ficha falhar.");
   warnings.push(...itemWarnings(items));
   return {
     schemaVersion: payload.schemaVersion, actor: {
       name: payload.actor.name, type: payload.actor.type,
       image: imageFile?.name ?? payload.actor.img ?? payload.actor.imgStrategy ?? null,
-      tokenImage: imageFile?.name ?? payload.actor.prototypeToken?.texture?.src ?? null,
+      tokenImage: tokenFile?.name ?? imageFile?.name ?? payload.actor.prototypeToken?.texture?.src ?? null,
       attributes: payload.actor.jarvis?.abilities ?? payload.actor.system?.abilities ?? {},
       hp: payload.actor.jarvis?.hp ?? payload.actor.system?.attributes?.hp ?? null,
       ac: payload.actor.jarvis?.ac ?? payload.actor.system?.attributes?.ac ?? null,
@@ -109,7 +114,7 @@ export function reviewActorImport(payload, { actors = globalThis.game?.actors, i
       effects: item.effects ?? [], uses: item.jarvis?.uses ?? item.system?.uses ?? null })),
     effects: payload.effects ?? [], duplicates: { actors: existing.map(actor => ({ id: actor.id, name: actor.name })), items: conflicts },
     existingComparisons: existing.map(actor => compareExistingActor(payload, actor)),
-    warnings, errors: [], canImport: !existing.length && !conflicts.length,
+    warnings, mechanics, errors: mechanics.errors, canImport: !existing.length && !conflicts.length && mechanics.passed,
     protection: "Cria um Actor novo. Não altera PV, recursos, slots, condições, imagens ou configurações de fichas existentes."
   };
 }
