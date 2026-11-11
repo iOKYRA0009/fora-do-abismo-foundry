@@ -214,6 +214,14 @@ export async function runJarvisDiagnostics(api, {
     }
   }
 
+  const partners = api.partners?.list?.() ?? [];
+  for (const partner of partners) {
+    add(`parceiro-${partner.id}`, !partner.active ? "skip" : partner.apiReady ? "pass" : "warn",
+      !partner.active ? `${partner.name}: opcional, não ativo.`
+        : partner.apiReady ? `${partner.name} ${partner.version ?? ""}: integração disponível.`
+          : `${partner.name} está ativo, mas a API ou dependência esperada não está pronta.`);
+  }
+
   if (inspectActors) {
     const actors = Array.from(gameRef?.actors?.contents ?? []).slice(0, Math.max(0, Math.min(20, Number(actorLimit) || 0)));
     if (!actors.length) add("fichas-leitura", "skip", "Nenhum Actor acessível para análise.");

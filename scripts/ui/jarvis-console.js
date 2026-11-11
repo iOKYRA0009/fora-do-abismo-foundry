@@ -49,7 +49,8 @@ function values(collection) {
   if (!collection) return [];
   if (Array.isArray(collection)) return collection;
   if (Array.isArray(collection.contents)) return collection.contents;
-  return typeof collection.values === "function" ? Array.from(collection.values()) : [];
+  if (typeof collection.values === "function") return Array.from(collection.values());
+  return typeof collection === "object" ? Object.values(collection) : [];
 }
 
 function options(entries, label = entry => entry.label ?? entry.name ?? entry.key, value = entry => entry.id ?? entry.key) {
@@ -736,6 +737,38 @@ function renderContent() {
     <div class="jarvis-console-row">${button("macro-install", "Instalar atalho da Central")}${button("macro-copy", "Copiar código")}</div>
   `) : "";
 
+  const partnerTools = gm ? section("partner-tools", `
+    <h3>Módulos parceiros</h3><p>As integrações são opcionais. Instale e ative o módulo desejado em Add-on Modules; depois recarregue o mundo.</p>
+    <div class="jarvis-console-row">${button("partners-list", "Ver estado das 10 integrações")}</div>
+    <h4>Habilidade e efeito DAE</h4>
+    <div class="jarvis-console-row"><label>Item do personagem<input name="partner-dae-item" placeholder="Nome do Item"></label>
+      <label>Activity<input name="partner-dae-activity" placeholder="Nome da Activity (opcional)"></label>
+      ${button("partner-dae-inspect", "Inspecionar Effect")}${button("partner-dae-open", "Editar Effect")}</div>
+    <h4>Objetos e apresentações da cena</h4>
+    <div class="jarvis-console-row"><label>Etiqueta<input name="partner-tag" placeholder="ex.: portal-norte"></label>
+      ${button("partner-tag-add", "Etiquetar objeto selecionado")}${button("partner-tag-find", "Encontrar objetos")}</div>
+    <div class="jarvis-console-grid"><label>Arquivo visual<input name="partner-cue-file" placeholder="modules/.../efeito.webm"></label>
+      <label>Arquivo sonoro (opcional)<input name="partner-cue-sound" placeholder="modules/.../som.ogg"></label>
+      <label>Nome da apresentação<input name="partner-cue-name" value="cena-jarvis"></label></div>
+    <div class="jarvis-console-row">${button("partner-cue-play", "Reproduzir Sequencer")}${button("partner-cue-stop", "Encerrar apresentação")}</div>
+    <h4>Tesouro no mapa</h4><p>Copie Items do personagem selecionado pelo nome; os originais permanecem na ficha. Coordenadas em pixels da cena.</p>
+    <div class="jarvis-console-row"><label>Items, separados por vírgula<input name="partner-loot-items" placeholder="Poção de Cura, Adaga"></label>
+      <label>X<input name="partner-loot-x" type="number" min="0"></label><label>Y<input name="partner-loot-y" type="number" min="0"></label>
+      ${button("partner-loot-create", "Criar Item Pile")}</div>
+    <h4>Efeitos visuais e clima</h4>
+    <div class="jarvis-console-row"><label>Preset Token Magic<input name="partner-tmfx-preset" placeholder="Nome do preset"></label>
+      ${button("partner-tmfx-apply", "Aplicar ao Token")}
+      <label>ID do filtro<input name="partner-tmfx-filter" placeholder="Para remover apenas este filtro"></label>${button("partner-tmfx-remove", "Remover filtro")}</div>
+    <div class="jarvis-console-row"><label>Preset FXMaster<input name="partner-weather" placeholder="Nome do preset"></label>
+      ${button("partner-weather-list", "Listar climas")}${button("partner-weather-play", "Aplicar clima")}${button("partner-weather-stop", "Parar clima")}</div>
+    <h4>Mensagem em idioma de fantasia</h4>
+    <div class="jarvis-console-row"><label>Idioma Polyglot<input name="partner-language" placeholder="ex.: draconic"></label>
+      <label>Mensagem<input name="partner-message" placeholder="Texto da pista"></label>${button("partner-language-send", "Enviar mensagem")}</div>
+    <h4>Mapas de outras ferramentas</h4>
+    <div class="jarvis-console-row">${button("partner-battlemap-open", "Abrir Universal Battlemap Importer")}</div>
+    <p class="jarvis-console-hint">socketlib atua automaticamente em efeitos de alvo configurados. Tidy 5e adiciona “Jarvis: revisar ficha” ao cabeçalho da ficha.</p>
+  `) : "";
+
   const executorPage = gm ? panel("executor", `
     <h2>Executor</h2><p>Importe, confira e execute macros ou pacotes Jarvis.</p>
     <ol class="jarvis-executor-steps" aria-label="Etapas da execução"><li>Importar</li><li>Validar</li><li>Visualizar</li><li>Confirmar</li><li>Executar</li><li>Conferir</li></ol>
@@ -781,7 +814,7 @@ function renderContent() {
     ${advanced("Visage e Metamorph", appearances)}`);
   const systemPage = gm ? panel("system", `<h2>Sistema</h2><p>Diagnósticos, compatibilidade e ferramentas avançadas.</p>
     <div class="jarvis-console-row">${button("diagnostics-run", "Executar diagnóstico")}${button("modules-list", "Listar módulos ativos")}</div>
-    ${advanced("Diagnóstico detalhado", diagnostics)}${advanced("Atalhos e automações", systemTools)}`) : "";
+    ${advanced("Módulos parceiros", partnerTools)}${advanced("Diagnóstico detalhado", diagnostics)}${advanced("Atalhos e automações", systemTools)}`) : "";
 
   return element(`<div class="jarvis-console" data-sidebar-collapsed="${preferences.sidebarCollapsed}">
     <header class="jarvis-console-header"><strong>JARVIS <span>${escapeHtml(jarvis.version)}</span></strong><div class="jarvis-console-header-actions"><small>${escapeHtml(game.user?.name ?? "")}</small><button type="button" class="jarvis-console-toggle" data-jarvis-toggle-sidebar aria-label="Recolher ou expandir menu" aria-expanded="${!preferences.sidebarCollapsed}" title="Recolher ou expandir menu"><i class="fa-solid fa-bars" aria-hidden="true"></i></button></div></header>
@@ -1466,6 +1499,97 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
     const report = await jarvis.diagnostics.run();
     refreshCaptureStatus(root);
     return setOutput(root, "Diagnóstico Jarvis", jarvis.diagnostics.format(report));
+  }
+  if (action === "partners-list") {
+    requireGM();
+    return setOutput(root, "Módulos parceiros", jarvis.partners.list());
+  }
+  if (action.startsWith("partner-")) {
+    requireGM();
+    const partners = jarvis.partners;
+    const scene = canvas?.scene;
+    const controlledToken = canvas?.tokens?.controlled?.[0] ?? null;
+    if (action === "partner-battlemap-open") {
+      return setOutput(root, "Importador de mapas", await partners.battlemap.open());
+    }
+    if (action === "partner-dae-inspect" || action === "partner-dae-open") {
+      const actor = selectedActor(root);
+      const itemName = fieldValue(root, "partner-dae-item").toLowerCase();
+      const item = values(actor.items).find(entry => entry.name.toLowerCase() === itemName);
+      if (!item) throw new JarvisInputError("Informe o nome exato de um Item do personagem selecionado.");
+      const activities = values(item.system?.activities ?? item.activities);
+      const wanted = fieldValue(root, "partner-dae-activity").toLowerCase();
+      const activity = activities.find(entry => !wanted || entry.name?.toLowerCase() === wanted);
+      if (!activity) throw new JarvisInputError("Activity não encontrada neste Item.");
+      return setOutput(root, "Active Effect", action === "partner-dae-open"
+        ? partners.dae.openEditor(activity) : await partners.dae.inspect(activity, actor));
+    }
+    if (action === "partner-tag-add") {
+      const object = ["tokens", "tiles", "walls", "lighting", "sounds", "drawings", "notes"]
+        .map(layer => canvas?.[layer]?.controlled?.[0]).find(Boolean);
+      if (!object) throw new JarvisInputError("Selecione um token, tile, parede, luz ou som no mapa.");
+      return setOutput(root, "Etiqueta adicionada", await partners.tagger.tag(object, fieldValue(root, "partner-tag")));
+    }
+    if (action === "partner-tag-find") {
+      const found = partners.tagger.find(fieldValue(root, "partner-tag"), scene);
+      return setOutput(root, "Objetos encontrados", found.map(entry => ({
+        id: entry.id, uuid: entry.uuid, name: entry.name ?? entry.documentName
+      })));
+    }
+    if (action === "partner-cue-play") {
+      const file = fieldValue(root, "partner-cue-file");
+      const sound = fieldValue(root, "partner-cue-sound") || null;
+      const tag = fieldValue(root, "partner-tag") || null;
+      return setOutput(root, "Apresentação reproduzida", await partners.sequencer.play({
+        file, sound, tag, at: controlledToken, scene,
+        name: fieldValue(root, "partner-cue-name") || "cena-jarvis"
+      }));
+    }
+    if (action === "partner-cue-stop") {
+      await partners.sequencer.stop(fieldValue(root, "partner-cue-name") || "cena-jarvis");
+      return setOutput(root, "Apresentação", "Efeito Jarvis encerrado.");
+    }
+    if (action === "partner-loot-create") {
+      const actor = selectedActor(root);
+      const names = fieldValue(root, "partner-loot-items").split(",").map(value => value.trim()).filter(Boolean);
+      if (!names.length) throw new JarvisInputError("Informe pelo menos um nome de Item da ficha selecionada.");
+      const items = names.map(name => values(actor.items).find(item => item.name.toLowerCase() === name.toLowerCase()));
+      if (items.some(item => !item)) throw new JarvisInputError("Um dos Items não foi encontrado na ficha.");
+      const x = Number(fieldValue(root, "partner-loot-x"));
+      const y = Number(fieldValue(root, "partner-loot-y"));
+      if (!fieldValue(root, "partner-loot-x") || !fieldValue(root, "partner-loot-y")) {
+        throw new JarvisInputError("Informe as coordenadas X e Y em pixels da cena.");
+      }
+      if (!await confirmAction("Criar tesouro", `Criar uma cópia de ${items.length} Item(s) como pilha em ${x}, ${y}?`)) return;
+      return setOutput(root, "Tesouro criado", await partners.itemPiles.create({ items, scene, x, y }));
+    }
+    if (action === "partner-tmfx-apply") {
+      if (!controlledToken) throw new JarvisInputError("Selecione um Token no mapa.");
+      await partners.tokenMagic.apply(controlledToken, fieldValue(root, "partner-tmfx-preset"));
+      return setOutput(root, "Token Magic", "Preset aplicado ao Token selecionado.");
+    }
+    if (action === "partner-tmfx-remove") {
+      if (!controlledToken) throw new JarvisInputError("Selecione um Token no mapa.");
+      await partners.tokenMagic.remove(controlledToken, fieldValue(root, "partner-tmfx-filter"));
+      return setOutput(root, "Token Magic", "Filtro indicado removido do Token.");
+    }
+    if (action === "partner-weather-list") {
+      return setOutput(root, "Presets FXMaster", partners.fxmaster.list());
+    }
+    if (action === "partner-weather-play") {
+      await partners.fxmaster.play(fieldValue(root, "partner-weather"), scene);
+      return setOutput(root, "Clima FXMaster", "Preset aplicado à cena atual.");
+    }
+    if (action === "partner-weather-stop") {
+      await partners.fxmaster.stop(fieldValue(root, "partner-weather"), scene);
+      return setOutput(root, "Clima FXMaster", "Preset indicado encerrado.");
+    }
+    if (action === "partner-language-send") {
+      const actor = selectedActor(root, { required: false });
+      const message = await partners.polyglot.send({ text: fieldValue(root, "partner-message"),
+        language: fieldValue(root, "partner-language"), actor });
+      return setOutput(root, "Mensagem Polyglot", { id: message.id, language: fieldValue(root, "partner-language") });
+    }
   }
   if (action === "framework-test") {
     requireGM();

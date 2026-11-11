@@ -26,6 +26,12 @@ No Foundry VTT:
 
 O Foundry usa o mesmo Manifest URL para detectar atualizações futuras.
 
+### Atualização Jarvis Tools 1.5.4 — módulos parceiros
+
+A Central agora reúne dez integrações opcionais para automações, cenas e fichas: socketlib, Tagger, Sequencer, Dynamic Active Effects, Item Piles, Token Magic FX, FXMaster, Polyglot, Universal Battlemap Importer e Tidy 5e Sheets. As funções aparecem em **Central → Sistema → Módulos parceiros** e o diagnóstico mostra quais parceiros estão ativos e prontos. O importador de mapas aceita também `.df2vtt`.
+
+Instale apenas os parceiros que desejar usar por **Add-on Modules** e ative-os em **Manage Modules**; Item Piles também precisa de **Item Piles D&D 5e**. As integrações não copiam código nem recursos desses projetos. A versão 1.5.4 inclui as versões anteriores e mantém suas releases disponíveis. Veja [notas e exemplos](docs/QUALITY-1.5.4.md).
+
 ### Atualização Jarvis Tools 1.5.3 — Compêndios em PT-BR
 
 Na **Central → Biblioteca → Compêndios**, a busca aceita nomes em português e inglês, inclusive nomes traduzidos pelo Babele. O Mestre pode acrescentar termos ao glossário de D&D e conferir um **Rascunho PT-BR** antes de importar. Quando o Babele estiver ativo, sua tradução tem prioridade; o glossário é um recurso complementar e só substitui termos literais nas descrições que não receberam tradução.
