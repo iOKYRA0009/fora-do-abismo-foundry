@@ -134,11 +134,18 @@ function validateActivity(activity, path, errors) {
   if (activity.consumption !== undefined && !isObject(activity.consumption)) errors.push(`${path}.consumption deve ser um objeto.`);
   if (activity.consumption?.targets !== undefined) {
     if (!Array.isArray(activity.consumption.targets)) errors.push(`${path}.consumption.targets deve ser uma lista.`);
-    else activity.consumption.targets.forEach((target, index) => {
-      if (!isObject(target) || !String(target.type ?? "itemUses").trim()) {
-        errors.push(`${path}.consumption.targets[${index}] deve definir um tipo de recurso.`);
-      }
-    });
+    else {
+      const seenTargets = new Set();
+      activity.consumption.targets.forEach((target, index) => {
+        if (!isObject(target) || !String(target.type ?? "itemUses").trim()) {
+          errors.push(`${path}.consumption.targets[${index}] deve definir um tipo de recurso.`);
+          return;
+        }
+        const targetKey = `${target.type ?? "itemUses"}:${target.target ?? ""}`;
+        if (seenTargets.has(targetKey)) errors.push(`${path}.consumption.targets[${index}] repete o mesmo recurso; pode cobrar duas vezes.`);
+        seenTargets.add(targetKey);
+      });
+    }
   }
   if (activity.effects !== undefined && !Array.isArray(activity.effects)) errors.push(`${path}.effects deve ser uma lista.`);
   validateUses(activity.uses, `${path}.uses`, errors);

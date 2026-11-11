@@ -38,3 +38,12 @@ test("validation locates malformed Activity consumption and recovery", () => {
     && error.details.some(detail => detail.includes("recovery[0]"))
     && error.details.some(detail => detail.includes("consumption.targets[0]")));
 });
+
+test("repeated consumption targets are rejected before a double charge", () => {
+  const malformed = structuredClone(payload);
+  malformed.items[0].jarvis.activities[0].consumption = { targets: [
+    { type: "itemUses", target: "" }, { type: "itemUses", target: "" }
+  ] };
+  assert.throws(() => validateJarvisActorPayload(malformed), error =>
+    error.details.some(detail => detail.includes("pode cobrar duas vezes")));
+});

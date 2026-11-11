@@ -17,6 +17,15 @@ function matches(value, query) {
   return plain(value).includes(query);
 }
 
+function relevance(result, query) {
+  const label = plain(result.label);
+  if (label === query) return 100;
+  if (label.startsWith(query)) return 70;
+  if (label.split(/\W+/).some(word => word.startsWith(query))) return 45;
+  if (label.includes(query)) return 25;
+  return 5;
+}
+
 function visibleActor(actor, access) {
   return Boolean(access?.gm || actor?.testUserPermission?.(game.user, "OBSERVER"));
 }
@@ -61,13 +70,21 @@ export async function searchConsole(query, {
   if (!needle || signal?.aborted) return [];
   const cap = Math.max(1, Math.min(50, Number(limit) || 30));
   const results = [];
-  const add = result => { if (results.length < cap) results.push(result); };
+  const add = result => {
+    const score = relevance(result, needle);
+    let index = results.findIndex(row => score > row.score);
+    if (index < 0) index = results.length;
+    if (index >= cap) return;
+    results.splice(index, 0, { score, result });
+    if (results.length > cap) results.pop();
+  };
+  const output = () => results.map(row => row.result);
 
   for (const tool of list(tools)) {
     if (!visibleTool(tool, access)) continue;
-    if (matches(`${tool.label} ${tool.description ?? ""}`, needle)) {
+    if (matches(`${tool.label} ${tool.description ?? ""} ${tool.tab ?? ""}`, needle)) {
       add({ type: "tool", id: tool.id, label: tool.label,
-        description: tool.description ?? "Ferramenta Jarvis", action: tool.id });
+        description: tool.description ?? "Ferramenta Jarvis", action: tool.id, category: tool.tab ?? null });
     }
   }
   for (const actor of list(actors)) {
@@ -100,7 +117,7 @@ export async function searchConsole(query, {
     }
   }
   if (signal?.aborted) return [];
-  if (results.length >= cap || needle.length < 2) return results;
+  if (results.length >= cap || needle.length < 2) return output();
 
   const searchablePacks = list(packs).filter(visiblePack);
   let cursor = 0;
@@ -126,5 +143,5 @@ export async function searchConsole(query, {
     }
   }
   await Promise.all(Array.from({ length: Math.min(2, searchablePacks.length) }, () => worker()));
-  return signal?.aborted ? [] : results;
+  return signal?.aborted ? [] : output();
 }
