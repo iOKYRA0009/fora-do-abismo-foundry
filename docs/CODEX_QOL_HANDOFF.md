@@ -10,16 +10,16 @@ Entregar Jarvis Tools 1.5.0 com importações V9 seguras, detecção de duplicat
 
 - Repositório: `https://github.com/iOKYRA0009/fora-do-abismo-foundry`.
 - Branch local: `feat/jarvis-tools-1.5.0-qol`, criada de `main` em `61ece6b` (Jarvis 1.4.1).
-- Último commit de código concluído: `ff05844` — `feat(qol): review V9 imports and export executor diagnostics`.
+- Último commit de código concluído: `385d1f4` — `feat(ui): show structured V9 import review in Central`. O checkpoint anterior é `ff05844`.
 - Para ver o último commit inclusive este handoff: `git log -1 --oneline`.
 - Diretório local: `C:\Users\Roger\.codex\.chatgpt-projects\g-p-6a70840fbf8081919fb2119ad103500d\jarvis-qol-150`.
 
 ## Arquivos alterados
 
 - `scripts/importer/v9/import-review.js` (novo), `jarvis-importer-v9.js`, `scripts/importer/validators/payload-validator.js`, `scripts/importer/adapters/dnd5e-adapter.js`.
-- `scripts/ui/actor-import-with-image.js`, `jarvis-console.js`, `console-tool-catalog.js`, `styles/fora-do-abismo.css`.
+- `scripts/ui/actor-import-with-image.js`, `jarvis-console.js`, `console-tool-catalog.js`, `import-review-view.js` (novo), `styles/fora-do-abismo.css`.
 - `scripts/macros/execution-report.js` (novo).
-- `tests/import-review.test.js`, `execution-report.test.js` (novos), `actor-import-with-image.test.js`, `dnd-runtime.test.js`, `importer-transaction.test.js`.
+- `tests/import-review.test.js`, `import-review-view.test.js`, `execution-report.test.js` (novos), `actor-import-with-image.test.js`, `dnd-runtime.test.js`, `importer-transaction.test.js`.
 - Este handoff.
 
 ## Melhorias concluídas neste checkpoint
@@ -31,6 +31,7 @@ Entregar Jarvis Tools 1.5.0 com importações V9 seguras, detecção de duplicat
 5. Aviso de compatibilidade corrigido para D&D5e 6.0.6, conforme manifesto existente. Versões posteriores de 6.0.x continuam com aviso.
 6. Falha após upload de retrato informa o caminho do arquivo que permanece. Relatório JSON do Executor informa PASSOU/FALHOU/MANUAL/NÃO TESTADO, sem fingir teste individual de Activity.
 7. Resultado da Central ampliado para revisão, pequenos ajustes de hierarquia e responsividade.
+8. Painel de revisão V9 renderizado por módulo independente, com HTML escapado, seções legíveis e invalidação quando JSON, arquivo ou Actor selecionado mudam.
 
 ## Pendente, em ordem
 
@@ -43,7 +44,7 @@ Entregar Jarvis Tools 1.5.0 com importações V9 seguras, detecção de duplicat
 
 ## Testes e bloqueios
 
-- `node --test tests/*.test.js`: **255 passaram, 0 falharam** em 2026-11-11.
+- `node --test tests/*.test.js`: **256 passaram, 0 falharam** em 2026-11-11.
 - `git diff --check`: passou.
 - Foundry local em `http://127.0.0.1:30000`: conexão recusada. Testes E2E e testes reais no mundo **NÃO TESTADOS**.
 - `node_modules/playwright-core` não está instalado neste checkout. O comando E2E também requer URL/mundo de homologação e navegador configurados.
