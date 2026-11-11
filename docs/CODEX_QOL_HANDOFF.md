@@ -10,7 +10,8 @@ Entregar Jarvis Tools 1.5.0 com importações V9 seguras, detecção de duplicat
 
 - Repositório: `https://github.com/iOKYRA0009/fora-do-abismo-foundry`.
 - Branch local: `feat/jarvis-tools-1.5.0-qol`, criada de `main` em `61ece6b` (Jarvis 1.4.1).
-- Último commit de código concluído: `385d1f4` — `feat(ui): show structured V9 import review in Central`. O checkpoint anterior é `ff05844`.
+- Último commit de código concluído: `5362e42` — `feat(qol): rank search results and guard repeated resource use`. Checkpoints anteriores: `385d1f4`, `ff05844`.
+- PR em rascunho: https://github.com/iOKYRA0009/fora-do-abismo-foundry/pull/36 . Ainda não está pronto para revisão final.
 - Para ver o último commit inclusive este handoff: `git log -1 --oneline`.
 - Diretório local: `C:\Users\Roger\.codex\.chatgpt-projects\g-p-6a70840fbf8081919fb2119ad103500d\jarvis-qol-150`.
 
@@ -32,6 +33,7 @@ Entregar Jarvis Tools 1.5.0 com importações V9 seguras, detecção de duplicat
 6. Falha após upload de retrato informa o caminho do arquivo que permanece. Relatório JSON do Executor informa PASSOU/FALHOU/MANUAL/NÃO TESTADO, sem fingir teste individual de Activity.
 7. Resultado da Central ampliado para revisão, pequenos ajustes de hierarquia e responsividade.
 8. Painel de revisão V9 renderizado por módulo independente, com HTML escapado, seções legíveis e invalidação quando JSON, arquivo ou Actor selecionado mudam.
+9. Busca local prioriza nome exato, início do nome e início de palavra sem alterar cache/cancelamento dos compêndios. O validador bloqueia consumo duplicado do mesmo recurso em uma Activity.
 
 ## Pendente, em ordem
 
@@ -44,7 +46,7 @@ Entregar Jarvis Tools 1.5.0 com importações V9 seguras, detecção de duplicat
 
 ## Testes e bloqueios
 
-- `node --test tests/*.test.js`: **256 passaram, 0 falharam** em 2026-11-11.
+- `node --test tests/*.test.js`: **258 passaram, 0 falharam** em 2026-11-11.
 - `git diff --check`: passou.
 - Foundry local em `http://127.0.0.1:30000`: conexão recusada. Testes E2E e testes reais no mundo **NÃO TESTADOS**.
 - `node_modules/playwright-core` não está instalado neste checkout. O comando E2E também requer URL/mundo de homologação e navegador configurados.
