@@ -158,6 +158,77 @@ test("GM toggle authorizes existing abilities without per-Activity review and st
   delete game.actors;
 });
 
+test("unlinked token copies inherit unchanged world approval and reject changed automation", async () => {
+  game.user = { id: "gm-1", isGM: true };
+  game.users.activeGM = { id: "gm-1" };
+  const world = activity({ pre: "globalThis.__jarvisTokenCalls += 1;" });
+  world.id = "activity-1";
+  world.item.id = "item-1";
+  world.item.system = { activities: new Map([[world.id, world]]) };
+  const baseActor = { type: "character", items: new Map([[world.item.id, world.item]]) };
+  world.item.actor = baseActor;
+  game.actors = [baseActor];
+  game.scenes = [];
+  await setPlayerAbilitiesEnabled(true);
+
+  const tokenActivity = activity({ pre: "globalThis.__jarvisTokenCalls += 1;" });
+  tokenActivity.id = world.id;
+  tokenActivity.uuid = "Scene.scene-1.Token.token-1.Actor.actor-1.Item.item-1.Activity.activity-1";
+  tokenActivity.item.id = world.item.id;
+  tokenActivity.item.uuid = "Scene.scene-1.Token.token-1.Actor.actor-1.Item.item-1";
+  tokenActivity.item.actor = { isToken: true, token: { baseActor },
+    testUserPermission: (user, level) => user.id === "player-1" && level === "OWNER" };
+  globalThis.__jarvisTokenCalls = 0;
+  game.user = { id: "player-1", isGM: false };
+  assert.equal(inspectActivityAutomation(tokenActivity).reason, "approved-via-base-actor");
+  assert.equal(automationHooks.pre(tokenActivity, {}), undefined);
+  assert.equal(globalThis.__jarvisTokenCalls, 1);
+
+  tokenActivity.flags[MODULE_ID].automation.pre = "globalThis.__jarvisTokenCalls += 100;";
+  assert.equal(inspectActivityAutomation(tokenActivity).reason, "approval-required");
+  assert.equal(automationHooks.pre(tokenActivity, {}), false);
+  assert.equal(globalThis.__jarvisTokenCalls, 1);
+
+  tokenActivity.flags[MODULE_ID].automation.pre = world.flags[MODULE_ID].automation.pre;
+  world.flags[MODULE_ID].automation.pre = "globalThis.__jarvisTokenCalls += 200;";
+  assert.equal(inspectActivityAutomation(tokenActivity).reason, "approval-required");
+
+  game.user = { id: "gm-1", isGM: true };
+  await setPlayerAbilitiesEnabled(false);
+  delete game.actors;
+  delete game.scenes;
+  delete globalThis.__jarvisTokenCalls;
+});
+
+test("GM toggle also authorizes abilities changed only on an unlinked token", async () => {
+  game.user = { id: "gm-1", isGM: true };
+  game.users.activeGM = { id: "gm-1" };
+  const tokenActivity = activity({ pre: "globalThis.__jarvisTokenOnlyCalls += 1;" });
+  tokenActivity.uuid = "Scene.scene-2.Token.token-2.Actor.actor-2.Item.item-2.Activity.activity-2";
+  tokenActivity.item.uuid = "Scene.scene-2.Token.token-2.Actor.actor-2.Item.item-2";
+  const tokenActor = { type: "character", isToken: true,
+    testUserPermission: (user, level) => user.id === "player-1" && level === "OWNER" };
+  tokenActivity.item.actor = tokenActor;
+  tokenActivity.item.system = { activities: new Map([["activity-2", tokenActivity]]) };
+  tokenActor.items = [tokenActivity.item];
+  game.actors = [];
+  game.scenes = [{ tokens: [{ actorLink: false, actor: tokenActor }] }];
+
+  const report = await setPlayerAbilitiesEnabled(true);
+  assert.equal(report.approved, 1);
+  assert.equal(inspectActivityAutomation(tokenActivity).approved, true);
+  globalThis.__jarvisTokenOnlyCalls = 0;
+  game.user = { id: "player-1", isGM: false };
+  assert.equal(automationHooks.pre(tokenActivity, {}), undefined);
+  assert.equal(globalThis.__jarvisTokenOnlyCalls, 1);
+
+  game.user = { id: "gm-1", isGM: true };
+  await setPlayerAbilitiesEnabled(false);
+  delete game.actors;
+  delete game.scenes;
+  delete globalThis.__jarvisTokenOnlyCalls;
+});
+
 test("post-script removal by name leaves unrelated Active Effects intact", async () => {
   const { post } = automationHooks;
   game.user = { id: "gm-1", isGM: true };

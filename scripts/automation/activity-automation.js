@@ -16,11 +16,18 @@ function warnUnapproved(activity, reason, phase) {
   const key = `${activity?.uuid ?? activity?.name ?? "unknown"}|${reason}|${phase}`;
   if (warnedUnapproved.has(key)) return;
   warnedUnapproved.add(key);
+  const cause = {
+    "unstable-uuid": "Activity ou Item sem identificador estável",
+    "too-large": "automação acima do limite de 128 KiB",
+    "invalid-automation": "dados de automação inválidos",
+    "settings-unavailable": "registro de aprovações indisponível",
+    "approval-required": "esta Activity ainda precisa de aprovação"
+  }[reason] ?? "aprovação ausente";
   ui.notifications?.warn?.(
     `Jarvis: automação de '${activity?.item?.name ?? "Item"} / ${activity?.name ?? "Activity"}' ` +
     (phase === "pre"
-      ? "não aprovada; uso cancelado até revisão pelo Mestre ativo."
-      : "não aprovada; efeitos e script Jarvis não foram executados.")
+      ? `não aprovada (${cause}); uso cancelado até revisão pelo Mestre ativo.`
+      : `não aprovada (${cause}); efeitos e script Jarvis não foram executados.`)
   );
 }
 

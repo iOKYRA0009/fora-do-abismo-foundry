@@ -192,7 +192,24 @@ export function inspectActivityAutomation(activity) {
   const approvals = getStoredApprovals();
   if (!approvals) return { ...identity, approved: false, reason: "settings-unavailable" };
   const approved = Object.hasOwn(approvals, identity.key) && approvals[identity.key] === digest;
-  return { ...identity, approved, reason: approved ? "approved" : "approval-required" };
+  if (approved) return { ...identity, approved: true, reason: "approved" };
+
+  // An unlinked token has its own Actor and Item UUIDs. A copied Activity can
+  // inherit the world Actor's approval only while its executable content is
+  // identical. Token deltas with changed scripts/effects still need approval.
+  const actor = activity.item?.actor;
+  const baseActor = actor?.isToken ? actor.token?.baseActor : null;
+  const baseItem = baseActor?.items?.get?.(activity.item?.id);
+  const baseActivity = baseItem?.system?.activities?.get?.(activity.id);
+  const baseIdentity = getIdentity(baseActivity);
+  if (baseIdentity && approvals[baseIdentity.key] === digest) {
+    try {
+      if (digestActivity(baseActivity) === digest) {
+        return { ...identity, approved: true, reason: "approved-via-base-actor" };
+      }
+    } catch { /* An invalid base Activity cannot authorize a token copy. */ }
+  }
+  return { ...identity, approved: false, reason: "approval-required" };
 }
 
 export async function approveActivityAutomation(activity) {
