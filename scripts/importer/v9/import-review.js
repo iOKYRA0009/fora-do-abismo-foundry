@@ -15,6 +15,15 @@ export function itemIdentity(item) {
   return `name:${item.type}:${key(item.name)}`;
 }
 
+function actorMatches(source, existing) {
+  const sourceId = source._id ?? source.id;
+  if (sourceId && sourceId === existing.id) return true;
+  const sourceOrigin = source.flags?.core?.sourceId ?? source.flags?.[MODULE_ID]?.sourceId;
+  const existingOrigin = existing.flags?.core?.sourceId ?? existing.flags?.[MODULE_ID]?.sourceId;
+  if (sourceOrigin && sourceOrigin === existingOrigin) return true;
+  return existing.type === source.type && key(existing.name) === key(source.name);
+}
+
 export function findItemConflicts(items, existing = []) {
   const seen = new Map();
   const conflicts = [];
@@ -50,10 +59,30 @@ function compareExistingActor(payload, actor) {
     itemConflicts: findItemConflicts(payload.items ?? [], values(actor.items)) };
 }
 
+function itemWarnings(items) {
+  const warnings = [];
+  for (const item of items) {
+    const activities = item.jarvis?.activities ?? Object.values(item.system?.activities ?? {});
+    for (const activity of activities) {
+      const label = `${item.name} / ${activity.name ?? activity.type ?? "Activity"}`;
+      if (["attack", "damage"].includes(activity.type)
+        && !activity.damage?.parts?.length && !item.system?.damage?.parts?.length) {
+        warnings.push(`${label}: dano sem fórmula explícita; confira a ficha nativa.`);
+      }
+      if (activity.type === "save" && !activity.save?.ability?.length) {
+        warnings.push(`${label}: salvaguarda sem atributo explícito; confira a CD na ficha nativa.`);
+      }
+      if (activity.uses?.max && !activity.consumption?.targets?.some(target => target?.type === "activityUses")) {
+        warnings.push(`${label}: usos da Activity sem alvo de consumo 'activityUses'; podem não ser descontados.`);
+      }
+    }
+  }
+  return warnings;
+}
+
 export function reviewActorImport(payload, { actors = globalThis.game?.actors, imageFile = null } = {}) {
   validateJarvisActorPayload(payload);
-  const existing = values(actors).filter(actor => actor.type === payload.actor.type
-    && key(actor.name) === key(payload.actor.name));
+  const existing = values(actors).filter(actor => actorMatches(payload.actor, actor));
   const items = payload.items ?? [];
   const conflicts = findItemConflicts(items);
   const warnings = [];
@@ -63,6 +92,7 @@ export function reviewActorImport(payload, { actors = globalThis.game?.actors, i
     warnings.push("Classe, subclasse e Advancement exigem revisão e conclusão na ficha nativa D&D5e.");
   }
   if (imageFile) warnings.push("O retrato enviado pode permanecer no armazenamento mesmo se a criação da ficha falhar.");
+  warnings.push(...itemWarnings(items));
   return {
     schemaVersion: payload.schemaVersion, actor: {
       name: payload.actor.name, type: payload.actor.type,
@@ -92,6 +122,7 @@ export function reviewItemImport(items, actor) {
   if (items.some(item => ["class", "subclass"].includes(item.type))) {
     warnings.push("Classe, subclasse e Advancement exigem revisão e conclusão na ficha nativa D&D5e.");
   }
+  warnings.push(...itemWarnings(items));
   return { actor: { id: actor.id, name: actor.name },
     items: items.map(item => ({ name: item.name, type: item.type, identity: itemIdentity(item),
       image: item.img ?? item.imgStrategy ?? null,

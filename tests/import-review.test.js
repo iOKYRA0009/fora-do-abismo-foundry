@@ -47,3 +47,19 @@ test("repeated consumption targets are rejected before a double charge", () => {
   assert.throws(() => validateJarvisActorPayload(malformed), error =>
     error.details.some(detail => detail.includes("pode cobrar duas vezes")));
 });
+
+test("review warns when Activity uses have no consumption target", () => {
+  const input = structuredClone(payload);
+  input.items[0].jarvis.activities[0].uses = { max: "2", spent: 0 };
+  const review = reviewActorImport(input, { actors: [] });
+  assert.ok(review.warnings.some(message => message.includes("activityUses")));
+});
+
+test("Actor review detects a stable source ID after an Actor was renamed", () => {
+  const input = structuredClone(payload);
+  input.actor.flags = { core: { sourceId: "Compendium.example.actor-1" } };
+  const review = reviewActorImport(input, { actors: [{ id: "old", name: "Nome novo", type: "npc",
+    flags: { core: { sourceId: "Compendium.example.actor-1" } } }] });
+  assert.equal(review.canImport, false);
+  assert.equal(review.duplicates.actors[0].id, "old");
+});
