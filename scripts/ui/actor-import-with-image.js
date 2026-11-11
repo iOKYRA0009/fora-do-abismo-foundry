@@ -66,13 +66,19 @@ export async function importJarvisActorWithImage(jsonText, {
 
   // Never mutate the caller's payload while applying the imported portrait.
   const copy = structuredClone(payload);
+  let imagePath = null;
   if (imageFile) {
-    const imagePath = await uploadJarvisActorImage(imageFile, { picker });
+    imagePath = await uploadJarvisActorImage(imageFile, { picker });
     copy.actor.img = imagePath;
     delete copy.actor.imgStrategy;
     copy.actor.prototypeToken ??= {};
     copy.actor.prototypeToken.texture ??= {};
     copy.actor.prototypeToken.texture.src = imagePath;
   }
-  return importer.importActor(copy, { renderSheet });
+  try {
+    return await importer.importActor(copy, { renderSheet });
+  } catch (cause) {
+    if (!imagePath) throw cause;
+    throw new Error(`Importação falhou: ${cause.message ?? cause}. O retrato enviado permanece em '${imagePath}' para revisão manual.`, { cause });
+  }
 }

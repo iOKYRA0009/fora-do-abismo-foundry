@@ -117,3 +117,11 @@ test("partial Item import into an existing Actor removes only the newly created 
   assert.deepEqual(removed, ["new-item"]);
   assert.deepEqual(actor.items, [existing]);
 });
+
+test("duplicate Actor import is rejected before creating a new document", async () => {
+  const existing = fakeActor({ type: "character" });
+  installFoundry(existing);
+  globalThis.game.actors = [existing];
+  globalThis.Actor.create = async () => { throw new Error("Actor.create should not run"); };
+  await assert.rejects(new JarvisImporterV9().importActor(payload), /bloqueada/);
+});

@@ -79,3 +79,11 @@ test("a failed upload prevents importing a partial Actor", async () => {
   const importer = { async importActor() { throw new Error("Importer was invoked unexpectedly"); } };
   await assert.rejects(importJarvisActorWithImage(JSON.stringify(payload), { imageFile: image, picker, importer }), /sem permissão/);
 });
+
+test("a failed Actor creation reports the uploaded portrait left for review", async () => {
+  const { picker } = fakePicker();
+  const image = new File(["content"], "sentinela.png", { type: "image/png" });
+  const importer = { async importActor() { throw new Error("conflito de nome"); } };
+  await assert.rejects(importJarvisActorWithImage(JSON.stringify(payload), { imageFile: image, picker, importer }),
+    /retrato enviado permanece em 'jarvis-actor-images\//);
+});

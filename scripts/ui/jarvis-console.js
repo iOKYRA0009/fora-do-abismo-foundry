@@ -3,6 +3,7 @@ import { searchConsole } from "./console-search.js";
 import { TOOL_CATALOG } from "./console-tool-catalog.js";
 import { JarvisInputError } from "./console-input-error.js";
 import { importJarvisActorWithImage } from "./actor-import-with-image.js";
+import { summarizeExecution } from "../macros/execution-report.js";
 import { moveExecutorMapElement } from "./executor-map-edit.js";
 import { inspectMosaicQuality } from "../scenes/package/mosaic-quality.js";
 import {
@@ -632,7 +633,7 @@ function renderContent() {
       <input name="actor-json-file" type="file" accept=".json,application/json"><textarea name="actor-json" rows="5" placeholder='{"schemaVersion":"9.0","actor":{"name":"Novo personagem","type":"character"},"items":[]}'></textarea>
     <label>Retrato do NPC (opcional, PNG/JPG/WebP até 6 MB): <input name="actor-image-file" type="file" accept="image/png,image/jpeg,image/webp"></label>
     <p class="jarvis-console-hint">O Jarvis envia o retrato para Dados do Usuário e define a imagem da ficha e do Token. O JSON V9 contém atributos, equipamentos, ataques e Effects.</p>
-      <div class="jarvis-console-row">${button("actor-import", "Validar e importar")}${button("actor-progression", "Aplicar progressão da ficha")}${button("actor-compare", "Comparar JSON com a ficha")}</div>
+      <div class="jarvis-console-row">${button("actor-import-preview", "Revisar importação V9")}${button("actor-import", "Confirmar criação")}${button("actor-progression", "Aplicar progressão da ficha")}${button("actor-compare", "Comparar JSON com a ficha")}</div>
       <h3>Manutenção da ficha</h3><div class="jarvis-console-row"><label>Regras alvo<select name="actor-rules-target"><option value="2024">D&D 2024</option><option value="2014">D&D 2014</option></select></label>
       ${button("actor-rules-set", "Salvar perfil de regras")}${button("actor-provenance-stamp", "Registrar origem dos Items")}${button("actor-jack-sync", "Sincronizar almas de Jack")}</div>` : ""}
   `);
@@ -651,7 +652,7 @@ function renderContent() {
     <p class="jarvis-console-hint">Classes e subclasses são criadas como Items nativos do sistema. Configure progressão e níveis na ficha antes de usar em jogo.</p>
     <h3>Adicionar Items de um JSON V9 à ficha</h3><p>Selecione o personagem ativo. Aceita uma lista de Items ou um objeto com a chave <code>items</code>.</p>
     <input name="items-json-file" type="file" accept=".json,application/json"><textarea name="items-json" rows="4" placeholder='{"items":[{"name":"Novo item","type":"feat"}]}'></textarea>
-    <div class="jarvis-console-row">${button("items-import", "Importar Items na ficha")}</div>
+    <div class="jarvis-console-row">${button("items-import-preview", "Revisar Items V9")}${button("items-import", "Confirmar Items na ficha")}</div>
   `) : "";
 
   const maps = gm ? section("maps", `
@@ -776,7 +777,7 @@ function renderContent() {
     <section class="jarvis-executor-preview" data-jarvis-executor-preview aria-live="polite"><p>Importe um arquivo ou cole código para começar.</p></section>
     <details class="jarvis-console-advanced"><summary>Histórico e recuperação</summary>
       <p>Consulte execuções anteriores. A reversão de pacotes remove apenas documentos que o Executor criou; arquivos de imagem enviados podem permanecer.</p>
-      <div class="jarvis-console-row">${button("executor-history", "Ver histórico")}${button("executor-rollback", "Reverter pacote")}</div>
+      <div class="jarvis-console-row">${button("executor-history", "Ver histórico")}${button("executor-report", "Baixar relatório")}${button("executor-rollback", "Reverter pacote")}</div>
       <label>ID da execução<input name="executor-rollback-id" placeholder="Selecione uma execução do histórico"></label>
       <div data-jarvis-executor-history class="jarvis-console-results"></div>
     </details>
@@ -974,11 +975,25 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
     requireGM();
     return setOutput(root, "Prévia do personagem", jarvis.content.preview(contentSpec(root, "actor")));
   }
-  if (action === "actor-import") {
+  if (action === "actor-import-preview" || action === "actor-import") {
     requireGM();
     const json = await fileOrText(root, "actor-json-file", "actor-json");
+    const imageFile = field(root, "actor-image-file")?.files?.[0] ?? null;
+    const fingerprint = JSON.stringify([json, imageFile?.name, imageFile?.size, imageFile?.lastModified]);
+    const payload = JSON.parse(json);
+    const review = jarvis.importer.previewActor(payload, { imageFile });
+    if (action === "actor-import-preview") {
+      state.actorImportPreview = { fingerprint };
+      return setOutput(root, "Revisão da importação V9", review);
+    }
+    if (state.actorImportPreview?.fingerprint !== fingerprint) {
+      throw new JarvisInputError("Prévia ausente ou desatualizada. Revise a importação V9 antes de criar a ficha.");
+    }
+    if (!review.canImport) throw new JarvisInputError(review.warnings.join(" "));
+    if (!await confirmAction("Criar Actor V9", `Criar '${review.actor.name}' com ${review.items.length} Item(s) e ${review.effects.length} efeito(s)? ${review.warnings.join(" ")}`)) return;
+    state.actorImportPreview = null;
     const actor = await importJarvisActorWithImage(json, {
-      imageFile: field(root, "actor-image-file")?.files?.[0] ?? null,
+      imageFile,
       importer: jarvis.importer,
       renderSheet: true
     });
@@ -1074,7 +1089,7 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
     requireGM();
     return setOutput(root, "Prévia de Item ou classe", jarvis.content.preview(contentSpec(root, "item")));
   }
-  if (action === "items-import") {
+  if (action === "items-import-preview" || action === "items-import") {
     requireGM();
     const actor = selectedActor(root, { manage: true });
     const parsed = JSON.parse(await fileOrText(root, "items-json-file", "items-json"));
@@ -1082,7 +1097,18 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
     if (!Array.isArray(items) || !items.length || items.length > 100 || items.some(item => !item || typeof item !== "object")) {
       throw new Error("Informe uma lista de 1 a 100 Items V9 válidos.");
     }
+    const fingerprint = JSON.stringify([actor.id, items]);
+    const review = jarvis.importer.previewItems(actor, items);
+    if (action === "items-import-preview") {
+      state.itemsImportPreview = { fingerprint };
+      return setOutput(root, "Revisão dos Items V9", review);
+    }
+    if (state.itemsImportPreview?.fingerprint !== fingerprint) {
+      throw new JarvisInputError("Prévia ausente ou desatualizada. Revise os Items V9 antes de importá-los.");
+    }
+    if (!review.canImport) throw new JarvisInputError(review.warnings.join(" "));
     if (!await confirmAction("Importar Items", `Adicionar ${items.length} Item(s) à ficha de ${actor.name}?`)) return;
+    state.itemsImportPreview = null;
     const created = await jarvis.importer.importItems(actor, items, { sourceLabel: "Central Jarvis" });
     return setOutput(root, "Items importados", `${created.length} Item(s) criados em ${actor.name}.`);
   }
@@ -1592,6 +1618,20 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
     if (!Array.isArray(history)) throw new Error("Histórico do Executor indisponível nesta versão do Jarvis.");
     renderExecutorHistory(root, history);
     return setOutput(root, "Histórico do Executor", history);
+  }
+  if (action === "executor-report") {
+    requireGM();
+    const id = fieldValue(root, "executor-rollback-id") || state.executorLastExecutionId;
+    const row = jarvis.executor.history?.().find(entry => entry.id === id);
+    const report = summarizeExecution(row);
+    const url = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2)], { type: "application/json" }));
+    try {
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `jarvis-execucao-${String(id).replace(/[^a-z0-9_-]/gi, "_")}.json`;
+      link.click();
+    } finally { URL.revokeObjectURL(url); }
+    return setOutput(root, "Relatório de execução", report);
   }
   if (action === "executor-rollback") {
     requireGM();

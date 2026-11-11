@@ -502,9 +502,9 @@ export class Dnd5eV6Adapter {
     if (major !== 6 || minor !== 0 || !Number.isInteger(patch)) {
       throw new Error(`D&D5e ${info.systemVersion ?? "desconhecido"} não é suportado pelo Jarvis V9. Alvo: 6.0.x.`);
     }
-    if (patch > 2) {
+    if (patch > 6) {
       ui.notifications?.warn(
-        `Jarvis V9: D&D5e ${info.systemVersion} está dentro de 6.0.x, mas a última versão verificada no manifesto é 6.0.2. Confira o diagnóstico antes de importar.`
+        `Jarvis V9: D&D5e ${info.systemVersion} está dentro de 6.0.x, mas a última versão verificada no manifesto é 6.0.6. Confira o diagnóstico antes de importar.`
       );
     }
 
