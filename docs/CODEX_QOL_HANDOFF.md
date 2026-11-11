@@ -10,7 +10,7 @@ Entregar Jarvis Tools 1.5.0 com importações V9 seguras, detecção de duplicat
 
 - Repositório: `https://github.com/iOKYRA0009/fora-do-abismo-foundry`.
 - Branch local: `feat/jarvis-tools-1.5.0-qol`, criada de `main` em `61ece6b` (Jarvis 1.4.1).
-- Último commit de código concluído: `5362e42` — `feat(qol): rank search results and guard repeated resource use`. Checkpoints anteriores: `385d1f4`, `ff05844`.
+- Último commit de código concluído: `12d6389` — `feat(importer): warn on incomplete Activities and match Actor origin`. Checkpoints anteriores: `5362e42`, `385d1f4`, `ff05844`.
 - PR em rascunho: https://github.com/iOKYRA0009/fora-do-abismo-foundry/pull/36 . Ainda não está pronto para revisão final.
 - Para ver o último commit inclusive este handoff: `git log -1 --oneline`.
 - Diretório local: `C:\Users\Roger\.codex\.chatgpt-projects\g-p-6a70840fbf8081919fb2119ad103500d\jarvis-qol-150`.
@@ -34,6 +34,7 @@ Entregar Jarvis Tools 1.5.0 com importações V9 seguras, detecção de duplicat
 7. Resultado da Central ampliado para revisão, pequenos ajustes de hierarquia e responsividade.
 8. Painel de revisão V9 renderizado por módulo independente, com HTML escapado, seções legíveis e invalidação quando JSON, arquivo ou Actor selecionado mudam.
 9. Busca local prioriza nome exato, início do nome e início de palavra sem alterar cache/cancelamento dos compêndios. O validador bloqueia consumo duplicado do mesmo recurso em uma Activity.
+10. Prévia avisa sobre dano, salvaguarda e usos de Activity incompletos. Actor renomeado ainda é detectado por `_id` ou `flags.core.sourceId` quando disponível.
 
 ## Pendente, em ordem
 
@@ -46,11 +47,12 @@ Entregar Jarvis Tools 1.5.0 com importações V9 seguras, detecção de duplicat
 
 ## Testes e bloqueios
 
-- `node --test tests/*.test.js`: **258 passaram, 0 falharam** em 2026-11-11.
+- `node --test tests/*.test.js`: **260 passaram, 0 falharam** em 2026-11-11.
 - `git diff --check`: passou.
 - Foundry local em `http://127.0.0.1:30000`: conexão recusada. Testes E2E e testes reais no mundo **NÃO TESTADOS**.
 - `node_modules/playwright-core` não está instalado neste checkout. O comando E2E também requer URL/mundo de homologação e navegador configurados.
 - Integrações DAE, Tidy5e, Nik's Tweaks, Visage e Metamorph **NÃO TESTADAS** neste checkpoint.
+- Manifestos instalados em dados locais: D&D5e `6.0.6`, DAE `14.0.19`, Tidy5e `14.4.0`, Visage `5.12.0`, Metamorph `1.5.3`, Jarvis instalado `1.4.0`. Isto não comprova que o mundo esteja ativo nem que as integrações funcionem. Nenhum mundo foi encontrado em `Data/worlds` nesta inspeção.
 - Não há benchmarks antes/depois; não afirmar melhoria de velocidade.
 
 ## Decisões técnicas
@@ -58,6 +60,7 @@ Entregar Jarvis Tools 1.5.0 com importações V9 seguras, detecção de duplicat
 - `importActor` continua criando Actor novo. Nome/tipo já existente bloqueia a criação, sem substituir PV, recursos, slots, condições, imagem ou configuração.
 - `importItems` bloqueia coincidências em vez de substituir ou saltar silenciosamente. Isso mantém o contrato de retorno e o rollback do Executor.
 - A Central usa DialogV2 existente. Migração total para outra aplicação depende de prova de compatibilidade, não apenas de estética.
+- A [API oficial V14](https://foundryvtt.com/api/modules/foundry.applications.html) descreve DialogV2 como subclass de ApplicationV2 adequada a janelas sem rerender. A Central atual não recria o DOM em trocas de abas; manter DialogV2 evita uma migração arriscada sem teste real. HandlebarsApplicationMixin fica para avaliação após teste de integração.
 - O relatório exportado é uma leitura do histórico. Sem telemetria de Activity real, Activity permanece NÃO TESTADO.
 - Imagens enviadas não são apagadas automaticamente após falha ou reversão; o caminho é relatado.
 
