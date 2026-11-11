@@ -26,6 +26,12 @@ No Foundry VTT:
 
 O Foundry usa o mesmo Manifest URL para detectar atualizações futuras.
 
+### Atualização Jarvis Tools 1.5.5 — Importer V9.1
+
+O **V9.1 é a versão interna do motor de importação**. Na Central → Personagens, o Mestre pode montar um NPC sem escrever JSON, acrescentar habilidades de ataque, salvaguarda, teste, dano, cura e teletransporte, reutilizar modelos, importar retrato e token separados e conferir cenários como ataque contra CA e salvaguarda contra CD. O JSON V9.0 continua aceito. A atualização de uma ficha existente preserva PV, atributos, recursos e condições e altera somente Activities de Items Jarvis correspondentes, além de adicionar Items novos.
+
+Activities novas têm descrição individual no chat. Para corrigir a Alvorada ou outro Item Jarvis **já importado**, selecione a ficha e clique em **Corrigir chat das habilidades**. A ferramenta apresenta a contagem e altera somente Activities Jarvis que ainda exibiriam a descrição inteira do Item. Veja [notas, exemplos e limites](docs/QUALITY-1.5.5.md). Nenhum módulo adicional é obrigatório.
+
 ### Atualização Jarvis Tools 1.5.4 — módulos parceiros
 
 A Central agora reúne dez integrações opcionais para automações, cenas e fichas: socketlib, Tagger, Sequencer, Dynamic Active Effects, Item Piles, Token Magic FX, FXMaster, Polyglot, Universal Battlemap Importer e Tidy 5e Sheets. As funções aparecem em **Central → Sistema → Módulos parceiros** e o diagnóstico mostra quais parceiros estão ativos e prontos. O importador de mapas aceita também `.df2vtt`.
@@ -78,7 +84,7 @@ Macro Script equivalente ao botão:
 game.modules.get("fora-do-abismo-foundry")?.api?.ui?.open()
 ```
 
-> O Importer V9 mantém seu formato e as APIs anteriores. A suíte Node passou em 212/212 testes. No Foundry V14 Build 369 com D&D5e 6.0.6, em mundo isolado, a navegação passou em 6/6 casos e o ensaio do Executor passou em 12 casos reais: criação de NPC, rolagem nativa, cena, imagens, perfis opcionais, rejeições, falha de upload e reversão. Jogador e Jogador Confiável não viram o Executor e tiveram as chamadas diretas da API recusadas. A renderização das camadas no canvas não foi confirmada no navegador sem interface; confira o mapa visualmente no Foundry ao atualizar.
+> O Importer V9 mantém seu formato e as APIs anteriores. A suíte Node da 1.5.5 passou em 265/265 verificações. No Foundry V14 Build 369 com D&D5e 6.0.6, a validação anterior do Executor em mundo isolado cobriu criação de NPC, rolagem nativa, cena, imagens, rejeições e reversão. A versão 1.5.5 precisa da conferência do Mestre no próprio mundo, especialmente dos cartões de habilidades da Alvorada e das rolagens do V9.1.
 
 ## Publicação automática
 

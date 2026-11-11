@@ -20,8 +20,15 @@ export function importReviewMarkup(review) {
     ${actor.hp || actor.ac || actor.attributes ? `<p>PV: ${escapeHtml(actor.hp?.value ?? "—")}/${escapeHtml(actor.hp?.max ?? "—")}
       · CA: ${escapeHtml(actor.ac ?? "—")} · atributos: ${escapeHtml(Object.keys(actor.attributes ?? {}).length)}</p>` : ""}
     ${actor.image ? `<p>Imagem: ${escapeHtml(typeof actor.image === "string" ? actor.image : actor.image.source ?? "estratégia definida")}</p>` : ""}
+    ${actor.tokenImage ? `<p>Token: ${escapeHtml(actor.tokenImage)}</p>` : ""}
+    ${actor.portraitPreview || actor.tokenPreview ? `<div class="jarvis-console-row">
+      ${actor.portraitPreview ? `<figure><img src="${escapeHtml(actor.portraitPreview)}" alt="Prévia do retrato" width="96" height="96"><figcaption>Retrato</figcaption></figure>` : ""}
+      ${actor.tokenPreview ? `<figure><img src="${escapeHtml(actor.tokenPreview)}" alt="Prévia do token" width="96" height="96"><figcaption>Token</figcaption></figure>` : ""}</div>` : ""}
     <details open><summary>Items (${review.items?.length ?? 0})</summary><ul>${itemRows(review.items ?? []) || "<li>Nenhum Item.</li>"}</ul></details>
     ${review.effects?.length ? `<details><summary>Efeitos (${review.effects.length})</summary><ul>${review.effects.map(effect => `<li>${escapeHtml(effect.name ?? "Efeito sem nome")}</li>`).join("")}</ul></details>` : ""}
+    ${review.mechanics ? `<details open><summary>Ensaio mecânico · ${review.mechanics.actions} ação(ões), ${review.mechanics.checks.length} cenário(s)</summary><ul>
+      ${review.mechanics.checks.map(check => `<li>${escapeHtml(check.action)}: d20 ${escapeHtml(check.d20)} + modificador = ${escapeHtml(check.total)} contra ${escapeHtml(check.target)} → ${escapeHtml(check.outcome)}</li>`).join("") || "<li>Sem cenários informados.</li>"}</ul></details>` : ""}
+    ${review.errors?.length ? `<div class="jarvis-review-warnings"><strong>Erros mecânicos</strong><ul>${review.errors.map(message => `<li>${escapeHtml(message)}</li>`).join("")}</ul></div>` : ""}
     ${duplicateActors.length || duplicateItems.length ? `<details open><summary>Duplicatas</summary><ul>
       ${duplicateActors.map(value => `<li>Actor existente: ${escapeHtml(value.name)} (${escapeHtml(value.id)})</li>`).join("")}
       ${duplicateItems.map(value => `<li>Item: ${escapeHtml(value.item)} coincide com ${escapeHtml(value.existing)}</li>`).join("")}</ul></details>` : ""}

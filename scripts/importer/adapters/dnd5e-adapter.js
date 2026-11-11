@@ -1,4 +1,5 @@
 import { applyActorResources } from "../resources/resource-engine.js";
+import { privateActivityDescription, sharedItemDescription } from "../v9/activity-chat-privacy.js";
 
 const SUPPORTED_ITEM_TYPES = new Set([
   "feat", "weapon", "spell", "consumable", "equipment", "tool", "loot",
@@ -12,7 +13,7 @@ const RECOVERY_PERIODS = Object.freeze({
 
 const ACTIVITY_TYPES = new Set([
   "attack", "save", "utility", "heal", "check", "damage", "summon",
-  "enchant", "cast", "forward"
+  "enchant", "cast", "forward", "teleport", "transform"
 ]);
 
 function clone(value) {
@@ -181,7 +182,8 @@ function buildBaseActivity(activity, id) {
     sort: Number(activity.sort ?? 0),
     activation: normalizeActivation(activity.activation),
     consumption: normalizeConsumption(activity.consumption),
-    description: { chatFlavor: activity.description?.chatFlavor ?? activity.chatFlavor ?? "" },
+    description: { chatFlavor: activity.description?.chatFlavor ?? activity.chatFlavor ?? "",
+      value: privateActivityDescription(activity) },
     duration: normalizeDuration(activity.duration),
     effects: Array.isArray(activity.effects) ? clone(activity.effects) : [],
     flags: clone(activity.flags ?? {}),
@@ -257,7 +259,7 @@ function buildUtilityActivity(activity, id) {
 
 function buildGenericActivity(activity, id) {
   const data = buildBaseActivity(activity, id);
-  for (const key of ["damage", "healing", "check", "save", "attack", "summon", "enchant", "roll"]) {
+  for (const key of ["damage", "healing", "check", "save", "attack", "summon", "enchant", "roll", "teleport", "transform", "profiles", "settings"]) {
     if (activity[key] !== undefined) data[key] = clone(activity[key]);
   }
   return data;
@@ -435,6 +437,19 @@ function applyActorDetails(system, details = {}) {
 }
 
 function applyClassSemantic(data, semantic) {
+  if (!["class", "subclass"].includes(data.type)) return;
+
+  if (Array.isArray(semantic.grants) && semantic.grants.length) {
+    if (Array.isArray(data.system.advancement) && data.system.advancement.length) {
+      throw new Error(`${data.name}: use grants ou system.advancement, não ambos.`);
+    }
+    data.system.advancement = semantic.grants.map((entry, index) => ({
+      _id: makeId(), type: "ItemGrant", level: entry.level,
+      title: entry.title || `Habilidades do nível ${entry.level}`,
+      configuration: { items: entry.uuids.map((uuid, sort) => ({ uuid, optional: false, sort: sort * 10000 })),
+        optional: false, sorting: "m", spell: null }, value: {}
+    }));
+  }
   if (data.type !== "class") return;
 
   if (semantic.levels !== undefined) {
@@ -578,6 +593,16 @@ export class Dnd5eV6Adapter {
 
     if (Array.isArray(semantic.activities) && semantic.activities.length) {
       data.system.activities = mergeActivities(data.system.activities, semantic.activities);
+    }
+    const itemActivities = Object.values(data.system.activities ?? {});
+    for (const activity of itemActivities) {
+      activity.description ??= {};
+      const shared = sharedItemDescription(activity, data.system.description?.value, itemActivities.length);
+      if (!String(activity.description.value ?? "").trim() || shared) {
+        activity.description.value = shared
+          ? privateActivityDescription({ name: activity.name || activity.type })
+          : privateActivityDescription(activity);
+      }
     }
 
     applyClassSemantic(data, semantic);

@@ -9,6 +9,9 @@ import {
 import { TOOL_CATALOG } from "./console-tool-catalog.js";
 import { JarvisInputError } from "./console-input-error.js";
 import { importJarvisActorWithImage } from "./actor-import-with-image.js";
+import { previewActivityChatRepair, repairActivityChatDescriptions } from "../importer/v9/activity-chat-privacy.js";
+import { getV91ActionPreset, listV91ActionPresets, saveV91ActionPreset } from "../importer/v9/action-presets.js";
+import { compileActorBlueprintV91 } from "../importer/v9/blueprint-v91.js";
 import { summarizeExecution } from "../macros/execution-report.js";
 import { renderImportReview } from "./import-review-view.js";
 import { moveExecutorMapElement } from "./executor-map-edit.js";
@@ -189,6 +192,64 @@ function itemTypes() {
 
 function field(root, name) { return root.querySelector(`[name="${name}"]`); }
 function fieldValue(root, name) { return field(root, name)?.value?.trim() ?? ""; }
+
+function v91ActionFromFields(root) {
+  const kind = fieldValue(root, "v91-kind");
+  const action = { name: fieldValue(root, "v91-action-name"), kind,
+    description: fieldValue(root, "v91-action-description"), activation: fieldValue(root, "v91-activation") || "action" };
+  const ability = fieldValue(root, "v91-ability");
+  if (["attack", "save", "check"].includes(kind)) action.ability = ability;
+  if (kind === "attack") {
+    const hit = fieldValue(root, "v91-to-hit");
+    if (hit) action.toHit = Number(hit);
+    action.damage = { formula: fieldValue(root, "v91-formula"), type: fieldValue(root, "v91-damage-type") };
+  }
+  if (kind === "save" || kind === "check") action.dc = Number(fieldValue(root, "v91-dc"));
+  if (kind === "save" && fieldValue(root, "v91-formula")) {
+    action.damage = { formula: fieldValue(root, "v91-formula"), type: fieldValue(root, "v91-damage-type") };
+    action.onSave = fieldValue(root, "v91-on-save");
+  }
+  if (kind === "damage") action.damage = { formula: fieldValue(root, "v91-formula"), type: fieldValue(root, "v91-damage-type") };
+  if (kind === "heal") action.healing = fieldValue(root, "v91-formula");
+  if (kind === "teleport") action.distance = Number(fieldValue(root, "v91-distance"));
+  if (kind === "utility" && fieldValue(root, "v91-formula")) action.roll = fieldValue(root, "v91-formula");
+  return action;
+}
+
+function v91ScenarioFromFields(root) {
+  const kind = fieldValue(root, "v91-scenario-kind");
+  if (!fieldValue(root, "v91-scenario-d20")) throw new JarvisInputError("Informe o resultado do d20 no ensaio.");
+  if (kind === "attack" && !fieldValue(root, "v91-scenario-target")) throw new JarvisInputError("Informe a CA do alvo no ensaio.");
+  if (kind !== "attack" && !fieldValue(root, "v91-scenario-modifier")) throw new JarvisInputError("Informe o modificador do alvo no ensaio.");
+  const scenario = { action: fieldValue(root, "v91-scenario-action"), kind,
+    d20: Number(fieldValue(root, "v91-scenario-d20")), expected: fieldValue(root, "v91-scenario-expected") };
+  if (kind === "attack") scenario.expected = ({ success: "hit", failure: "miss" })[scenario.expected] ?? scenario.expected;
+  else scenario.expected = ({ hit: "success", miss: "failure" })[scenario.expected] ?? scenario.expected;
+  if (kind === "attack") scenario.targetAC = Number(fieldValue(root, "v91-scenario-target"));
+  else scenario.modifier = Number(fieldValue(root, "v91-scenario-modifier"));
+  return scenario;
+}
+
+function v91BlueprintFromFields(root, previous = null) {
+  if (previous) return { schemaVersion: "9.1", actor: structuredClone(previous.actor),
+    items: structuredClone(previous.items ?? []), effects: structuredClone(previous.effects ?? []),
+    actions: structuredClone(previous.actions ?? []), scenarios: structuredClone(previous.scenarios ?? []) };
+  const actor = { name: fieldValue(root, "v91-actor-name") || fieldValue(root, "actor-name"),
+    type: fieldValue(root, "v91-actor-type") || fieldValue(root, "actor-type"), jarvis: {
+    abilities: Object.fromEntries(["str", "dex", "con", "int", "wis", "cha"].map(key => [key, Number(fieldValue(root, `actor-${key}`))]))
+  } };
+  const hp = fieldValue(root, "actor-hp");
+  const ac = fieldValue(root, "actor-ac");
+  if (hp) actor.jarvis.hp = { value: Number(hp), max: Number(hp) };
+  if (ac) actor.jarvis.ac = Number(ac);
+  return { schemaVersion: "9.1", actor, items: [], effects: [], actions: [], scenarios: [] };
+}
+
+function refreshV91Presets(root) {
+  const select = field(root, "v91-preset");
+  if (select) select.innerHTML = `<option value="">Escolha um modelo</option>${listV91ActionPresets()
+    .map(row => `<option value="${escapeHtml(row.id)}">${escapeHtml(row.action.name)}</option>`).join("")}`;
+}
 
 function selectedActor(root, { required = true, manage = false } = {}) {
   const actor = game.actors.get(fieldValue(root, "jarvis-actor"));
@@ -608,14 +669,40 @@ function renderContent() {
       <label class="jarvis-console-span">História inicial<textarea name="actor-biography" rows="2" placeholder="Opcional"></textarea></label></div>
       <p class="jarvis-console-hint">Modo avançado: cole um objeto JSON com <code>data</code> (Actor nativo ou campos Jarvis), <code>effects</code> e outras opções. A ficha nativa permite concluir classe, raça e equipamento.</p><textarea name="actor-advanced" rows="4" placeholder='{"data":{"jarvis":{"skills":{"prc":1}}},"effects":[]}'></textarea>
       <div class="jarvis-console-row">${button("actor-wizard-preview", "Pré-visualizar ficha")}${button("actor-create", "Confirmar criação")}</div>
-      <h3>Importar ficha Jarvis V9</h3><p>JSON com <code>schemaVersion: "9.0"</code>, Actor, Items e Effects. O importador valida antes de criar.</p>
-      <input name="actor-json-file" type="file" accept=".json,application/json"><textarea name="actor-json" rows="5" placeholder='{"schemaVersion":"9.0","actor":{"name":"Novo personagem","type":"character"},"items":[]}'></textarea>
-    <label>Retrato do NPC (opcional, PNG/JPG/WebP até 6 MB): <input name="actor-image-file" type="file" accept="image/png,image/jpeg,image/webp"></label>
-    <p class="jarvis-console-hint">O Jarvis envia o retrato para Dados do Usuário e define a imagem da ficha e do Token. O JSON V9 contém atributos, equipamentos, ataques e Effects.</p>
-      <div class="jarvis-console-row">${button("actor-import-preview", "Revisar importação V9")}${button("actor-import", "Confirmar criação")}${button("actor-progression", "Aplicar progressão da ficha")}${button("actor-compare", "Comparar JSON com a ficha")}</div>
+      <details><summary>Montar NPC V9.1 sem escrever JSON</summary>
+      <p>Preencha nome abaixo; PV, CA e atributos estão nos campos logo acima. Depois adicione cada ação aqui.</p>
+      <div class="jarvis-console-grid"><label>Nome da ficha V9.1<input name="v91-actor-name" placeholder="Ex.: Guardião do Umbral"></label>
+      <label>Tipo<select name="v91-actor-type"><option value="npc">NPC</option><option value="character">Personagem</option></select></label>
+      <label>Habilidade<input name="v91-action-name" placeholder="Ex.: Investida sombria"></label>
+      <label>Mecânica<select name="v91-kind"><option value="attack">Ataque</option><option value="save">Salvaguarda</option><option value="check">Teste</option><option value="damage">Dano</option><option value="heal">Cura</option><option value="teleport">Teletransporte</option><option value="utility">Utilidade</option></select></label>
+      <label>Atributo<select name="v91-ability"><option value="str">FOR</option><option value="dex">DES</option><option value="con">CON</option><option value="int">INT</option><option value="wis">SAB</option><option value="cha">CAR</option></select></label>
+      <label>Acerto fixo (obrigatório para NPC)<input name="v91-to-hit" type="number" placeholder="Ex.: 7"></label>
+      <label>CD<input name="v91-dc" type="number" min="1" max="40" placeholder="Ex.: 14"></label>
+      <label>Distância de teletransporte (pés)<input name="v91-distance" type="number" min="0" placeholder="Ex.: 30"></label>
+      <label>Fórmula<input name="v91-formula" placeholder="Ex.: 2d6+4"></label>
+      <label>Tipo do dano<select name="v91-damage-type"><option value="slashing">Cortante</option><option value="piercing">Perfurante</option><option value="bludgeoning">Contundente</option><option value="fire">Fogo</option><option value="cold">Frio</option><option value="lightning">Elétrico</option><option value="thunder">Trovejante</option><option value="acid">Ácido</option><option value="poison">Veneno</option><option value="necrotic">Necrótico</option><option value="radiant">Radiante</option><option value="psychic">Psíquico</option><option value="force">Energia</option></select></label>
+      <label>Ao passar na salvaguarda<select name="v91-on-save"><option value="none">Sem dano</option><option value="half">Metade</option><option value="full">Dano total</option></select></label>
+      <label>Tempo<select name="v91-activation"><option value="action">Ação</option><option value="bonus">Ação bônus</option><option value="reaction">Reação</option></select></label>
+      <label class="jarvis-console-span">Texto público da habilidade<textarea name="v91-action-description" rows="2" placeholder="Só esta habilidade aparecerá no chat."></textarea></label></div>
+      <div class="jarvis-console-row">${button("v91-new-package", "Montar ficha")}${button("v91-add-action", "Adicionar habilidade")}</div>
+      <p>Ensaio opcional: escolha uma habilidade e um resultado esperado para conferir a conta antes de importar.</p>
+      <div class="jarvis-console-grid"><label>Nome da habilidade<input name="v91-scenario-action" placeholder="Mesmo nome acima"></label>
+      <label>Tipo<select name="v91-scenario-kind"><option value="attack">Ataque</option><option value="save">Salvaguarda</option><option value="check">Teste</option></select></label>
+      <label>Resultado do d20<input name="v91-scenario-d20" type="number" min="1" max="20" placeholder="Ex.: 9"></label>
+      <label>CA do alvo<input name="v91-scenario-target" type="number" placeholder="Ex.: 16"></label>
+      <label>Modificador do alvo<input name="v91-scenario-modifier" type="number" placeholder="Ex.: 2"></label>
+      <label>Resultado esperado<select name="v91-scenario-expected"><option value="hit">Acerto</option><option value="miss">Erro</option><option value="success">Sucesso</option><option value="failure">Falha</option></select></label></div>
+      <div class="jarvis-console-row">${button("v91-add-scenario", "Adicionar ensaio")}</div>
+      <div class="jarvis-console-row"><select name="v91-preset"><option value="">Escolha um modelo</option>${listV91ActionPresets().map(row => `<option value="${escapeHtml(row.id)}">${escapeHtml(row.action.name)}</option>`).join("")}</select>${button("v91-load-preset", "Carregar modelo")}${button("v91-save-preset", "Guardar habilidade")}</div></details>
+      <h3>Importar ficha Jarvis V9.1</h3><p>Cole o pacote JSON 9.1 compacto ou o JSON 9.0 completo. A revisão mostra ataques, CDs, danos e possíveis lacunas antes de criar.</p>
+      <input name="actor-json-file" type="file" accept=".json,application/json"><textarea name="actor-json" rows="5" placeholder='{"schemaVersion":"9.1","actor":{"name":"Novo NPC","type":"npc"},"actions":[]}'></textarea>
+    <label>Retrato da ficha (PNG/JPG/WebP até 6 MB): <input name="actor-image-file" type="file" accept="image/png,image/jpeg,image/webp"></label>
+    <label>Token (opcional, PNG transparente recomendado): <input name="actor-token-file" type="file" accept="image/png,image/jpeg,image/webp"></label>
+    <p class="jarvis-console-hint">Envie ficha, retrato e token juntos. Se enviar só o retrato, ele também será usado como token.</p>
+      <div class="jarvis-console-row">${button("actor-import-preview", "Revisar importação V9.1")}${button("actor-import", "Confirmar criação")}${button("actor-sync-preview", "Revisar atualização da ficha")}${button("actor-sync", "Atualizar ficha selecionada")}${button("actor-progression", "Aplicar progressão da ficha")}${button("actor-compare", "Comparar JSON com a ficha")}</div>
       <section class="jarvis-import-review" data-jarvis-actor-review aria-live="polite"><p class="jarvis-console-hint">Revise o JSON antes de confirmar.</p></section>
       <h3>Manutenção da ficha</h3><div class="jarvis-console-row"><label>Regras alvo<select name="actor-rules-target"><option value="2024">D&D 2024</option><option value="2014">D&D 2014</option></select></label>
-      ${button("actor-rules-set", "Salvar perfil de regras")}${button("actor-provenance-stamp", "Registrar origem dos Items")}${button("actor-jack-sync", "Sincronizar almas de Jack")}</div>` : ""}
+      ${button("actor-rules-set", "Salvar perfil de regras")}${button("actor-provenance-stamp", "Registrar origem dos Items")}${button("actor-jack-sync", "Sincronizar almas de Jack")}${button("actor-chat-repair", "Corrigir chat das habilidades")}</div>` : ""}
   `);
 
   const content = gm ? section("content", `
@@ -929,6 +1016,45 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
   const jarvis = api();
   if (action === "clear-output") return clearOutput(root);
   if (action === "pack-focus") return selectTab(root, "library");
+  if (["v91-new-package", "v91-add-action", "v91-add-scenario"].includes(action)) {
+    requireGM();
+    let previous = null;
+    if (action !== "v91-new-package") {
+      const hasSource = Boolean(field(root, "actor-json-file")?.files?.[0] || fieldValue(root, "actor-json"));
+      if (hasSource) {
+        try { previous = JSON.parse(await fileOrText(root, "actor-json-file", "actor-json")); }
+        catch (cause) { throw new JarvisInputError(`Pacote atual inválido: ${cause.message}`); }
+        if (previous?.schemaVersion !== "9.1") throw new JarvisInputError("O construtor acrescenta habilidades apenas a pacotes V9.1.");
+      }
+    }
+    const blueprint = v91BlueprintFromFields(root, previous);
+    if (action === "v91-add-action") blueprint.actions.push(v91ActionFromFields(root));
+    if (action === "v91-add-scenario") blueprint.scenarios.push(v91ScenarioFromFields(root));
+    compileActorBlueprintV91(blueprint);
+    field(root, "actor-json").value = JSON.stringify(blueprint, null, 2);
+    if (field(root, "actor-json-file")) field(root, "actor-json-file").value = "";
+    state.actorImportPreview = null;
+    renderImportReview(root, "actor", null);
+    return setOutput(root, "Pacote V9.1", `${blueprint.actor.name}: ${blueprint.actions.length} habilidade(s), ${blueprint.scenarios.length} ensaio(s). Revise a importação para continuar.`);
+  }
+  if (action === "v91-save-preset") {
+    requireGM();
+    const saved = saveV91ActionPreset(v91ActionFromFields(root));
+    refreshV91Presets(root);
+    field(root, "v91-preset").value = saved;
+    return setOutput(root, "Biblioteca de habilidades", "Habilidade guardada neste navegador.");
+  }
+  if (action === "v91-load-preset") {
+    requireGM();
+    const preset = getV91ActionPreset(fieldValue(root, "v91-preset"));
+    const set = (name, value) => { const control = field(root, name); if (control) control.value = value ?? ""; };
+    set("v91-action-name", preset.name); set("v91-kind", preset.kind); set("v91-ability", preset.ability ?? "str");
+    set("v91-to-hit", preset.toHit); set("v91-dc", preset.dc); set("v91-distance", preset.distance);
+    set("v91-formula", preset.damage?.formula ?? preset.healing ?? preset.roll);
+    set("v91-damage-type", preset.damage?.type); set("v91-on-save", preset.onSave ?? "none");
+    set("v91-activation", preset.activation ?? "action"); set("v91-action-description", preset.description);
+    return setOutput(root, "Biblioteca de habilidades", `Modelo '${preset.name}' carregado. Adicione ao pacote quando estiver pronto.`);
+  }
   if (action === "actor-open") {
     const actor = selectedActor(root);
     actor.sheet?.render(true);
@@ -961,10 +1087,22 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
     requireGM();
     const json = await fileOrText(root, "actor-json-file", "actor-json");
     const imageFile = field(root, "actor-image-file")?.files?.[0] ?? null;
-    const fingerprint = JSON.stringify([json, imageFile?.name, imageFile?.size, imageFile?.lastModified]);
+    const tokenFile = field(root, "actor-token-file")?.files?.[0] ?? null;
+    const fingerprint = JSON.stringify([json, imageFile?.name, imageFile?.size, imageFile?.lastModified,
+      tokenFile?.name, tokenFile?.size, tokenFile?.lastModified]);
     const payload = JSON.parse(json);
-    const review = jarvis.importer.previewActor(payload, { imageFile });
+    const review = jarvis.importer.previewActor(payload, { imageFile, tokenFile });
     if (action === "actor-import-preview") {
+      for (const url of state.actorImagePreviewUrls ?? []) URL.revokeObjectURL(url);
+      state.actorImagePreviewUrls = [];
+      if (imageFile && URL.createObjectURL) {
+        review.actor.portraitPreview = URL.createObjectURL(imageFile);
+        state.actorImagePreviewUrls.push(review.actor.portraitPreview);
+      }
+      if (tokenFile && URL.createObjectURL) {
+        review.actor.tokenPreview = URL.createObjectURL(tokenFile);
+        state.actorImagePreviewUrls.push(review.actor.tokenPreview);
+      }
       state.actorImportPreview = { fingerprint };
       renderImportReview(root, "actor", review);
       return setOutput(root, "Revisão da importação V9", review);
@@ -972,23 +1110,54 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
     if (state.actorImportPreview?.fingerprint !== fingerprint) {
       throw new JarvisInputError("Prévia ausente ou desatualizada. Revise a importação V9 antes de criar a ficha.");
     }
-    if (!review.canImport) throw new JarvisInputError(review.warnings.join(" "));
+    if (!review.canImport) throw new JarvisInputError([...review.errors, ...review.warnings].join(" "));
     if (!await confirmAction("Criar Actor V9", `Criar '${review.actor.name}' com ${review.items.length} Item(s) e ${review.effects.length} efeito(s)? ${review.warnings.join(" ")}`)) return;
     state.actorImportPreview = null;
     renderImportReview(root, "actor", null);
+    for (const url of state.actorImagePreviewUrls ?? []) URL.revokeObjectURL(url);
+    state.actorImagePreviewUrls = [];
     const actor = await importJarvisActorWithImage(json, {
-      imageFile,
+      imageFile, tokenFile,
       importer: jarvis.importer,
       renderSheet: true
     });
     refreshActorOptions(root, actor.id);
     return setOutput(root, "Importação concluída", `${actor.name} foi criado.`);
   }
+  if (action === "actor-sync-preview" || action === "actor-sync") {
+    requireGM();
+    const actor = selectedActor(root, { manage: true });
+    const json = await fileOrText(root, "actor-json-file", "actor-json");
+    const payload = JSON.parse(json);
+    const fingerprint = JSON.stringify([actor.id, json]);
+    const review = jarvis.importer.previewActorSync(actor, payload);
+    if (action === "actor-sync-preview") {
+      state.actorSyncPreview = { fingerprint };
+      renderImportReview(root, "actor", review);
+      return setOutput(root, "Revisão da atualização V9.1", review);
+    }
+    if (state.actorSyncPreview?.fingerprint !== fingerprint) throw new JarvisInputError("Revise esta atualização antes de aplicá-la.");
+    if (!review.canImport) throw new JarvisInputError(review.errors.join(" "));
+    if (!await confirmAction("Atualizar ficha V9.1", `Atualizar ${review.updates.length} Item(s) e adicionar ${review.additions.length} em ${actor.name}?`)) return;
+    state.actorSyncPreview = null;
+    const result = await jarvis.importer.syncActor(actor, payload);
+    renderImportReview(root, "actor", null);
+    return setOutput(root, "Ficha atualizada", result);
+  }
   if (action === "actor-compare") {
     requireGM();
     const actor = selectedActor(root);
     const payload = JSON.parse(await fileOrText(root, "actor-json-file", "actor-json"));
     return setOutput(root, "Comparação com JSON", jarvis.diagnostics.compareActor(payload, actor));
+  }
+  if (action === "actor-chat-repair") {
+    requireGM();
+    const actor = selectedActor(root, { manage: true });
+    const preview = previewActivityChatRepair(actor);
+    if (!preview.fixes.length) return setOutput(root, "Chat das habilidades", "Nenhuma descrição Jarvis sem texto próprio foi encontrada.");
+    if (!await confirmAction("Corrigir chat das habilidades", `Definir descrição individual em ${preview.fixes.length} Activity(s) de ${actor.name}?`)) return;
+    const report = await repairActivityChatDescriptions(actor);
+    return setOutput(root, "Chat das habilidades", report);
   }
   if (action === "actor-provenance") {
     const actor = selectedActor(root);
