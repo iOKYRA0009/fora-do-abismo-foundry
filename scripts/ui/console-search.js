@@ -1,3 +1,5 @@
+import { glossary, localizedName, matchesBilingual } from "../translation/compendium-language.js";
+
 const indexCache = new WeakMap();
 const CACHE_MS = 5 * 60 * 1000;
 
@@ -58,9 +60,19 @@ function visibleTool(tool, access) {
 async function packRows(pack) {
   const cached = indexCache.get(pack);
   if (cached && Date.now() - cached.at < CACHE_MS) return cached.rows;
-  const rows = list(await pack.getIndex({ fields: ["type", "img"] }));
+  const rows = list(await pack.getIndex({ fields: ["type", "img", "flags.babele.originalName"] }));
   indexCache.set(pack, { at: Date.now(), rows });
   return rows;
+}
+
+export async function searchCompendiumPack(pack, query, { limit = 100, terms = glossary() } = {}) {
+  const rows = await packRows(pack);
+  return rows.filter(entry => matchesBilingual(entry, query, terms))
+    .slice(0, Math.max(1, Math.min(200, limit)))
+    .map(entry => ({ pack, id: entry._id ?? entry.id, name: localizedName(entry, terms),
+      originalName: entry.flags?.babele?.originalName ?? entry.name,
+      type: entry.type ?? pack.documentName }))
+    .filter(row => row.id);
 }
 
 export async function searchConsole(query, {
@@ -69,6 +81,7 @@ export async function searchConsole(query, {
   const needle = plain(query).trim();
   if (!needle || signal?.aborted) return [];
   const cap = Math.max(1, Math.min(50, Number(limit) || 30));
+  const terms = glossary();
   const results = [];
   const add = result => {
     const score = relevance(result, needle);
@@ -96,7 +109,7 @@ export async function searchConsole(query, {
   }
   for (const item of list(items)) {
     if (!visibleItem(item, access)) continue;
-    if (matches(`${item.name ?? ""} ${item.type ?? ""}`, needle)) {
+    if (matchesBilingual(item, needle, terms)) {
       add({ type: "item", id: item.uuid ?? item.id, itemId: item.id,
         actorId: item.parent?.documentName === "Actor" ? item.parent.id : null,
         label: item.name, description: item.type ?? "Item" });
@@ -133,11 +146,12 @@ export async function searchConsole(query, {
       if (signal?.aborted) return;
       for (const entry of entries) {
         if (results.length >= cap) break;
-        if (!matches(`${entry.name ?? ""} ${entry.type ?? ""}`, needle)) continue;
+        if (!matchesBilingual(entry, needle, terms)) continue;
         const documentId = entry._id ?? entry.id;
         if (!documentId) continue;
+        const displayName = localizedName(entry, terms);
         add({ type: "compendium", id: `${pack.collection}:${documentId}`,
-          packId: pack.collection, documentId, label: entry.name,
+          packId: pack.collection, documentId, label: displayName,
           description: `${pack.title ?? pack.collection} · ${entry.type ?? pack.documentName}` });
       }
     }
