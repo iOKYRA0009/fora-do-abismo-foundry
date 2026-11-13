@@ -86,6 +86,8 @@ jobs:
           cp -r styles "$RELEASE_DIR/"
           cp -r schemas "$RELEASE_DIR/"
           cp README.md "$RELEASE_DIR/README.md"
+          mkdir -p "$RELEASE_DIR/examples"
+          cp examples/JARVIS_TERCEIRO_TRONO_V3_INSTALAR.js "$RELEASE_DIR/examples/"
 
           for optional_dir in assets docs lang templates packs; do
             if [[ -d "$optional_dir" ]]; then

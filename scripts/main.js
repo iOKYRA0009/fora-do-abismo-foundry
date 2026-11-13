@@ -19,7 +19,8 @@ import { captureSceneSnapshot, compareSceneSnapshot } from "./scenes/production-
 import { inspectMosaicQuality } from "./scenes/package/mosaic-quality.js";
 import { listAtmosphereCues, previewAtmosphereCue, applyAtmosphereCue, restoreAtmosphereCue } from "./scenes/atmosphere-director.js";
 import { registerActivityAutomation } from "./automation/activity-automation.js";
-import { registerSocketBridge, socketBridgeStatus } from "./integrations/socketlib-bridge.js";
+import { registerSocketBridge, requestThirdThroneCommand, socketBridgeStatus } from "./integrations/socketlib-bridge.js";
+import { registerThirdThroneEngine } from "./automation/third-throne-engine.js";
 import { listPartnerStatus } from "./integrations/partner-status.js";
 import { tagSceneObject, findSceneObjects, playSceneCue, stopSceneCue,
   applyTokenFx, removeTokenFx, playWeather, stopWeather, listWeatherPresets } from "./integrations/partner-scene.js";
@@ -124,6 +125,7 @@ Hooks.once("init", runtimeCapture.guard("initialization", "init", () => {
   registerActivityAutomation();
   registerAppearanceEffectAutomation();
   registerJackEngine();
+  registerThirdThroneEngine();
   registerProgressionEngine();
   registerSceneAssetLedger();
   registerManagedMacros();
@@ -231,6 +233,10 @@ Hooks.once("ready", runtimeCapture.guard("initialization", "ready", () => {
     jack: {
       syncActor: syncJackSoulTiers,
       getSoulStatus: getJackSoulStatus
+    },
+    thirdThrone: {
+      command: requestThirdThroneCommand,
+      remoteStatus: socketBridgeStatus
     },
     provenance: {
       analyzeActor: analyzeActorProvenance,

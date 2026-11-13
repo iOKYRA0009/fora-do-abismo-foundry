@@ -270,7 +270,9 @@ function onPreUpdateActor(actor, changes) {
 
   const explicitSoulChange = changeValue(changes, `system.resources.${SOUL_RESOURCE}.value`);
   const currentSouls = explicitSoulChange === undefined ? getSouls(actor) : Math.max(0, Math.trunc(asNumber(explicitSoulChange, 0)));
-  const lostToZero = Math.floor(currentSouls / 2);
+  const lostToZero = actor.getFlag?.(MODULE_ID, "thirdThroneV3")
+    ? Math.min(currentSouls, 50)
+    : Math.floor(currentSouls / 2);
   setChange(changes, `system.resources.${SOUL_RESOURCE}.value`, lostToZero);
 
   ui.notifications?.warn(`Jack caiu a 0 PV: Almas reduzidas de ${currentSouls} para ${lostToZero}.`);

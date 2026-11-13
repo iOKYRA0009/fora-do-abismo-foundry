@@ -1,4 +1,5 @@
 import { applyEmbeddedEffectToActor } from "../automation/embedded-effect-engine.js";
+import { runThirdThroneOnGm } from "../automation/third-throne-engine.js";
 
 const MODULE_ID = "fora-do-abismo-foundry";
 let socket = null;
@@ -43,6 +44,12 @@ async function applyOnGm({ activityUuid, tokenUuid, effectIndex }) {
   return { actorUuid: token.actor.uuid, effectId: result?.id ?? null };
 }
 
+async function thirdThroneOnGm(args) {
+  const senderId = this?.socketdata?.userId;
+  const sender = game.users?.get?.(senderId);
+  return runThirdThroneOnGm(args, sender);
+}
+
 export function registerSocketBridge() {
   if (registered) return;
   registered = true;
@@ -50,7 +57,33 @@ export function registerSocketBridge() {
     if (!game.modules?.get?.("socketlib")?.active || !globalThis.socketlib?.registerModule) return;
     socket = globalThis.socketlib.registerModule(MODULE_ID);
     socket.register("applyConfiguredEffect", applyOnGm);
+    socket.register("thirdThroneV3", thirdThroneOnGm);
   });
+}
+
+export async function requestThirdThroneCommand(args) {
+  if (args?.action === "summon") {
+    const jack = game.actors?.get?.(args.jackId);
+    const accepted = jack?.getFlag?.(MODULE_ID, "thirdThroneV3")?.fusionAccepted;
+    if (!accepted) {
+      const confirm = globalThis.Dialog?.confirm;
+      if (typeof confirm !== "function") throw new Error("Confirmação da fusão indisponível nesta versão do Foundry.");
+      const yes = await confirm({ title: "Terceiro Trono — escolha de Jack",
+        content: "<p>Jack aceita voluntariamente fundir o Orbe e manifestar o Terceiro Trono?</p>" });
+      if (!yes) return { cancelled: true };
+      args = { ...args, acceptFusion: true };
+    }
+  }
+  let result;
+  if (game.user?.isGM) result = await runThirdThroneOnGm(args, game.user);
+  else {
+    if (!socket) throw new Error("Terceiro Trono: socketlib e um Mestre ativo são necessários.");
+    result = await socket.executeAsGM("thirdThroneV3", args);
+  }
+  if (args?.action === "summon" && Array.isArray(result?.actorIds)) {
+    for (const id of result.actorIds) game.actors?.get?.(id)?.sheet?.render?.(true);
+  }
+  return result;
 }
 
 export function socketBridgeStatus() {

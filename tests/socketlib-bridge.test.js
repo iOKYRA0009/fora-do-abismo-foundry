@@ -4,6 +4,7 @@ import { applyConfiguredEffectViaGm, registerSocketBridge } from "../scripts/int
 
 let onReady;
 let gmHandler;
+const registered = new Map();
 let sent;
 globalThis.Hooks = { once(name, callback) {
   assert.equal(name, "socketlib.ready");
@@ -26,11 +27,11 @@ globalThis.game = { user: { isGM: true }, users: { get: id => id === sender.id ?
   modules: { get: id => id === "socketlib" ? { active: true } : null } };
 globalThis.socketlib = { registerModule() {
   return { register(name, handler) {
-    assert.equal(name, "applyConfiguredEffect");
-    gmHandler = handler;
+    registered.set(name, handler);
+    if (name === "applyConfiguredEffect") gmHandler = handler;
   }, async executeAsGM(name, payload) {
     sent = { name, payload };
-    return gmHandler.call({ socketdata: { userId: sender.id } }, payload);
+    return registered.get(name).call({ socketdata: { userId: sender.id } }, payload);
   } };
 } };
 globalThis.fromUuid = async uuid => ({ [activity.uuid]: activity, [token.uuid]: token })[uuid] ?? null;
@@ -45,6 +46,8 @@ globalThis.ActiveEffect = { implementation: {
 
 registerSocketBridge();
 onReady();
+assert.equal(typeof registered.get("applyConfiguredEffect"), "function");
+assert.equal(typeof registered.get("thirdThroneV3"), "function");
 
 test("socketlib applies only an effect configured on a controlled Activity", async () => {
   const result = await applyConfiguredEffectViaGm(activity, { document: token }, 0);
