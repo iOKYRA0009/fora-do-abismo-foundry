@@ -2,11 +2,10 @@
 
 ## Instalação
 
-1. Faça cópia do mundo Foundry e atualize o módulo **Fora do Abismo — Jarvis Tools** para esta versão (1.5.6). Ative `socketlib` e recarregue o mundo como Mestre.
-   Nesta máquina, o módulo instalado está em `C:\Users\Roger\AppData\Local\FoundryVTT\Data\modules\fora-do-abismo-foundry` e ainda marca versão 1.5.4. Com o Foundry fechado, copie a pasta de mesmo nome do pacote entregue para `Data\modules`, após guardar a pasta antiga.
-2. Verifique que as quatro fichas importadas conservam os IDs de Jack, Oswin, Procissão e Bram dos arquivos exportados. Verifique que existe exatamente um usuário jogador chamado **Ruan**.
-3. Na **Central Jarvis → Macro Executor → JavaScript (Script)**, abra `examples/JARVIS_TERCEIRO_TRONO_V3_INSTALAR.js`, faça a prévia e execute como Mestre. Não crie um macro tradicional do Foundry.
-4. Teste com Jack em cena: selecione seu token, use a Activity **Invocar o Trio** da ficha dele e entre como Ruan para conferir as três fichas na aba Personagens. A permissão de proprietário nas invocações é temporária e volta ao valor anterior quando elas acabam.
+1. No gerenciador de módulos do Foundry, clique em **Atualizar** para instalar Jarvis Tools 1.5.7. Mantenha `socketlib` ativo e abra o mundo **Fora do Abismo** como Mestre. O Jarvis instala a V3 automaticamente uma única vez ao carregar o mundo, se encontrar as quatro fichas e o jogador **Ruan**.
+2. Teste com Jack em cena: selecione seu token, use a Activity **Invocar o Trio** da ficha dele e entre como Ruan para conferir as três fichas na aba Personagens. A permissão de proprietário nas invocações é temporária e volta ao valor anterior quando elas acabam.
+
+O script `examples/JARVIS_TERCEIRO_TRONO_V3_INSTALAR.js` continua disponível para uma reinstalação manual pela **Central Jarvis → Macro Executor → JavaScript (Script)**. Não é um macro tradicional do Foundry.
 
 O instalador atualiza os quatro Actors pelos IDs, organiza as novas Activities, arquiva as Activities anteriores e conserva os textos originais no arquivo V2 ou em `thirdThroneV3Archive`.
 
@@ -39,6 +38,6 @@ Os patamares de 10/25/50 Almas de Jack continuam desbloqueados após gastos volu
 - A reação sacrificada de Jack no trio é registrada no estado e no chat; o Foundry não impede automaticamente que o jogador use outra Activity de reação na mesma rodada. O Mestre deve observar esse custo.
 - Posicionamento dos alvos, linha de visão, aplicação de condições, redução de dano e terreno difícil continuam sob arbitragem normal da mesa. A Activity faz as rolagens; se uma Activity for cancelada depois da rolagem, confira o custo no chat.
 - A fusão com o Orbe pede aceite voluntário de Jack na primeira invocação.
-- O instalador exige Foundry V14 e sistema dnd5e 6.x, conforme `module.json`; não foi executado no mundo ativo deste projeto.
+- O instalador exige Foundry V14 e sistema dnd5e 6.x, conforme `module.json`; foi verificado por testes automatizados e deve ser conferido no mundo após a atualização.
 
 Referência para as ações, reações e terreno difícil: [Regras Básicas D&D 2024 — Playing the Game](https://www.dndbeyond.com/sources/dnd/br-2024/playing-the-game). As habilidades específicas do Terceiro Trono, seus custos e a fraqueza radiante são regras caseiras da campanha.

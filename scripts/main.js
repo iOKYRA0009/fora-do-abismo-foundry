@@ -21,6 +21,7 @@ import { listAtmosphereCues, previewAtmosphereCue, applyAtmosphereCue, restoreAt
 import { registerActivityAutomation } from "./automation/activity-automation.js";
 import { registerSocketBridge, requestThirdThroneCommand, socketBridgeStatus } from "./integrations/socketlib-bridge.js";
 import { registerThirdThroneEngine } from "./automation/third-throne-engine.js";
+import { autoInstallThirdThroneV3 } from "./automation/third-throne-auto-installer.js";
 import { listPartnerStatus } from "./integrations/partner-status.js";
 import { tagSceneObject, findSceneObjects, playSceneCue, stopSceneCue,
   applyTokenFx, removeTokenFx, playWeather, stopWeather, listWeatherPresets } from "./integrations/partner-scene.js";
@@ -370,6 +371,11 @@ Hooks.once("ready", runtimeCapture.guard("initialization", "ready", () => {
   };
 
   if (module) module.api = api;
+
+  void autoInstallThirdThroneV3().catch(error => {
+    console.error(`${MODULE_ID} | Instalação automática do Terceiro Trono V3 falhou`, error);
+    ui.notifications?.error(`Terceiro Trono V3: ${error.message}`);
+  });
 
   const appearance = getAppearanceStatus();
   const transformation = getTransformationStatus();

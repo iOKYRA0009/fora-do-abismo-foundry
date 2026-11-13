@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { autoInstallThirdThroneV3 } from "../scripts/automation/third-throne-auto-installer.js";
 
 const MODULE = "fora-do-abismo-foundry";
 const IDS = ["MxWry5bSpDdH36Z7", "ueUfr5JrOEjLPi2V", "mzoiuTGUwk2zUbHy", "K1VakgpDkbmyE2Cf"];
@@ -55,12 +56,14 @@ test("Jarvis installer organizes four existing sheets and keeps summon ownership
   } };
   globalThis.game = { user: gm, users: { activeGM: gm, contents: [gm, ruan] },
     actors: { get: id => byId[id] }, folders: { contents: folders },
-    modules: new Map([[MODULE, { api: { thirdThrone: { command() {}, remoteStatus: () => ({ ready: true }) } } }]]) };
+    modules: new Map([[MODULE, { api: { thirdThrone: { command() {}, remoteStatus: () => ({ ready: true }) } } }],
+      ["socketlib", { active: true }]]) };
   globalThis.ui = { notifications: { info() {} } };
   const source = await readFile(new URL("../examples/JARVIS_TERCEIRO_TRONO_V3_INSTALAR.js", import.meta.url), "utf8");
-  const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-  const installer = new AsyncFunction("jarvis", "game", "canvas", "ui", source);
-  const result = await installer(null, game, null, ui);
+  globalThis.fetch = async () => ({ ok: true, text: async () => source });
+  const autoResult = await autoInstallThirdThroneV3();
+  assert.equal(autoResult.installed, true);
+  const result = autoResult.result;
   assert.equal(result.player, "Ruan");
   assert.equal(actors[0].getFlag(MODULE, "thirdThroneV3").fieldExcessCost, 10);
   assert.equal(actors[0].ownership.ruan, 3);
@@ -74,4 +77,5 @@ test("Jarvis installer organizes four existing sheets and keeps summon ownership
     if (!item.system.identifier?.startsWith("terceiro-trono-v3-")) continue;
     for (const id of Object.keys(item.system.activities)) assert.match(id, /^[A-Za-z0-9]{16}$/);
   }
+  assert.deepEqual(await autoInstallThirdThroneV3(), { skipped: "already-installed" });
 });
