@@ -4,7 +4,7 @@ const persistedActivity = (item, id) => {
   return prepared?.get?.(id) ?? prepared?.[id] ?? null;
 };
 const semanticActivitiesOf = item => item?.jarvis?.activities ?? Object.values(activitiesOf(item));
-const asArray = value => Array.isArray(value) ? value : value ? [value] : [];
+const asArray = value => Array.isArray(value) ? value : value instanceof Set ? [...value] : value ? [value] : [];
 
 export function matchCreatedItems(expectedItems, createdItems) {
   const created = Array.from(createdItems ?? []);
@@ -129,7 +129,7 @@ export function verifyPersistedActivities(expectedItems, createdItems) {
         || String(persisted.attack?.ability ?? "") !== String(activity.attack?.ability ?? "")
         || Boolean(persisted.attack?.flat) !== Boolean(activity.attack?.flat))) failures.push(`${expected.name}: bônus ou atributo de ataque mudou.`);
       if (activity.type === "save" && (String(persisted.save?.dc?.formula ?? "") !== String(activity.save?.dc?.formula ?? "")
-        || JSON.stringify(persisted.save?.ability ?? []) !== JSON.stringify(activity.save?.ability ?? []))) {
+        || JSON.stringify(asArray(persisted.save?.ability).sort()) !== JSON.stringify(asArray(activity.save?.ability).sort()))) {
         failures.push(`${expected.name}: CD ou atributo da salvaguarda mudou.`);
       }
       if (activity.type === "save" && persisted.damage?.onSave !== activity.damage?.onSave) {

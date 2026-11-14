@@ -98,6 +98,26 @@ test("post-import audit uses the live Activity collection when serialized data i
   assert.deepEqual(verifyPersistedActivities(expected, actual), []);
 });
 
+test("post-import audit accepts D&D5e Set fields for damage types and save abilities", () => {
+  const expected = [{ name: "Golpe", type: "feat", system: { activities: {
+    damage1: { type: "damage", damage: { parts: [{
+      bonus: "", types: ["psychic"], custom: { enabled: true, formula: "5d6" }
+    }] } },
+    save1: { type: "save", save: { ability: ["dex"], dc: { formula: "17" } },
+      damage: { onSave: "none", parts: [] } }
+  } } }];
+  const actual = [{ name: "Golpe", type: "feat", system: { activities: new Map([
+    ["damage1", { type: "damage", damage: { parts: [{
+      bonus: "", types: new Set(["psychic"]), custom: { enabled: true, formula: "5d6" }
+    }] } }],
+    ["save1", { type: "save", save: { ability: new Set(["dex"]), dc: { formula: "17" } },
+      damage: { onSave: "none", parts: [] } }]
+  ]) } }];
+  assert.deepEqual(verifyPersistedActivities(expected, actual), []);
+  actual[0].system.activities.get("damage1").damage.parts[0].types = new Set(["fire"]);
+  assert.match(verifyPersistedActivities(expected, actual)[0], /tipo do dano mudou/);
+});
+
 test("missing Activities are restored on their matching Items without replacing other Activities", async () => {
   const first = { name: "Primeira", type: "feat", system: { activities: {
     firstActivity: { type: "utility", description: { value: "Primeira" } }

@@ -26,6 +26,10 @@ No Foundry VTT:
 
 O Foundry usa o mesmo Manifest URL para detectar atualizações futuras.
 
+### Correção 1.5.10 — auditoria de dano e salvaguarda
+
+O D&D5e representa tipos de dano e atributos de salvaguarda como conjuntos (`Set`) após criar uma Activity. A auditoria do importador agora compara esses valores como listas equivalentes, preservando a detecção de alterações reais de dano ou CD. Isso corrige a rejeição de personagens V9.0 e V9.1 cujas Activities já tinham sido gravadas. O arquivo JSON antigo continua válido e não precisa ser convertido.
+
 ### Correção 1.5.9 — Activities na importação de personagens
 
 A auditoria agora associa cada Item criado por ID, identificador ou nome e tipo, sem depender da posição em que o Foundry o devolve. Ela verifica as Activities na coleção ativa do D&D5e e tenta gravar novamente apenas as Activities ausentes antes de concluir a importação. Se o sistema continuar recusando alguma Activity, o Jarvis informa o erro e remove a ficha incompleta. A correção vale para qualquer personagem V9.0 ou V9.1 e independe do idioma dos nomes. O JSON deve ser importado em **Central Jarvis → Personagens → Importar ficha Jarvis V9.1**.
