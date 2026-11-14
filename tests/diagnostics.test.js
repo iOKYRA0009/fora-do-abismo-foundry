@@ -66,9 +66,20 @@ test("diagnostic exercises old and new previews without writing to a world", asy
   const report = await runJarvisDiagnostics(fakeApi(), { gameRef: fakeGame() });
   assert.equal(report.mode, "read-only");
   assert.equal(report.ok, true, formatJarvisDiagnostics(report));
-  assert.equal(report.checks.find(check => check.id === "runtime").status, "warn");
+  assert.equal(report.checks.find(check => check.id === "runtime").status, "pass");
   assert.equal(report.checks.find(check => check.id === "integracao-de-escrita").status, "skip");
   assert.equal(report.checks.find(check => check.id === "fichas-leitura").status, "pass");
+});
+
+test("diagnostic agrees with importer on D&D5e 6.1 and later unsupported minors", async () => {
+  const world = fakeGame();
+  world.system.version = "6.1.0";
+  let report = await runJarvisDiagnostics(fakeApi(), { gameRef: world, inspectActors: false });
+  assert.equal(report.checks.find(check => check.id === "runtime").status, "warn");
+  assert.match(report.checks.find(check => check.id === "runtime").detail, /6\.1\.0/);
+  world.system.version = "6.2.0";
+  report = await runJarvisDiagnostics(fakeApi(), { gameRef: world, inspectActors: false });
+  assert.equal(report.checks.find(check => check.id === "runtime").status, "fail");
 });
 
 test("diagnostic reports a missing old API rather than treating it as tested", async () => {

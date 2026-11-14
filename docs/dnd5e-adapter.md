@@ -3,8 +3,8 @@
 ## Alvo atual
 
 - Foundry VTT: V14
-- D&D5e: 6.0.x
-- Versão verificada durante o desenvolvimento atual: 6.0.2
+- D&D5e: 6.0.x e 6.1.x
+- Última versão verificada no manifesto: 6.0.6. A série 6.1.x é aceita com aviso e requer conferência da ficha no mundo.
 
 ## Por que existe uma camada semântica
 

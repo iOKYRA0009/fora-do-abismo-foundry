@@ -115,16 +115,8 @@ export async function runJarvisDiagnostics(api, {
     add("updates", "skip", "Manifesto remoto indisponível ou consulta desativada.");
   }
 
-  const generation = Number(gameRef?.release?.generation);
-  const systemId = gameRef?.system?.id;
-  const systemVersion = String(gameRef?.system?.version ?? "");
-  const match = /^6\.0\.(\d+)(?:$|[-+])/.exec(systemVersion);
-  if (generation !== 14 || systemId !== "dnd5e" || !match) {
-    add("runtime", "fail", `Encontrado Foundry V${generation || "?"} / ${systemId ?? "?"} ${systemVersion || "?"}; esperado V14 / dnd5e 6.0.x.`);
-  } else {
-    add("runtime", Number(match[1]) > 2 ? "warn" : "pass",
-      `Foundry V14 / dnd5e ${systemVersion}; manifesto verificado até 6.0.2.`);
-  }
+  const runtime = Dnd5eV6Adapter.inspectRuntime(gameRef);
+  add("runtime", runtime.status, runtime.message);
 
   const missing = API_CONTRACT.filter(path => typeof atPath(api, path) !== "function");
   add("api-legacy", missing.length ? "fail" : "pass",

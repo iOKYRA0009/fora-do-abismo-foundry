@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { importJarvisActorWithImage, uploadJarvisActorImage } from "../scripts/ui/actor-import-with-image.js";
+import { JarvisImporterV9 } from "../scripts/importer/v9/jarvis-importer-v9.js";
 
 const payload = {
   schemaVersion: "9.0",
@@ -62,6 +63,16 @@ test("an invalid V9 payload must be rejected before a portrait is uploaded", asy
   await assert.rejects(importJarvisActorWithImage(JSON.stringify({ actor: payload.actor }), {
     imageFile: image, importer, picker
   }), error => error.name === "PayloadValidationError" && error.details.some(x => /schemaVersion/.test(x)));
+  assert.deepEqual(actions, []);
+});
+
+test("unsupported world is rejected before portrait upload or Actor creation", async () => {
+  const { picker, actions } = fakePicker();
+  const image = new File(["abc"], "sentinela.webp", { type: "image/webp" });
+  globalThis.game = { release: { generation: 14 }, system: { id: "dnd5e", version: "6.2.0" } };
+  await assert.rejects(importJarvisActorWithImage(JSON.stringify(payload), {
+    imageFile: image, picker, importer: new JarvisImporterV9()
+  }), /não é suportado/);
   assert.deepEqual(actions, []);
 });
 

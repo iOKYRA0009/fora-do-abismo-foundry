@@ -26,6 +26,10 @@ No Foundry VTT:
 
 O Foundry usa o mesmo Manifest URL para detectar atualizações futuras.
 
+### Correção 1.5.8 — importação em outros mundos D&D5e
+
+O Importer V9 agora aceita D&D5e 6.1.x no Foundry V14. A versão 6.1.0 é posterior à última verificada no manifesto (6.0.6), então a Central mostra um aviso para conferir a ficha depois de importar. A prévia verifica a versão antes do upload de retrato ou token. O diagnóstico usa a mesma regra do importador. Para importar personagens, são necessários o sistema D&D5e e o Jarvis Tools ativo no mundo; nenhum módulo parceiro é obrigatório. Em outra instalação do Foundry, instale o Jarvis pelo mesmo Manifest URL; em outro mundo da mesma instalação, ative-o em **Manage Modules**. Recursos de campanha e módulos parceiros continuam opcionais para o importador.
+
 ### Atualização Jarvis Tools 1.5.5 — Importer V9.1
 
 O **V9.1 é a versão interna do motor de importação**. Na Central → Personagens, o Mestre pode montar um NPC sem escrever JSON, acrescentar habilidades de ataque, salvaguarda, teste, dano, cura e teletransporte, reutilizar modelos, importar retrato e token separados e conferir cenários como ataque contra CA e salvaguarda contra CD. O JSON V9.0 continua aceito. A atualização de uma ficha existente preserva PV, atributos, recursos e condições e altera somente Activities de Items Jarvis correspondentes, além de adicionar Items novos.
@@ -225,13 +229,13 @@ A API principal é `jarvis.scenes.package`: `validate`, `preview`, `build`, `ins
 ## Compatibilidade-alvo
 
 - Foundry VTT: **V14**
-- Sistema principal: **D&D5e 6.0.x**
+- Sistema principal: **D&D5e 6.0.x ou 6.1.x**
 - D&D5e mínimo no manifesto: **6.0.0**
-- D&D5e verificado: **6.0.2**
+- D&D5e verificado no manifesto: **6.0.6**
 
-O ambiente informado pelo mestre usa **Foundry 14.369 / dnd5e 6.0.6**. A faixa 6.0.x é aceita com aviso, mas 6.0.6 ainda precisa de teste de integração no mundo antes de ser marcada como verificada.
+O ambiente informado pelo mestre usa **Foundry 14.369 / dnd5e 6.0.6**. D&D5e 6.1.x é aceito com aviso; a ficha importada deve ser conferida no mundo. Sistemas diferentes de D&D5e e outras versões principais do Foundry continuam fora do alvo do adaptador.
 
-O D&D5e 6.0.2 é a base de desenvolvimento e teste do Jarvis V9. A camada `jarvis` serve como API estável para evitar que cada atualização do sistema obrigue a reescrever todas as fichas.
+O D&D5e 6.0.x é a base de desenvolvimento do Jarvis V9. A camada `jarvis` serve como API estável para evitar que cada atualização do sistema obrigue a reescrever todas as fichas.
 
 ## Estrutura
 

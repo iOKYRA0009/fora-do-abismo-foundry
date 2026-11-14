@@ -15,6 +15,7 @@ const ACTIVITY_TYPES = new Set([
   "attack", "save", "utility", "heal", "check", "damage", "summon",
   "enchant", "cast", "forward", "teleport", "transform"
 ]);
+const WARNED_RUNTIME_VERSIONS = new Set();
 
 function clone(value) {
   return foundry.utils.deepClone(value);
@@ -496,34 +497,42 @@ export class Dnd5eV6Adapter {
     return "dnd5e-6.0";
   }
 
-  static getTargetInfo() {
+  static getTargetInfo(gameRef = globalThis.game) {
     return {
-      foundryGeneration: game.release?.generation ?? null,
-      systemId: game.system?.id ?? null,
-      systemVersion: game.system?.version ?? null
+      foundryGeneration: gameRef?.release?.generation ?? null,
+      systemId: gameRef?.system?.id ?? null,
+      systemVersion: gameRef?.system?.version ?? null
     };
   }
 
-  static assertRuntime() {
-    const info = this.getTargetInfo();
+  static inspectRuntime(gameRef = globalThis.game) {
+    const info = this.getTargetInfo(gameRef);
     if (info.systemId !== "dnd5e") {
-      throw new Error(`Adaptador D&D5e recebeu sistema '${info.systemId ?? "desconhecido"}'.`);
+      return { info, status: "fail", message: `Adaptador D&D5e recebeu sistema '${info.systemId ?? "desconhecido"}'.` };
     }
     if (Number(info.foundryGeneration) !== 14) {
-      throw new Error(`Foundry V${info.foundryGeneration ?? "desconhecida"} não é suportado pelo Jarvis V9. Alvo: V14.`);
+      return { info, status: "fail", message: `Foundry V${info.foundryGeneration ?? "desconhecida"} não é suportado pelo Jarvis V9. Alvo: V14.` };
     }
 
-    const [major, minor, patch] = String(info.systemVersion ?? "0.0.0").split(".").map(Number);
-    if (major !== 6 || minor !== 0 || !Number.isInteger(patch)) {
-      throw new Error(`D&D5e ${info.systemVersion ?? "desconhecido"} não é suportado pelo Jarvis V9. Alvo: 6.0.x.`);
+    const match = /^6\.(0|1)\.(\d+)$/.exec(String(info.systemVersion ?? ""));
+    if (!match) {
+      return { info, status: "fail", message: `D&D5e ${info.systemVersion ?? "desconhecido"} não é suportado pelo Jarvis V9. Alvo: 6.0.x ou 6.1.x.` };
     }
-    if (patch > 6) {
-      ui.notifications?.warn(
-        `Jarvis V9: D&D5e ${info.systemVersion} está dentro de 6.0.x, mas a última versão verificada no manifesto é 6.0.6. Confira o diagnóstico antes de importar.`
-      );
+    if (Number(match[1]) === 1 || Number(match[2]) > 6) {
+      return { info, status: "warn", message: `Jarvis V9: D&D5e ${info.systemVersion} é aceito, mas a última versão verificada no manifesto é 6.0.6. Confira o diagnóstico e revise a ficha importada.` };
     }
+    return { info, status: "pass", message: `Foundry V14 / D&D5e ${info.systemVersion} dentro da faixa verificada.` };
+  }
 
-    return info;
+  static assertRuntime() {
+    const result = this.inspectRuntime();
+    if (result.status === "fail") throw new Error(result.message);
+    const warn = globalThis.ui?.notifications?.warn;
+    if (result.status === "warn" && typeof warn === "function" && !WARNED_RUNTIME_VERSIONS.has(result.info.systemVersion)) {
+      globalThis.ui.notifications.warn(result.message);
+      WARNED_RUNTIME_VERSIONS.add(result.info.systemVersion);
+    }
+    return result.info;
   }
 
   static adaptActor(actorData = {}) {

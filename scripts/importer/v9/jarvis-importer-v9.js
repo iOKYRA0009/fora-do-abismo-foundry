@@ -33,6 +33,7 @@ async function verifyGrantReferences(items = []) {
 
 export class JarvisImporterV9 {
   previewActor(payload, options = {}) {
+    Dnd5eV6Adapter.assertRuntime();
     return reviewActorImport(compileActorBlueprintV91(payload), options);
   }
 
@@ -41,6 +42,7 @@ export class JarvisImporterV9 {
   }
 
   previewActorSync(actor, source) {
+    Dnd5eV6Adapter.assertRuntime();
     if (!actor || actor.documentName !== "Actor") throw new Error("Selecione uma ficha válida.");
     const payload = compileActorBlueprintV91(source);
     const mechanics = inspectActorMechanics(payload);
@@ -69,7 +71,6 @@ export class JarvisImporterV9 {
 
   async syncActor(actor, source) {
     if (!game.user?.isGM) throw new Error("A sincronização V9.1 exige Mestre ativo.");
-    Dnd5eV6Adapter.assertRuntime();
     const payload = compileActorBlueprintV91(source);
     const review = this.previewActorSync(actor, payload);
     if (!review.canImport) throw new Error(`Sincronização bloqueada: ${review.errors.join(" ")}`);
@@ -123,7 +124,6 @@ export class JarvisImporterV9 {
       throw new Error("Jarvis Importer V9 exige permissão de Mestre para criar Actors.");
     }
 
-    Dnd5eV6Adapter.assertRuntime();
     const review = this.previewActor(payload);
     if (!review.canImport) {
       throw new Error(`Importação de '${payload.actor.name}' bloqueada: ${[...review.errors, ...review.warnings].join(" ")}`);

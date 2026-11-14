@@ -125,3 +125,16 @@ test("duplicate Actor import is rejected before creating a new document", async 
   globalThis.Actor.create = async () => { throw new Error("Actor.create should not run"); };
   await assert.rejects(new JarvisImporterV9().importActor(payload), /bloqueada/);
 });
+
+test("D&D5e 6.1 world reaches native Actor creation without an extra module", async () => {
+  installFoundry(fakeActor());
+  globalThis.game.system.version = "6.1.0";
+  let created = false;
+  globalThis.Actor.create = async data => {
+    created = true;
+    assert.equal(data.name, payload.actor.name);
+    return null;
+  };
+  await assert.rejects(new JarvisImporterV9().importActor(payload), /não retornou um Actor/);
+  assert.equal(created, true);
+});
