@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { compileActorBlueprintV91 } from "../scripts/importer/v9/blueprint-v91.js";
-import { inspectActorMechanics, verifyPersistedActivities } from "../scripts/importer/v9/mechanics-review.js";
+import { inspectActorMechanics, restoreMissingActivities, verifyPersistedActivities } from "../scripts/importer/v9/mechanics-review.js";
 import { Dnd5eV6Adapter } from "../scripts/importer/adapters/dnd5e-adapter.js";
 import { importJarvisActorWithImage } from "../scripts/ui/actor-import-with-image.js";
 import { previewActivityChatRepair, repairActivityChatDescriptions } from "../scripts/importer/v9/activity-chat-privacy.js";
@@ -66,6 +66,68 @@ test("post-import audit reads Foundry activity collections as well as raw object
   const expected = [{ name: "Sopro", system: { activities: { abc: expectedActivity } } }];
   const actual = [{ system: { activities: new Map([["abc", expectedActivity]]) } }];
   assert.deepEqual(verifyPersistedActivities(expected, actual), []);
+});
+
+test("post-import audit matches Items by identity when Foundry returns them in another order", () => {
+  const first = { _id: "item-first", name: "Primeira habilidade", type: "feat",
+    system: { activities: { activity1: { type: "utility" } } } };
+  const second = { _id: "item-second", name: "Segunda habilidade", type: "feat",
+    system: { activities: { activity2: { type: "utility" } } } };
+  const created = [second, first].map(item => ({ ...item, id: item._id,
+    toObject() { return { system: { activities: item.system.activities } }; } }));
+  assert.deepEqual(verifyPersistedActivities([first, second], created), []);
+});
+
+test("post-import audit uses the system identifier when a translation changes the displayed Item name", () => {
+  const activity = { type: "utility" };
+  const expected = [{ name: "Uncanny Dodge", type: "feat", system: {
+    identifier: "uncanny-dodge", activities: { dodgeActivity: activity }
+  } }];
+  const actual = [{ name: "Esquiva Sobrenatural", type: "feat", system: {
+    identifier: "uncanny-dodge", activities: new Map([["dodgeActivity", activity]])
+  } }];
+  assert.deepEqual(verifyPersistedActivities(expected, actual), []);
+});
+
+test("post-import audit uses the live Activity collection when serialized data is incomplete", () => {
+  const activity = { type: "utility", description: { value: "<p>Ação</p>" } };
+  const expected = [{ name: "Habilidade", type: "feat", system: { activities: { activity1: activity } } }];
+  const actual = [{ name: "Habilidade", type: "feat",
+    system: { activities: new Map([["activity1", activity]]) },
+    toObject() { return { system: { activities: {} } }; } }];
+  assert.deepEqual(verifyPersistedActivities(expected, actual), []);
+});
+
+test("missing Activities are restored on their matching Items without replacing other Activities", async () => {
+  const first = { name: "Primeira", type: "feat", system: { activities: {
+    firstActivity: { type: "utility", description: { value: "Primeira" } }
+  } } };
+  const second = { name: "Segunda", type: "feat", system: { activities: {
+    secondActivity: { type: "damage", damage: { parts: [] } }
+  } } };
+  const makeCreated = expected => ({ name: expected.name, type: expected.type,
+    system: { activities: new Map() },
+    toObject() { return { system: { activities: Object.fromEntries(this.system.activities) } }; },
+    async update(changes) {
+      for (const [path, activity] of Object.entries(changes)) {
+        this.system.activities.set(path.split(".").at(-1), activity);
+      }
+    } });
+  const created = [makeCreated(second), makeCreated(first)];
+  created[1].system.activities.set("existing", { type: "utility" });
+  await restoreMissingActivities([first, second], created);
+  assert.equal(created[1].system.activities.has("existing"), true);
+  assert.deepEqual(verifyPersistedActivities([first, second], created), []);
+});
+
+test("post-import audit still rejects an Activity that Foundry drops after a restore attempt", async () => {
+  const expected = [{ name: "Esquiva", type: "feat", system: { activities: {
+    activity1: { type: "utility" }
+  } } }];
+  const actual = [{ name: "Esquiva", type: "feat", system: { activities: new Map() },
+    async update() {} }];
+  await restoreMissingActivities(expected, actual);
+  assert.match(verifyPersistedActivities(expected, actual)[0], /Activity activity1 não foi gravada/);
 });
 
 test("portrait and token upload remain independent in one import", async () => {

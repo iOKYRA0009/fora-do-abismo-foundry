@@ -26,6 +26,10 @@ No Foundry VTT:
 
 O Foundry usa o mesmo Manifest URL para detectar atualizações futuras.
 
+### Correção 1.5.9 — Activities na importação de personagens
+
+A auditoria agora associa cada Item criado por ID, identificador ou nome e tipo, sem depender da posição em que o Foundry o devolve. Ela verifica as Activities na coleção ativa do D&D5e e tenta gravar novamente apenas as Activities ausentes antes de concluir a importação. Se o sistema continuar recusando alguma Activity, o Jarvis informa o erro e remove a ficha incompleta. A correção vale para qualquer personagem V9.0 ou V9.1 e independe do idioma dos nomes. O JSON deve ser importado em **Central Jarvis → Personagens → Importar ficha Jarvis V9.1**.
+
 ### Correção 1.5.8 — importação em outros mundos D&D5e
 
 O Importer V9 agora aceita D&D5e 6.1.x no Foundry V14. A versão 6.1.0 é posterior à última verificada no manifesto (6.0.6), então a Central mostra um aviso para conferir a ficha depois de importar. A prévia verifica a versão antes do upload de retrato ou token. O diagnóstico usa a mesma regra do importador. Para importar personagens, são necessários o sistema D&D5e e o Jarvis Tools ativo no mundo; nenhum módulo parceiro é obrigatório. Em outra instalação do Foundry, instale o Jarvis pelo mesmo Manifest URL; em outro mundo da mesma instalação, ative-o em **Manage Modules**. Recursos de campanha e módulos parceiros continuam opcionais para o importador.

@@ -1,6 +1,6 @@
 import { validateJarvisActorPayload } from "../validators/payload-validator.js";
 import { compileActorBlueprintV91 } from "./blueprint-v91.js";
-import { inspectActorMechanics, verifyPersistedActivities } from "./mechanics-review.js";
+import { inspectActorMechanics, restoreMissingActivities, verifyPersistedActivities } from "./mechanics-review.js";
 import { reviewActorImport, reviewItemImport, findItemConflicts, itemIdentity } from "./import-review.js";
 import {
   buildGenerationDescriptor,
@@ -98,6 +98,7 @@ export class JarvisImporterV9 {
         }
         snapshots.push({ item, activities: previous });
         await item.update({ "system.activities": merged });
+        await restoreMissingActivities([{ name: itemData.name, system: { activities: merged } }], [item]);
         const failures = verifyPersistedActivities([{ name: itemData.name, system: { activities: merged } }], [item]);
         if (failures.length) throw new Error(`Auditoria V9.1: ${failures.join(" ")}`);
       }
@@ -150,6 +151,7 @@ export class JarvisImporterV9 {
     try {
       if (itemData.length) {
         const created = await this.#createItems(actor, itemData);
+        await restoreMissingActivities(itemData, created);
         const failures = verifyPersistedActivities(itemData, created);
         if (failures.length) throw new Error(`Auditoria V9.1: ${failures.join(" ")}`);
       }

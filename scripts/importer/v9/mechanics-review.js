@@ -1,10 +1,48 @@
 const activitiesOf = item => item?.system?.activities ?? {};
 const persistedActivity = (item, id) => {
-  const source = item?.toObject?.().system?.activities ?? activitiesOf(item);
-  return source?.get?.(id) ?? source?.[id] ?? null;
+  const prepared = activitiesOf(item);
+  return prepared?.get?.(id) ?? prepared?.[id] ?? null;
 };
 const semanticActivitiesOf = item => item?.jarvis?.activities ?? Object.values(activitiesOf(item));
 const asArray = value => Array.isArray(value) ? value : value ? [value] : [];
+
+export function matchCreatedItems(expectedItems, createdItems) {
+  const created = Array.from(createdItems ?? []);
+  const used = new Set();
+  return expectedItems.map((expected, index) => {
+    const id = expected._id ?? expected.id;
+    let actual = id && created.find(item => !used.has(item) && (item?.id ?? item?._id) === id);
+    const identifier = expected.system?.identifier;
+    if (!actual && !id && identifier) {
+      actual = created.find(item => !used.has(item) && item?.type === expected.type
+        && (item?.system?.identifier ?? item?._source?.system?.identifier) === identifier);
+    }
+    if (!actual && !id && expected.name && expected.type) {
+      actual = created.find(item => !used.has(item)
+        && item?.type === expected.type
+        && [item?.name, item?._source?.name, item?.toObject?.().name].includes(expected.name));
+    }
+    // Synchronization audits one existing Item; its incoming type can differ from the old document.
+    if (!actual && !id && expectedItems.length === 1 && created.length === 1) actual = created[0];
+    // Small document doubles in tests may omit the identifying fields.
+    if (!actual && !id && !expected.type && !created[index]?.name) actual = created[index];
+    if (actual) used.add(actual);
+    return { expected, actual };
+  });
+}
+
+/** Re-save only Activities omitted by the document creation/update pipeline. */
+export async function restoreMissingActivities(expectedItems, createdItems) {
+  for (const { expected, actual } of matchCreatedItems(expectedItems, createdItems)) {
+    if (!actual?.update) continue;
+    const missing = Object.entries(activitiesOf(expected))
+      .filter(([id]) => !persistedActivity(actual, id));
+    if (!missing.length) continue;
+    const changes = Object.fromEntries(missing.map(([id, activity]) =>
+      [`system.activities.${id}`, activity]));
+    await actual.update(changes);
+  }
+}
 
 function scenarioResult(scenario, activity) {
   const die = Number(scenario.d20);
@@ -69,9 +107,17 @@ export function verifyPersistedActivities(expectedItems, createdItems) {
     formula: String(part?.custom?.enabled ? part?.custom?.formula : part?.bonus ?? ""),
     types: asArray(part?.types).sort().join(",")
   }));
-  expectedItems.forEach((expected, index) => {
-    const actual = createdItems[index];
-    if (!actual?.system?.activities) return; // Limited document doubles do not expose data.
+  for (const { expected, actual } of matchCreatedItems(expectedItems, createdItems)) {
+    if (!actual) {
+      failures.push(`${expected.name}: Item criado não foi encontrado para auditoria das Activities.`);
+      continue;
+    }
+    if (!actual.system?.activities) {
+      if (Object.keys(activitiesOf(expected)).length) {
+        failures.push(`${expected.name}: o Item criado não expõe Activities para auditoria.`);
+      }
+      continue;
+    }
     for (const [id, activity] of Object.entries(activitiesOf(expected))) {
       const persisted = persistedActivity(actual, id);
       if (!persisted) { failures.push(`${expected.name}: Activity ${id} não foi gravada.`); continue; }
@@ -104,6 +150,6 @@ export function verifyPersistedActivities(expectedItems, createdItems) {
         failures.push(`${expected.name}: distância do teletransporte mudou.`);
       }
     }
-  });
+  }
   return failures;
 }
