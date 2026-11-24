@@ -72,15 +72,22 @@ export async function resolveSmartCompendiums(items=[],{packs=globalThis.game?.p
   const loaded=new Map();
   for(const source of items){
     const origin=compendiumOrigin(source),kind=declaredKind(source);
+    const baseHint=source?.jarvis?.provenance?.baseUuid;
+    const baseUuid=typeof baseHint==="string"&&baseHint.startsWith("Compendium.")?baseHint:null;
     const row={name:source.name,type:source.type};
-    const preserve=(status,extra={})=>{output.push(clone(source));report.push({...row,status,...extra});};
+    const explicitOfficial=official.has(kind);
+    const hasMechanics=Object.keys(source.system??{}).some(k=>!states.has(k)&&!["source","identifier"].includes(k)) || Object.keys(source.jarvis??{}).some(k=>!["provenance","organization","identifier","description"].includes(k)) || Boolean(source.effects?.length);
+    const preserve=(status,extra={})=>{output.push(clone(source));report.push({...row,status,...extra,requiresReview:explicitOfficial&&!hasMechanics&&["unresolved","ambiguous","candidate"].includes(status)});};
     let candidates=[];
-    if(origin)candidates=[{uuid:origin}];
+    if(origin||baseUuid)candidates=[{uuid:origin??baseUuid}];
     else if(kind!=="homebrew")candidates=(await indexes()).filter(({entry})=>entry.type===source.type
       &&((identifier(source)&&identifier(source)===identifier(entry))||intersects(names(source,terms),names(entry,terms)))
       &&(!edition(source)||!edition(entry)||edition(source)===edition(entry)))
       .map(x=>({...x,uuid:x.entry.uuid??"Compendium."+(x.pack.collection??x.pack.metadata?.id)+".Item."+(x.entry._id??x.entry.id)}));
     candidates=[...new Map(candidates.map(x=>[x.uuid,x])).values()];
+    if(!origin&&!baseUuid&&indexErrors.length&&candidates.length===1){
+      preserve("ambiguous",{candidates:candidates.map(x=>x.uuid),reason:"Índices incompletos: não é seguro selecionar a única fonte visível."});continue;
+    }
     if(candidates.length!==1){
       preserve(candidates.length?"ambiguous":custom.has(kind)?"homebrew":official.has(kind)||origin?"unresolved":"unverified",
         {candidates:candidates.map(x=>x.uuid),reason:candidates.length?"Mais de uma fonte; escolha manual.":"Nenhuma fonte comprovada; dados preservados."});continue;
@@ -96,8 +103,8 @@ export async function resolveSmartCompendiums(items=[],{packs=globalThis.game?.p
     }
     const differences=mechanicalDifferences(source,b);
     const strong=origin||(identifier(source)&&identifier(source)===identifier(b)&&edition(source)&&edition(source)===edition(b));
-    if(custom.has(kind)||differences.length||(!strong&&!official.has(kind))){
-      preserve(custom.has(kind)||differences.length?"modified-preserved":"candidate",{uuid:c.uuid,differences,reason:"Base localizada; dados enviados preservados sem mesclagem automática."});continue;
+    if(baseUuid&&!origin||custom.has(kind)||differences.length||(!strong&&!official.has(kind))){
+      preserve(baseUuid&&!origin||custom.has(kind)||differences.length?"modified-preserved":"candidate",{uuid:c.uuid,differences,reason:"Base localizada; dados enviados preservados sem mesclagem automática."});continue;
     }
     output.push(overlay(b,source,c.uuid));report.push({...row,status:"rehydrated",uuid:c.uuid,differences:[]});
   }

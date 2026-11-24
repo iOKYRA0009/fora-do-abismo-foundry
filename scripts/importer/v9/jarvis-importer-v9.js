@@ -1,7 +1,7 @@
 import { validateJarvisActorPayload } from "../validators/payload-validator.js";
 import { compileActorBlueprintV91 } from "./blueprint-v91.js";
 import { inspectActorMechanics, restoreMissingActivities, verifyPersistedActivities } from "./mechanics-review.js";
-import { reviewActorImport, reviewItemImport, findItemConflicts } from "./import-review.js";
+import { reviewActorImport, reviewItemImport, findItemConflicts, auditActorDuplicates } from "./import-review.js";
 import {
   buildGenerationDescriptor,
   resolveDocumentImage
@@ -28,6 +28,8 @@ async function withImportLock(key, fn) {
   try { return await fn(); } finally { inFlight.delete(key); }
 }
 function warnCompendiumReview(report) {
+  const missing=report.filter(x=>x.requiresReview);
+  if(missing.length)throw new Error("Jarvis: fonte oficial obrigatória não resolvida: "+missing.map(x=>x.name).join(", ")+". Informe UUID compatível ou dados mecânicos completos.");
   const review=report.filter(x=>["unresolved","ambiguous","modified-preserved","candidate"].includes(x.status));
   if(review.length) console.warn(MODULE_ID+" | Smart Compendium: revisar fontes e modificações",review);
 }
@@ -53,6 +55,7 @@ export class JarvisImporterV9 {
     return reviewActorImport(compileActorBlueprintV91(payload), options);
   }
 
+  auditDuplicates(actor) { return auditActorDuplicates(actor); }
   async analyzeCompendiums(items=[]) {
     const {report,indexErrors,environment}=await rehydrateLegacyOfficialItems(items);
     return {report,indexErrors,environment};

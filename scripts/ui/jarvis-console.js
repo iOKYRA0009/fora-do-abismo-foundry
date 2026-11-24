@@ -702,7 +702,7 @@ function renderContent() {
       <div class="jarvis-console-row">${button("actor-import-preview", "Revisar importação V9.1")}${button("actor-import", "Confirmar criação")}${button("actor-sync-preview", "Revisar atualização da ficha")}${button("actor-sync", "Atualizar ficha selecionada")}${button("actor-progression", "Aplicar progressão da ficha")}${button("actor-compare", "Comparar JSON com a ficha")}</div>
       <section class="jarvis-import-review" data-jarvis-actor-review aria-live="polite"><p class="jarvis-console-hint">Revise o JSON antes de confirmar.</p></section>
       <h3>Manutenção da ficha</h3><div class="jarvis-console-row"><label>Regras alvo<select name="actor-rules-target"><option value="2024">D&D 2024</option><option value="2014">D&D 2014</option></select></label>
-      ${button("actor-rules-set", "Salvar perfil de regras")}${button("actor-provenance-stamp", "Registrar origem dos Items")}${button("actor-jack-sync", "Sincronizar almas de Jack")}${button("actor-chat-repair", "Corrigir chat das habilidades")}</div>` : ""}
+      ${button("actor-rules-set", "Salvar perfil de regras")}${button("actor-provenance-stamp", "Registrar origem dos Items")}${button("actor-jack-sync", "Sincronizar almas de Jack")}${button("actor-chat-repair", "Corrigir chat das habilidades")}${button("actor-duplicates-audit","Revisar possíveis duplicatas")}</div>` : ""}
   `);
 
   const content = gm ? section("content", `
@@ -1093,6 +1093,11 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
     const payload = JSON.parse(json);
     const review = jarvis.importer.previewActor(payload, { imageFile, tokenFile });
     if (jarvis.importer.analyzeCompendiums) review.compendiums=await jarvis.importer.analyzeCompendiums(compileActorBlueprintV91(payload).items ?? []);
+    if (review.compendiums?.report.some(row=>row.requiresReview)) {
+      review.canImport=false;
+      const message="Fonte oficial obrigatória ausente ou ambígua: "+review.compendiums.report.filter(row=>row.requiresReview).map(row=>row.name).join(", ");
+      review.errors=[...(review.errors??[]),message];review.warnings=[...(review.warnings??[]),message];
+    }
     if (action === "actor-import-preview") {
       for (const url of state.actorImagePreviewUrls ?? []) URL.revokeObjectURL(url);
       state.actorImagePreviewUrls = [];
@@ -1133,6 +1138,11 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
     const fingerprint = JSON.stringify([actor.id, json]);
     const review = jarvis.importer.previewActorSync(actor, payload);
     if (jarvis.importer.analyzeCompendiums) review.compendiums=await jarvis.importer.analyzeCompendiums(compileActorBlueprintV91(payload).items ?? []);
+    if (review.compendiums?.report.some(row=>row.requiresReview)) {
+      review.canImport=false;
+      const message="Fonte oficial obrigatória ausente ou ambígua: "+review.compendiums.report.filter(row=>row.requiresReview).map(row=>row.name).join(", ");
+      review.errors=[...(review.errors??[]),message];review.warnings=[...(review.warnings??[]),message];
+    }
     if (action === "actor-sync-preview") {
       state.actorSyncPreview = { fingerprint, compendiums: JSON.stringify(review.compendiums ?? null) };
       renderImportReview(root, "actor", review);
@@ -1151,6 +1161,11 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
     const actor = selectedActor(root);
     const payload = JSON.parse(await fileOrText(root, "actor-json-file", "actor-json"));
     return setOutput(root, "Comparação com JSON", jarvis.diagnostics.compareActor(payload, actor));
+  }
+  if (action === "actor-duplicates-audit") {
+    requireGM();
+    const actor=selectedActor(root,{manage:true});
+    return setOutput(root,"Auditoria de duplicatas (somente leitura)",jarvis.importer.auditDuplicates(actor));
   }
   if (action === "actor-chat-repair") {
     requireGM();
@@ -1255,6 +1270,11 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
     const fingerprint = JSON.stringify([actor.id, items]);
     const review = jarvis.importer.previewItems(actor, items);
     if (jarvis.importer.analyzeCompendiums) review.compendiums=await jarvis.importer.analyzeCompendiums(items);
+    if (review.compendiums?.report.some(row=>row.requiresReview)) {
+      review.canImport=false;
+      const message="Fonte oficial obrigatória ausente ou ambígua: "+review.compendiums.report.filter(row=>row.requiresReview).map(row=>row.name).join(", ");
+      review.errors=[...(review.errors??[]),message];review.warnings=[...(review.warnings??[]),message];
+    }
     if (action === "items-import-preview") {
       state.itemsImportPreview = { fingerprint, compendiums: JSON.stringify(review.compendiums ?? null) };
       renderImportReview(root, "items", review);

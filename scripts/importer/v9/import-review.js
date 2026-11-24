@@ -1,4 +1,4 @@
-import { compendiumOrigin, declaredKind, sameCompendiumIdentity, sameBilingualName } from "../compat/smart-compendium.js";
+import { compendiumOrigin, declaredKind, sameCompendiumIdentity, sameBilingualName, mechanicalDifferences } from "../compat/smart-compendium.js";
 import { validateJarvisActorPayload } from "../validators/payload-validator.js";
 import { inspectActorMechanics } from "./mechanics-review.js";
 
@@ -41,6 +41,21 @@ export function findItemConflicts(items, existing = []) {
   return conflicts;
 }
 
+export function auditActorDuplicates(actor) {
+  if(!actor||actor.documentName!=="Actor")throw new Error("Selecione uma ficha válida.");
+  const items=values(actor.items);
+  const pairs=[];
+  const describe=item=>({id:item.id??item._id??null,name:item.name,type:item.type,source:compendiumOrigin(item),kind:declaredKind(item),
+    identifier:item.system?.identifier??null,spent:item.system?.uses?.spent??null,quantity:item.system?.quantity??null});
+  for(let i=0;i<items.length;i++)for(let j=i+1;j<items.length;j++){
+    const a=items[i],b=items[j];
+    if(!findItemConflicts([b],[a]).length)continue;
+    const x=a.toObject?.()??a,y=b.toObject?.()??b;
+    pairs.push({first:describe(a),second:describe(b),differences:[...new Set([...mechanicalDifferences(x,y),...mechanicalDifferences(y,x)])],
+      reason:"Correspondência possível; confira usos, vínculos, efeitos e progressão. Nenhum Item será apagado automaticamente."});
+  }
+  return {actor:{id:actor.id,name:actor.name},itemCount:items.length,pairs,readOnly:true};
+}
 function compareExistingActor(payload, actor) {
   const source = payload.actor;
   const actual = typeof actor.toObject === "function" ? actor.toObject() : actor;

@@ -11,6 +11,7 @@ export const TOOL_CATALOG = Object.freeze([
   { id: "actor-sync-preview", label: "Revisar atualização V9.1", tab: "characters", gmOnly: true },
   { id: "actor-sync", label: "Atualizar ficha V9.1", tab: "characters", gmOnly: true },
   { id: "actor-chat-repair", label: "Corrigir chat das habilidades", tab: "characters", gmOnly: true },
+  { id: "actor-duplicates-audit", label: "Revisar possíveis duplicatas", tab: "characters", gmOnly: true },
   { id: "items-import-preview", label: "Revisar Items V9", tab: "library", gmOnly: true },
   { id: "executor-report", label: "Baixar relatório de execução", tab: "executor", gmOnly: true },
   { id: "item-create", label: "Criar Item ou homebrew", tab: "library", gmOnly: true },
