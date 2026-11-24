@@ -1,0 +1,3 @@
+# 1.5.11 — Smart Import (primeira etapa, revisão)
+Resolução por UUID e índice local, tipo, edição e correspondência bilíngue. Nome isolado é somente candidato. Variantes, diferenças de schema e fontes ambíguas são preservadas, sem sobrescrever compêndios. Prévia mostra diferenças e indisponibilidade de índices. Bloqueio local de importações e auditoria após progressão; verificação de Activities nas adições.
+Limitações: sem reparador destrutivo, mesclagem automática de variantes, trava distribuída entre navegadores ou tradução completa. JavaScript livre que chama Actor/Item diretamente pode contornar as proteções. A prévia ainda não é um simulador de combate. Testar npm test e Foundry V14/D&D5e real em dois ambientes, inclusive macro original de Ruan, antes de publicar.

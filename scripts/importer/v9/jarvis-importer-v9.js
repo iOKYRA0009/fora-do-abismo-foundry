@@ -20,6 +20,18 @@ import {
 } from "../../rules/rules-profile.js";
 
 const MODULE_ID = "fora-do-abismo-foundry";
+const inFlight = new Set();
+async function withImportLock(key, fn) {
+  if (game.user?.isGM && game.users?.activeGM?.id && game.user.id !== game.users.activeGM.id) throw new Error("Jarvis: somente o Mestre ativo pode importar.");
+  if (inFlight.has(key)) throw new Error("Jarvis: importação já em andamento para esta ficha.");
+  inFlight.add(key);
+  try { return await fn(); } finally { inFlight.delete(key); }
+}
+const actorLock = actor => "actor:" + (actor?.uuid ?? actor?.id ?? "unknown");
+function assertNoDuplicates(items,existing=[]) {
+  const conflicts=findItemConflicts(items,existing);
+  if(conflicts.length)throw new Error("Jarvis: duplicatas após resolução/progressão: "+conflicts.map(x=>x.item+" / "+x.existing).join(", "));
+}
 
 async function verifyGrantReferences(items = []) {
   const uuids = [...new Set(items.flatMap(item => (item.jarvis?.grants ?? []).flatMap(entry => entry.uuids ?? [])))];
@@ -37,6 +49,10 @@ export class JarvisImporterV9 {
     return reviewActorImport(compileActorBlueprintV91(payload), options);
   }
 
+  async analyzeCompendiums(items=[]) {
+    const {report,indexErrors,environment}=await rehydrateLegacyOfficialItems(items);
+    return {report,indexErrors,environment};
+  }
   previewItems(actor, items) {
     return reviewItemImport(items, actor);
   }
@@ -56,8 +72,7 @@ export class JarvisImporterV9 {
     const additions = [];
     const updates = [];
     for (const sourceItem of payload.items ?? []) {
-      const matches = existing.filter(item => itemIdentity(item) === itemIdentity(sourceItem)
-        || (item.type === sourceItem.type && String(item.name).trim().toLowerCase() === String(sourceItem.name).trim().toLowerCase()));
+      const matches = existing.filter(item => findItemConflicts([sourceItem],[item]).length);
       if (matches.length > 1) errors.push(`${sourceItem.name}: mais de um Item correspondente na ficha.`);
       else if (!matches.length) additions.push(sourceItem.name);
       else if (!matches[0].flags?.[MODULE_ID]?.adapter) errors.push(`${sourceItem.name}: Item existente não foi importado pelo Jarvis; revisão manual necessária.`);
@@ -69,13 +84,17 @@ export class JarvisImporterV9 {
       protection: "Atualiza somente Activities de Items Jarvis correspondentes e adiciona Items novos. PV, recursos, condições e atributos atuais ficam preservados." };
   }
 
-  async syncActor(actor, source) {
+  async syncActor(actor,source) {
+    return withImportLock(actorLock(actor),()=>this.#syncActor(actor,source));
+  }
+  async #syncActor(actor, source) {
     if (!game.user?.isGM) throw new Error("A sincronização V9.1 exige Mestre ativo.");
     const payload = compileActorBlueprintV91(source);
     const review = this.previewActorSync(actor, payload);
     if (!review.canImport) throw new Error(`Sincronização bloqueada: ${review.errors.join(" ")}`);
     await verifyGrantReferences(payload.items);
     const { items: resolved } = await rehydrateLegacyOfficialItems(payload.items ?? []);
+    assertNoDuplicates(resolved);
     const adapted = Dnd5eV6Adapter.adaptItems(resolved);
     this.#applyItemSemanticMetadata(adapted, resolved);
     this.#applyItemImages(adapted);
@@ -102,7 +121,13 @@ export class JarvisImporterV9 {
         const failures = verifyPersistedActivities([{ name: itemData.name, system: { activities: merged } }], [item]);
         if (failures.length) throw new Error(`Auditoria V9.1: ${failures.join(" ")}`);
       }
-      if (additions.length) await this.#createItems(actor, additions);
+      if (additions.length) {
+        assertNoDuplicates(additions,Array.from(actor.items ?? []));
+        const created=await this.#createItems(actor,additions);
+        await restoreMissingActivities(additions,created);
+        const failures=verifyPersistedActivities(additions,created);
+        if(failures.length)throw new Error("Auditoria V9.1: "+failures.join(" "));
+      }
       await stampActorProvenance(actor);
     } catch (error) {
       const rollbackErrors = [];
@@ -117,7 +142,12 @@ export class JarvisImporterV9 {
     return { actor: actor.name, added: additions.length, updated: review.updates.length };
   }
 
-  async importActor(payload, { renderSheet = true } = {}) {
+  async importActor(payload,options={}) {
+    const p=compileActorBlueprintV91(payload);
+    const key="new:"+String(p.actor?.type)+":"+String(p.actor?.name).trim().toLowerCase();
+    return withImportLock(key,()=>this.#importActor(p,options));
+  }
+  async #importActor(payload, { renderSheet = true } = {}) {
     payload = compileActorBlueprintV91(payload);
     validateJarvisActorPayload(payload);
 
@@ -135,6 +165,7 @@ export class JarvisImporterV9 {
     const { items: resolvedItems, report: rehydrationReport } = await rehydrateLegacyOfficialItems(
       payload.items ?? []
     );
+    assertNoDuplicates(resolvedItems);
     const itemData = Dnd5eV6Adapter.adaptItems(resolvedItems);
     const effectData = foundry.utils.deepClone(payload.effects ?? []);
     const effectivePayload = { ...payload, items: resolvedItems };
@@ -166,6 +197,7 @@ export class JarvisImporterV9 {
       }
 
       await applyActorProgressions(actor, { notify: false });
+      assertNoDuplicates(Array.from(actor.items ?? []));
       await stampActorProvenance(actor);
       await setActorRulesProfile(
         actor,
@@ -196,11 +228,14 @@ export class JarvisImporterV9 {
 
     ui.notifications?.info(`Jarvis Importer V9: ${actor.name} importado com sucesso.`);
 
-    if (renderSheet) actor.sheet?.render(true);
+    if (renderSheet) await actor.sheet?.render(true);
     return actor;
   }
 
-  async importItems(actor, sourceItems = [], { sourceLabel = "Jarvis Progression" } = {}) {
+  async importItems(actor,sourceItems=[],options={}) {
+    return withImportLock(actorLock(actor),()=>this.#importItems(actor,sourceItems,options));
+  }
+  async #importItems(actor, sourceItems = [], { sourceLabel = "Jarvis Progression" } = {}) {
     if (!game.user?.isGM) {
       throw new Error("Jarvis Importer V9 exige permissão de Mestre para criar Items.");
     }
@@ -216,6 +251,7 @@ export class JarvisImporterV9 {
     }
 
     const { items: resolvedItems, report } = await rehydrateLegacyOfficialItems(sourceItems);
+    assertNoDuplicates(resolvedItems,Array.from(actor.items ?? []));
     const itemData = Dnd5eV6Adapter.adaptItems(resolvedItems);
     this.#applyItemSemanticMetadata(itemData, resolvedItems);
     this.#applyItemImages(itemData);
@@ -224,6 +260,9 @@ export class JarvisImporterV9 {
     let created;
     try {
       created = await this.#createItems(actor, itemData);
+      await restoreMissingActivities(itemData,created);
+      const failures=verifyPersistedActivities(itemData,created);
+      if(failures.length)throw new Error(`Auditoria V9.1: ${failures.join(" ")}`);
       await stampActorProvenance(actor);
     } catch (error) {
       const newIds = Array.from(actor.items ?? [], item => item.id).filter(id => id && !existingIds.has(id));
@@ -337,14 +376,15 @@ export class JarvisImporterV9 {
   #storeRehydrationSummary(actorData, report = []) {
     const hydrated = report.filter(entry => entry.status === "rehydrated");
     const unresolved = report.filter(entry => entry.status === "unresolved");
-    if (!hydrated.length && !unresolved.length) return;
+    if (!report.length) return;
 
     actorData.flags ??= {};
     actorData.flags[MODULE_ID] ??= {};
     actorData.flags[MODULE_ID].rehydration = {
       systemVersion: game.system?.version ?? null,
       hydrated: hydrated.map(entry => ({ name: entry.name, uuid: entry.uuid })),
-      unresolved: unresolved.map(entry => ({ name: entry.name, uuid: entry.uuid }))
+      unresolved: unresolved.map(entry => ({ name: entry.name, uuid: entry.uuid })),
+      smartCompendium: report
     };
   }
 

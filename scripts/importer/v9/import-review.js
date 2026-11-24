@@ -1,3 +1,4 @@
+import { compendiumOrigin, declaredKind, sameCompendiumIdentity, sameBilingualName } from "../compat/smart-compendium.js";
 import { validateJarvisActorPayload } from "../validators/payload-validator.js";
 import { inspectActorMechanics } from "./mechanics-review.js";
 
@@ -6,9 +7,8 @@ const key = value => String(value ?? "").trim().toLocaleLowerCase("pt-BR");
 const values = collection => Array.from(collection?.contents ?? collection ?? []);
 
 export function itemIdentity(item) {
-  const source = item.flags?.core?.sourceId ?? item.flags?.[MODULE_ID]?.sourceId
-    ?? item.jarvis?.provenance?.uuid ?? item.uuid;
-  if (source) return `source:${source}`;
+  const source = compendiumOrigin(item);
+  if (source && !["official-modified","homebrew","homebrew-extension"].includes(declaredKind(item))) return `source:${item.type}:${source}`;
   const id = item._id ?? item.id;
   if (id) return `id:${id}`;
   const identifier = item.system?.identifier ?? item.jarvis?.identifier;
@@ -26,15 +26,17 @@ function actorMatches(source, existing) {
 }
 
 export function findItemConflicts(items, existing = []) {
-  const seen = new Map();
-  const conflicts = [];
-  const keys = item => [itemIdentity(item), `name:${item.type}:${key(item.name)}`];
-  for (const item of existing) for (const identity of keys(item)) seen.set(identity, item);
+  const seen = [...existing], conflicts = [];
   for (const item of items) {
-    const identity = keys(item).find(candidate => seen.has(candidate)) ?? itemIdentity(item);
-    const previous = seen.get(identity);
-    if (previous) conflicts.push({ item: item.name, identity, existing: previous.name ?? item.name });
-    else for (const candidate of keys(item)) seen.set(candidate, item);
+    const previous = seen.find(candidate => {
+      if (candidate.type !== item.type) return false;
+      const a = candidate.system?.identifier ?? candidate.jarvis?.identifier;
+      const b = item.system?.identifier ?? item.jarvis?.identifier;
+      return itemIdentity(candidate) === itemIdentity(item) || sameCompendiumIdentity(candidate,item)
+        || Boolean(a && b && key(a) === key(b)) || sameBilingualName(candidate,item);
+    });
+    if(previous) conflicts.push({item:item.name,identity:itemIdentity(item),existing:previous.name??item.name});
+    seen.push(item);
   }
   return conflicts;
 }

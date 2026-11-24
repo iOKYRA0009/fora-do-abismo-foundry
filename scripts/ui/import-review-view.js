@@ -32,6 +32,7 @@ export function importReviewMarkup(review) {
     ${duplicateActors.length || duplicateItems.length ? `<details open><summary>Duplicatas</summary><ul>
       ${duplicateActors.map(value => `<li>Actor existente: ${escapeHtml(value.name)} (${escapeHtml(value.id)})</li>`).join("")}
       ${duplicateItems.map(value => `<li>Item: ${escapeHtml(value.item)} coincide com ${escapeHtml(value.existing)}</li>`).join("")}</ul></details>` : ""}
+    ${review.compendiums ? `<details open><summary>Smart Compendium</summary><p>${escapeHtml(review.compendiums.environment?.itemPacks ?? 0)} compêndios disponíveis</p><ul>${review.compendiums.report.map(x=>`<li>${escapeHtml(x.name)}: ${escapeHtml(x.status)} — ${escapeHtml(x.uuid??x.candidates?.join(", ")??"")} ${escapeHtml(x.differences?.join(", ")??"")} ${escapeHtml(x.reason??"")}</li>`).join("")}</ul><p>Índices indisponíveis: ${escapeHtml(review.compendiums.indexErrors.map(x=>x.pack).join(", ")||"nenhum")}</p></details>` : ""}
     ${review.warnings?.length ? `<div class="jarvis-review-warnings"><strong>Avisos</strong><ul>${review.warnings.map(message => `<li>${escapeHtml(message)}</li>`).join("")}</ul></div>` : ""}
     <p class="jarvis-console-hint">${escapeHtml(review.protection ?? "")}</p>`;
 }

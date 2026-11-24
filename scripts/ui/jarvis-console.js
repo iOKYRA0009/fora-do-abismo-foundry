@@ -1092,6 +1092,7 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
       tokenFile?.name, tokenFile?.size, tokenFile?.lastModified]);
     const payload = JSON.parse(json);
     const review = jarvis.importer.previewActor(payload, { imageFile, tokenFile });
+    if (jarvis.importer.analyzeCompendiums) review.compendiums=await jarvis.importer.analyzeCompendiums(payload.items ?? []);
     if (action === "actor-import-preview") {
       for (const url of state.actorImagePreviewUrls ?? []) URL.revokeObjectURL(url);
       state.actorImagePreviewUrls = [];
@@ -1131,6 +1132,7 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
     const payload = JSON.parse(json);
     const fingerprint = JSON.stringify([actor.id, json]);
     const review = jarvis.importer.previewActorSync(actor, payload);
+    if (jarvis.importer.analyzeCompendiums) review.compendiums=await jarvis.importer.analyzeCompendiums(payload.items ?? []);
     if (action === "actor-sync-preview") {
       state.actorSyncPreview = { fingerprint };
       renderImportReview(root, "actor", review);
@@ -1252,6 +1254,7 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
     }
     const fingerprint = JSON.stringify([actor.id, items]);
     const review = jarvis.importer.previewItems(actor, items);
+    if (jarvis.importer.analyzeCompendiums) review.compendiums=await jarvis.importer.analyzeCompendiums(items);
     if (action === "items-import-preview") {
       state.itemsImportPreview = { fingerprint };
       renderImportReview(root, "items", review);
