@@ -1,3 +1,4 @@
+import { findItemConflicts } from "../importer/v9/import-review.js";
 const MODULE_ID = "fora-do-abismo-foundry";
 const progressionInFlight = new WeakMap();
 
@@ -42,17 +43,9 @@ function entryId(entry, index) {
 }
 
 function findExistingGrant(actor, template) {
-  const identifier = template?.jarvis?.identifier ?? template?.system?.identifier;
-  if (identifier) {
-    const key = slugify(identifier);
-    const byIdentifier = actor.items.find(item => slugify(item.system?.identifier ?? "") === key);
-    if (byIdentifier) return byIdentifier;
-  }
-
-  const name = String(template?.name ?? "").trim().toLowerCase();
-  const type = template?.type;
-  if (!name) return null;
-  return actor.items.find(item => item.type === type && String(item.name ?? "").trim().toLowerCase() === name) ?? null;
+  const matches=Array.from(actor.items??[]).filter(item=>findItemConflicts([template],[item]).length);
+  if(matches.length>1)throw new Error("Jarvis Progression: múltiplas correspondências para "+template.name);
+  return matches[0]??null;
 }
 
 async function markEntriesGranted(item, granted) {
