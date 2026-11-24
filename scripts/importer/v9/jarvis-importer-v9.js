@@ -1,7 +1,7 @@
 import { validateJarvisActorPayload } from "../validators/payload-validator.js";
 import { compileActorBlueprintV91 } from "./blueprint-v91.js";
 import { inspectActorMechanics, restoreMissingActivities, verifyPersistedActivities } from "./mechanics-review.js";
-import { reviewActorImport, reviewItemImport, findItemConflicts, itemIdentity } from "./import-review.js";
+import { reviewActorImport, reviewItemImport, findItemConflicts } from "./import-review.js";
 import {
   buildGenerationDescriptor,
   resolveDocumentImage
@@ -26,6 +26,10 @@ async function withImportLock(key, fn) {
   if (inFlight.has(key)) throw new Error("Jarvis: importação já em andamento para esta ficha.");
   inFlight.add(key);
   try { return await fn(); } finally { inFlight.delete(key); }
+}
+function warnCompendiumReview(report) {
+  const review=report.filter(x=>["unresolved","ambiguous","modified-preserved","candidate"].includes(x.status));
+  if(review.length) console.warn(MODULE_ID+" | Smart Compendium: revisar fontes e modificações",review);
 }
 const actorLock = actor => "actor:" + (actor?.uuid ?? actor?.id ?? "unknown");
 function assertNoDuplicates(items,existing=[]) {
@@ -93,7 +97,8 @@ export class JarvisImporterV9 {
     const review = this.previewActorSync(actor, payload);
     if (!review.canImport) throw new Error(`Sincronização bloqueada: ${review.errors.join(" ")}`);
     await verifyGrantReferences(payload.items);
-    const { items: resolved } = await rehydrateLegacyOfficialItems(payload.items ?? []);
+    const { items: resolved, report } = await rehydrateLegacyOfficialItems(payload.items ?? []);
+    warnCompendiumReview(report);
     assertNoDuplicates(resolved);
     const adapted = Dnd5eV6Adapter.adaptItems(resolved);
     this.#applyItemSemanticMetadata(adapted, resolved);
@@ -165,6 +170,7 @@ export class JarvisImporterV9 {
     const { items: resolvedItems, report: rehydrationReport } = await rehydrateLegacyOfficialItems(
       payload.items ?? []
     );
+    warnCompendiumReview(rehydrationReport);
     assertNoDuplicates(resolvedItems);
     const itemData = Dnd5eV6Adapter.adaptItems(resolvedItems);
     const effectData = foundry.utils.deepClone(payload.effects ?? []);
@@ -251,6 +257,7 @@ export class JarvisImporterV9 {
     }
 
     const { items: resolvedItems, report } = await rehydrateLegacyOfficialItems(sourceItems);
+    warnCompendiumReview(report);
     assertNoDuplicates(resolvedItems,Array.from(actor.items ?? []));
     const itemData = Dnd5eV6Adapter.adaptItems(resolvedItems);
     this.#applyItemSemanticMetadata(itemData, resolvedItems);

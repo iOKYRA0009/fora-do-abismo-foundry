@@ -1,4 +1,5 @@
 import { resolveSmartCompendiums } from "./smart-compendium.js";
+const MODULE_ID = "fora-do-abismo-foundry";
 export async function rehydrateLegacyOfficialItems(items=[],{notify=false}={}) {
   const result=await resolveSmartCompendiums(items);
   const count=result.report.filter(x=>x.status==="rehydrated").length;

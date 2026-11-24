@@ -1092,7 +1092,7 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
       tokenFile?.name, tokenFile?.size, tokenFile?.lastModified]);
     const payload = JSON.parse(json);
     const review = jarvis.importer.previewActor(payload, { imageFile, tokenFile });
-    if (jarvis.importer.analyzeCompendiums) review.compendiums=await jarvis.importer.analyzeCompendiums(payload.items ?? []);
+    if (jarvis.importer.analyzeCompendiums) review.compendiums=await jarvis.importer.analyzeCompendiums(compileActorBlueprintV91(payload).items ?? []);
     if (action === "actor-import-preview") {
       for (const url of state.actorImagePreviewUrls ?? []) URL.revokeObjectURL(url);
       state.actorImagePreviewUrls = [];
@@ -1104,11 +1104,11 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
         review.actor.tokenPreview = URL.createObjectURL(tokenFile);
         state.actorImagePreviewUrls.push(review.actor.tokenPreview);
       }
-      state.actorImportPreview = { fingerprint };
+      state.actorImportPreview = { fingerprint, compendiums: JSON.stringify(review.compendiums ?? null) };
       renderImportReview(root, "actor", review);
       return setOutput(root, "Revisão da importação V9", review);
     }
-    if (state.actorImportPreview?.fingerprint !== fingerprint) {
+    if (state.actorImportPreview?.fingerprint !== fingerprint || state.actorImportPreview?.compendiums !== JSON.stringify(review.compendiums ?? null)) {
       throw new JarvisInputError("Prévia ausente ou desatualizada. Revise a importação V9 antes de criar a ficha.");
     }
     if (!review.canImport) throw new JarvisInputError([...review.errors, ...review.warnings].join(" "));
@@ -1132,13 +1132,13 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
     const payload = JSON.parse(json);
     const fingerprint = JSON.stringify([actor.id, json]);
     const review = jarvis.importer.previewActorSync(actor, payload);
-    if (jarvis.importer.analyzeCompendiums) review.compendiums=await jarvis.importer.analyzeCompendiums(payload.items ?? []);
+    if (jarvis.importer.analyzeCompendiums) review.compendiums=await jarvis.importer.analyzeCompendiums(compileActorBlueprintV91(payload).items ?? []);
     if (action === "actor-sync-preview") {
-      state.actorSyncPreview = { fingerprint };
+      state.actorSyncPreview = { fingerprint, compendiums: JSON.stringify(review.compendiums ?? null) };
       renderImportReview(root, "actor", review);
       return setOutput(root, "Revisão da atualização V9.1", review);
     }
-    if (state.actorSyncPreview?.fingerprint !== fingerprint) throw new JarvisInputError("Revise esta atualização antes de aplicá-la.");
+    if (state.actorSyncPreview?.fingerprint !== fingerprint || state.actorSyncPreview?.compendiums !== JSON.stringify(review.compendiums ?? null)) throw new JarvisInputError("Revise esta atualização antes de aplicá-la.");
     if (!review.canImport) throw new JarvisInputError(review.errors.join(" "));
     if (!await confirmAction("Atualizar ficha V9.1", `Atualizar ${review.updates.length} Item(s) e adicionar ${review.additions.length} em ${actor.name}?`)) return;
     state.actorSyncPreview = null;
@@ -1256,11 +1256,11 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
     const review = jarvis.importer.previewItems(actor, items);
     if (jarvis.importer.analyzeCompendiums) review.compendiums=await jarvis.importer.analyzeCompendiums(items);
     if (action === "items-import-preview") {
-      state.itemsImportPreview = { fingerprint };
+      state.itemsImportPreview = { fingerprint, compendiums: JSON.stringify(review.compendiums ?? null) };
       renderImportReview(root, "items", review);
       return setOutput(root, "Revisão dos Items V9", review);
     }
-    if (state.itemsImportPreview?.fingerprint !== fingerprint) {
+    if (state.itemsImportPreview?.fingerprint !== fingerprint || state.itemsImportPreview?.compendiums !== JSON.stringify(review.compendiums ?? null)) {
       throw new JarvisInputError("Prévia ausente ou desatualizada. Revise os Items V9 antes de importá-los.");
     }
     if (!review.canImport) throw new JarvisInputError(review.warnings.join(" "));
