@@ -32,9 +32,10 @@ export function preparePackageIntegrations(pkg,worldActors=[]){
       const actor=text(p.actor,"Participante"),key=norm(actor);
       if(seen.has(key))fail("Participante duplicado: "+actor);seen.add(key);
       const inPackage=actors.filter(a=>norm(a.actor?.name)===key);
-      if(inPackage.length!==1)unique(worldActors,actor,"Participante existente");
+      const existing=inPackage.length===1?null:unique(worldActors,actor,"Participante existente");
+      if(existing&&!existing.id)fail("Participante existente sem ID.");
       if(p.offTurn!==undefined&&typeof p.offTurn!=="boolean")fail("offTurn deve ser booleano.");
-      return {actor,cost:p.cost,offTurn:p.offTurn===true,requiredStatus:p.requiredStatus??null};
+      return {actor,existingId:existing?.id??null,cost:p.cost,offTurn:p.offTurn===true,requiredStatus:p.requiredStatus??null};
     });
     if(!seen.has(norm(initiator)))fail("Iniciador precisa participar.");
     if(c.activity!=null)sourceActivity(start,c.activity);
@@ -46,9 +47,10 @@ export function preparePackageIntegrations(pkg,worldActors=[]){
     only(b,["actor","item","activity","effectId"]);
     const actor=text(b.actor,"Personagem"),payload=sourceActor(actors,actor);
     const {item,activity,semantic}=sourceActivity(payload,{item:b.item,activity:b.activity});
+    if(activity.type!=="utility"||(activity.effects??[]).length)fail("Vínculo requer Activity utility sem efeitos nativos associados, para evitar aplicação duplicada.");
     if(!semantic.includes(activity)||!/^[A-Za-z0-9]{16}$/.test(activity._id??""))fail("Automação exige Activity semântica com ID de 16 caracteres.");
     const effectId=text(b.effectId,"ID de efeito",16);
-    if(!/^[A-Za-z0-9]{16}$/.test(effectId)||!(item.effects??[]).some(e=>e._id===effectId))fail("Active Effect embutido não encontrado: "+effectId);
+    if(!/^[A-Za-z0-9]{16}$/.test(effectId)||(item.effects??[]).filter(e=>e._id===effectId&&e.transfer===false).length!==1)fail("Active Effect embutido não encontrado ou sem transfer:false: "+effectId);
     const key=[norm(actor),norm(b.item),norm(b.activity)].join("|");
     if(bound.has(key)||activity.automation)fail("Activity já possui automação ou vínculo repetido.");
     bound.add(key);
@@ -59,7 +61,7 @@ export function preparePackageIntegrations(pkg,worldActors=[]){
 }
 export function resolveImportedCombos(combos,created,worldActors){
   return combos.map(c=>{
-    const actorFor=name=>{const fresh=created.filter(a=>norm(a.name)===norm(name));return fresh.length?unique(fresh,name,"Personagem criado"):unique(worldActors,name,"Participante existente");};
+    const actorFor=p=>{if(p.existingId){const a=unique(worldActors,p.actor,"Participante existente");if(a.id!==p.existingId)fail("Participante existente mudou durante importação.");return a;}return unique(created,p.actor,"Personagem criado");};
     const initiator=unique(created,c.initiator,"Iniciador criado");
     let activity=null;
     if(c.activity){
@@ -68,6 +70,16 @@ export function resolveImportedCombos(combos,created,worldActors){
       if(typeof a.use!=="function")fail("Activity criada não utilizável.");
       activity={itemId:item.id,activityId:a.id};
     }
-    return {name:c.name,description:c.description,initiatorId:initiator.id,participants:c.participants.map(p=>({actorId:actorFor(p.actor).id,cost:p.cost,offTurn:p.offTurn,requiredStatus:p.requiredStatus})),maxDistance:c.maxDistance,activity,visibility:"gm"};
+    return {name:c.name,description:c.description,initiatorId:initiator.id,participants:c.participants.map(p=>({actorId:actorFor(p).id,cost:p.cost,offTurn:p.offTurn,requiredStatus:p.requiredStatus})),maxDistance:c.maxDistance,activity,visibility:"gm"};
   });
+}
+
+export function verifyImportedBindings(bindings,created){
+  for(const b of bindings){
+    const actor=unique(created,b.actor,"Personagem criado");
+    const item=unique(list(actor.items),b.item,"Item criado");
+    const activity=unique(list(item.system?.activities),b.activity,"Activity criada");
+    const config=activity.flags?.["fora-do-abismo-foundry"]?.automation;
+    if(!config||Object.keys(config).length!==1||config.effects?.length!==1||config.effects[0].effectId!==b.effectId||config.effects[0].target!=="self"||config.effects[0].strict!==true||config.effects[0].replace!==true||!list(item.effects).some(e=>e.id===b.effectId&&e.transfer===false))fail("Vínculo de efeito não persistiu: "+b.item+" / "+b.activity);
+  }
 }
