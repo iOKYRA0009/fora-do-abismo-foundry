@@ -1,3 +1,5 @@
+import { preparePackageIntegrations, resolveImportedCombos } from "../importer/package-integrations.js";
+import { registerImportedCombos, removeImportedCombos } from "../synergy/synergy-engine.js";
 import { rejectJsonAsScript } from "./source-format.js";
 import { validateJarvisActorPayload } from "../importer/validators/payload-validator.js";
 import { validateSceneBlueprint } from "../scenes/scene-blueprint-validator.js";
@@ -438,6 +440,10 @@ export function previewJarvisExecution(source, { mode = "auto", files = [] } = {
   if (uploadedAssets.some(asset => !asset.verified)) warnings.push("Arquivos anexados serão inspecionados byte a byte antes do envio.");
   const existingActors = collectionValues(game.actors);
   const existingScenes = collectionValues(game.scenes);
+  const mechanics = preparePackageIntegrations(pkg, existingActors);
+  if (mechanics.combos.length) warnings.push("Sinergias serão registradas como privadas do Mestre, sem gastar ações nem solicitar participação.");
+  if (mechanics.bindings.length) warnings.push("Vínculos declarativos aplicarão efeitos ao próprio usuário da Activity quando utilizada.");
+  if (mechanics.bindings.length) for (const actor of mechanics.actors) validateActorPayload(actor, assets);
   for (const actor of actors) if (existingActors.some(x => normalize(x.name) === normalize(actor.actor.name))) {
     throw new Error(`Jarvis Executor: personagem '${actor.actor.name}' já existe. Não sobrescreveremos a ficha.`);
   }
@@ -458,6 +464,7 @@ export function previewJarvisExecution(source, { mode = "auto", files = [] } = {
       calibration: calibratedScenes[index].calibration
     })), itemAdditions: additions.map(x => ({ actor: x.actor, items: x.items.length })),
     appearanceProfiles: appearances.summaries, transformationProfiles: transformations.summaries,
+    synergyCombos: mechanics.combos, effectBindings: mechanics.bindings,
     integrations: {
       ...(appearances.status ? { visage: { active: true, apiReady: true, version: appearances.status.version } } : {}),
       ...(transformations.status ? { metamorph: { active: true, apiReady: true, version: transformations.status.version } } : {})
@@ -635,6 +642,13 @@ export async function rollbackJarvisExecution(executionId) {
     const skipped = [];
     const errors = [];
     const removed = { actors: [], scenes: [], items: [] };
+    if (entry.hasImportedCombos) {
+      try {
+        const combos = await removeImportedCombos(id);
+        removed.combos = combos.removed;
+        for (const combo of combos.skipped) skipped.push("Sinergia editada: "+combo);
+      } catch(e) { errors.push("Sinergias: "+e.message); }
+    }
     const changed = (document, saved) => saved.modifiedTime !== null
       && modificationTime(document) !== null && modificationTime(document) !== saved.modifiedTime;
     // A browser interruption can occur between document creation and the next
@@ -744,6 +758,7 @@ export async function runJarvisExecution(plan, api) {
     // references and scene geometry, then track every new document by run ID.
     const verified = previewJarvisExecution(JSON.stringify(plan.data), { mode: "package", files: plan.files });
     const payload = verified.data;
+    const mechanics = preparePackageIntegrations(payload, collectionValues(game.actors));
     const beforeActors = new Set(collectionValues(game.actors).map(actor => actor.id));
     const beforeScenes = new Set(collectionValues(game.scenes).map(scene => scene.id));
     const beforeItems = new Map(collectionValues(game.actors).map(actor =>
@@ -754,7 +769,7 @@ export async function runJarvisExecution(plan, api) {
     let images = {};
     let operation = "envio das imagens";
     await writeHistory(entries => [{ id: executionId, at: Date.now(), kind: "package",
-      name: String(payload.name ?? "Pacote Jarvis"), status: "running", actors: [], scenes: [], items: [], images: {},
+      name: String(payload.name ?? "Pacote Jarvis"), status: "running", actors: [], scenes: [], items: [], images: {}, hasImportedCombos: mechanics.combos.length > 0,
       message: "Importação iniciada; documentos novos serão rastreados." }, ...entries]);
     try {
       const mapDimensions = {};
@@ -779,7 +794,7 @@ export async function runJarvisExecution(plan, api) {
       }
       images = await uploadAssets(payload.assets ?? [], plan.files, mapDimensions);
       await modifyHistory(executionId, { images: { ...images } });
-      const resolved = replaceRefs(payload, images);
+      const resolved = replaceRefs({...payload, actors: mechanics.actors}, images);
       for (const actorPayload of resolved.actors ?? []) {
         operation = `criação do personagem '${actorPayload.actor.name}'`;
         const actor = await api.importer.importActor(stampActorPayload(actorPayload, executionId), { renderSheet: false });
@@ -827,8 +842,13 @@ export async function runJarvisExecution(plan, api) {
         else throw new Error("Jarvis Executor: Scene Builder não retornou uma cena rastreável.");
         await modifyHistory(executionId, ledgerSnapshot(createdActors, createdScenes, addedItems, images));
       }
+      let comboIds = [];
+      if (mechanics.combos.length) {
+        operation = "registro privado das sinergias";
+        comboIds = await registerImportedCombos(executionId, resolveImportedCombos(mechanics.combos, createdActors, collectionValues(game.actors)));
+      }
       const ledger = ledgerSnapshot(createdActors, createdScenes, addedItems, images);
-      await modifyHistory(executionId, { ...ledger, status: "success", finishedAt: Date.now(),
+      await modifyHistory(executionId, { ...ledger, comboIds, status: "success", finishedAt: Date.now(),
         message: "Concluído. Documentos rastreados; imagens enviadas permanecem no armazenamento mesmo após reversão." });
       return {
         kind: "package", executionId, name: resolved.name ?? "Pacote Jarvis",
@@ -836,13 +856,17 @@ export async function runJarvisExecution(plan, api) {
         scenes: createdScenes.map(s => ({ id:s.id, name:s.name })), itemAdditions: addedItems.map(a=>a.items.length),
         appearanceProfiles: resolved.appearanceProfiles?.length ?? 0,
         transformationProfiles: resolved.transformationProfiles?.length ?? 0,
+        synergyCombos: comboIds.length, effectBindings: mechanics.bindings.length,
         images, created: ledger, rollbackAvailable: true,
         note: "Concluído. Os arquivos enviados ficam no armazenamento do Foundry, inclusive após reversão."
       };
     } catch (error) {
       images = { ...images, ...(error.uploadedImages ?? {}) };
+      const comboErrors = [];
+      if (mechanics.combos.length) try { const result = await removeImportedCombos(executionId); if (result.skipped.length) comboErrors.push("Sinergias editadas: "+result.skipped.join(", ")); } catch(e) { comboErrors.push("Sinergias: "+e.message); }
       const rollback = await rollbackCurrent(executionId, { createdActors, createdScenes, addedItems,
         beforeActors, beforeScenes, beforeItems });
+      rollback.errors.push(...comboErrors);
       const message = `Jarvis Executor: falha em ${operation}. ${error.message ?? error}`;
       await modifyHistory(executionId, { ...ledgerSnapshot(createdActors, createdScenes, addedItems, images),
         status: rollback.errors.length ? "partial_rollback" : "failed", finishedAt: Date.now(), rollback,
