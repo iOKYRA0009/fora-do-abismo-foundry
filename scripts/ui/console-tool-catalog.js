@@ -1,4 +1,7 @@
 export const TOOL_CATALOG = Object.freeze([
+  { id: "actor-dependency-audit", label: "Auditar dependências da ficha", tab: "characters", gmOnly: true },
+  { id: "synergy-audit", label: "Auditar biblioteca de combos", tab: "characters", gmOnly: true },
+  { id: "synergy-preview", label: "Simular combo sem gastar ações", tab: "characters", gmOnly: true },
   { id: "synergy-open", label: "Abrir combos", tab: "characters" },
   { id: "synergy-status", label: "Consultar ações", tab: "characters" },
   { id: "synergy-start", label: "Iniciar economia de ações", tab: "characters", gmOnly: true },
