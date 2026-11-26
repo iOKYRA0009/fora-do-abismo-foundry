@@ -915,9 +915,9 @@ function renderContent() {
     <div class="jarvis-console-row">${button("actor-open", "Abrir ficha")}${button("actor-provenance", "Analisar origem")}${button("actor-rules", "Perfil de regras")}${button("actor-jack", "Estado de Jack")}</div>
     ${gm ? `<section class="jarvis-console-card"><h3>Importador Universal</h3><p>Cole código ou selecione um arquivo. Detecta o formato e prepara a revisão existente, sem criar documentos nem executar macros.</p>
       <label>Arquivo<input type="file" name="universal-file" accept=".json,.js,.mjs,.txt,.yaml,.yml,.xml,.csv,.md,.markdown,.zip,.jarvis,.py,.lua"></label>
-      <label>Conteúdo<textarea name="universal-source" rows="6" spellcheck="false" placeholder="Cole o conteúdo de uma ficha, Items ou macro"></textarea></label>
+      <label>Conteúdo<textarea name="universal-source" rows="6" spellcheck="false" placeholder="Nome: Orgulho&#10;Tipo: NPC&#10;PV: 250&#10;CA: 22"></textarea></label>
       <div class="jarvis-console-row">${button("universal-detect","Detectar formato")}${button("universal-route","Preparar importação")}</div>
-      <p class="jarvis-console-hint">Suporte: JSON Jarvis, Items, Executor, JavaScript, JSON nativo de NPC/personagem, YAML, XML e CSV (esquemas documentados). ZIP e texto livre ainda não convertidos. Preparar substitui o conteúdo do editor de destino e limpa seus arquivos anteriores; anexe retrato/token/imagens novamente quando necessário.</p></section>` : ""}
+      <p class="jarvis-console-hint">Suporte: JSON Jarvis, Items, Executor, JavaScript, JSON nativo de NPC/personagem, YAML, XML e CSV (esquemas documentados). TXT/Markdown de ficha estruturada em português também aceitos. ZIP e texto livre ainda não convertidos. Preparar substitui o conteúdo do editor de destino e limpa seus arquivos anteriores; anexe retrato/token/imagens novamente quando necessário.</p></section>` : ""}
     ${renderSynergyControls(actors, gm)}
     ${advanced("Criar, importar e manter fichas", characters)}
     ${advanced("Área dos jogadores", players)}
@@ -1059,7 +1059,7 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
   if (action === "universal-detect" || action === "universal-route") {
     requireGM();
     const file = field(root,"universal-file")?.files?.[0];
-    if (file && /\\.(zip|jarvis)$/i.test(file.name)) return setOutput(root,"Importador Universal",{formato:"archive",suportado:false,mensagem:"Pacotes ZIP/.jarvis reconhecidos. A leitura de arquivos internos ainda não está disponível."});
+    if (file && /\.(zip|jarvis)$/i.test(file.name)) return setOutput(root,"Importador Universal",{formato:"archive",suportado:false,mensagem:"Pacotes ZIP/.jarvis reconhecidos. A leitura de arquivos internos ainda não está disponível."});
     const source = await fileOrText(root,"universal-file","universal-source");
     const detected = convertUniversalSource(detectUniversalSource(source,{filename:file?.name??""}));
     if (action === "universal-detect" || !detected.supported) return setOutput(root,"Formato detectado",universalReport(detected));
