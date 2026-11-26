@@ -320,3 +320,9 @@ Três recursos originais para o Mestre: **Registro de Produção** (export JSON 
 ## Jarvis Synergy Engine (1.6.2)
 
 Habilidades conjuntas de 2 a 7 personagens, controle de ação/ação bônus/reação por turno, consentimento, biblioteca privada e editor visual. Consulte [o guia de configuração e limitações](docs/JARVIS-SYNERGY-ENGINE.md). Inclui a proteção contra JSON executado como JavaScript da versão 1.5.14.
+
+## Jarvis Dependency Audit (1.6.3)
+
+Central → Personagens → Criar, importar e manter fichas → Manutenção → Auditar dependências da ficha. A auditoria somente leitura identifica referências a Items de consumo, atributos numéricos e Active Effects inexistentes ou ambíguos; sugestões não são aplicadas automaticamente. Não executa JavaScript, não testa fórmulas nem a mecânica de módulos externos.
+
+Em Sinergias Jarvis → Economia e editor de combos: **Auditar biblioteca** lista participantes e Activities removidos e condições que precisam de revisão, mesmo fora de combate. **Simular sem gastar ações** usa o rascunho atual do editor e as condições do combate ativo, mostrando disponibilidade e saldo antes/depois quando possível. Não salva, não consome recursos, não pede consentimento e não executa a Activity. A execução real revalida todas as condições; a prévia não garante um resultado de ataque ou dano.
