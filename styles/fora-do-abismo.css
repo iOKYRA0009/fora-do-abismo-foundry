@@ -439,3 +439,18 @@
 .jarvis-console .jarvis-executor-map-preview .jarvis-console-row { margin-top: .6rem; }
 
 .jarvis-console .jarvis-executor-map-missing { min-height: 120px; padding: 1rem; color: #b7b8bd; }
+
+/* Per-Actor sheet watermark, independent of portrait and token. */
+.jarvis-sheet-background-host {
+  position: relative;
+  isolation: isolate;
+}
+.jarvis-sheet-background-host > .jarvis-sheet-background-layer {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-position: center;
+  background-repeat: no-repeat;
+  border-radius: inherit;
+}
