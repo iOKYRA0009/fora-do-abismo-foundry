@@ -12,13 +12,14 @@ function getItem(activity) {
   return activity?.item ?? null;
 }
 
-export function resolveEmbeddedEffect(activity, { effectId = null, effectName = null } = {}) {
+export function resolveEmbeddedEffect(activity, { effectId = null, effectName = null, strict = false } = {}) {
   const item = getItem(activity);
   if (!item) throw new Error("Jarvis Effect Engine: Activity sem Item associado.");
 
   if (effectId) {
     const byId = item.effects?.get?.(String(effectId));
     if (byId) return byId;
+    if (strict) throw new Error("Jarvis Effect Engine: efeito explícito removido; revise o vínculo.");
   }
 
   if (effectName) {
@@ -102,11 +103,12 @@ export async function applyEmbeddedEffectToActor(activity, actor, {
   effectId = null,
   effectName = null,
   key = null,
-  replace = true
+  replace = true,
+  strict = false
 } = {}) {
   if (!actor) throw new Error("Jarvis Effect Engine: Actor alvo ausente.");
 
-  const effect = resolveEmbeddedEffect(activity, { effectId, effectName });
+  const effect = resolveEmbeddedEffect(activity, { effectId, effectName, strict });
   const normalizedKey = asKey(key) || `embedded:${effect.uuid}`;
 
   const existing = replace
