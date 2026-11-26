@@ -454,3 +454,43 @@
   background-repeat: no-repeat;
   border-radius: inherit;
 }
+
+/* Optional per-Actor palette, scoped to the sheet content. */
+.window-content.jarvis-sheet-palette {
+  --color-text-primary: var(--jarvis-sheet-text);
+  --color-text-secondary: var(--jarvis-sheet-text);
+  --color-text-emphatic: var(--jarvis-sheet-text);
+  --color-text-dark-primary: var(--jarvis-sheet-text);
+  --color-text-dark-secondary: var(--jarvis-sheet-text);
+  --color-text-light-primary: var(--jarvis-sheet-text);
+  --dnd5e-color-text: var(--jarvis-sheet-text);
+  --dnd5e-color-text-dark: var(--jarvis-sheet-text);
+  --dnd5e-color-text-light: var(--jarvis-sheet-text);
+  --dnd5e-color-gold: var(--jarvis-sheet-title);
+  --dnd5e-color-heading: var(--jarvis-sheet-title);
+  --dnd5e-color-border: var(--jarvis-sheet-divider);
+  background: var(--jarvis-sheet-paper) !important;
+  color: var(--jarvis-sheet-text);
+}
+.jarvis-sheet-palette :is(.sheet-body, .tab, .sheet-header, .sheet-sidebar, .sidebar, .main-content) {
+  background: transparent;
+  color: var(--jarvis-sheet-text);
+}
+.jarvis-sheet-palette :is(.card, .items-section, .item-list, .ability-score, .attribute, .skills, .inventory, .features-list, .details) {
+  background-color: color-mix(in srgb, var(--jarvis-sheet-paper) 68%, transparent);
+  border-color: var(--jarvis-sheet-divider);
+  color: var(--jarvis-sheet-text);
+}
+.jarvis-sheet-palette :is(h1, h2, h3, h4, .section-title, .items-header .item-name, .document-name, .sheet-tabs a.active) {
+  color: var(--jarvis-sheet-title);
+  border-color: var(--jarvis-sheet-divider);
+}
+.jarvis-sheet-palette :is(.items-header, .item-list > li, .sheet-tabs, hr, .divider) {
+  border-color: var(--jarvis-sheet-divider);
+}
+.jarvis-sheet-palette :is(input:not([type="checkbox"]):not([type="radio"]), textarea, select) {
+  color: var(--jarvis-sheet-text);
+  background-color: var(--jarvis-sheet-paper);
+  border-color: var(--jarvis-sheet-divider);
+}
+.jarvis-console input[type="color"] { min-width: 3rem; min-height: 2rem; }

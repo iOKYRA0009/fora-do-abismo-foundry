@@ -8,9 +8,13 @@ Este repositório concentra o código da campanha: Jarvis Importer, macros, auto
 
 A lore completa não deve ser duplicada aqui. O Google Drive continua sendo a fonte documental da campanha; este repositório é a oficina técnica.
 
-## Personalização de ficha — 1.5.12
+## Personalização de ficha — 1.5.13
 
-Na Central Jarvis, selecione um personagem, abra **Aparências → Fundo personalizado da ficha**, envie uma imagem PNG/JPG/WebP (até 6 MB), defina opacidade e tamanho e clique em **Salvar fundo na ficha**. O Mestre pode ajustar ou remover o fundo sem alterar retrato, token, atributos ou habilidades. O tema fica em uma flag do Actor, compartilhada com quem tem acesso à ficha. O padrão é 10% de opacidade e 65% de tamanho. A imagem fica armazenada nos dados do Foundry; remover o tema não apaga o arquivo.
+A Central → Aparências permite ativar uma paleta individual opcional com quatro seletores de cor: papel, texto, títulos e divisórias. A paleta pode ser usada com ou sem imagem. O tema é salvo no Actor, o formulário carrega o tema do personagem selecionado e **Restaurar padrão** remove imagem e paleta. O controle **Retirar imagem ao salvar** preserva a paleta. Temas antigos sem paleta continuam funcionando. Texto e títulos devem ter contraste de pelo menos 4,5:1 em relação ao papel; a imagem e outras superfícies ainda exigem inspeção visual. Exemplo de JSON de importação: `"sheetAppearance": {"palette":{"paper":"#f8f6ef","text":"#30323a","title":"#806126","divider":"#b0b4bd"}}` dentro de `actor.jarvis`. A paleta altera somente a área de conteúdo da ficha, não o tema global do Foundry. Alguns elementos nativos ou de módulos parceiros podem conservar sua aparência original.
+
+### Marca d'água (desde 1.5.12)
+
+Na Central Jarvis, selecione um personagem, abra **Aparências → Aparência personalizada da ficha**, envie uma imagem PNG/JPG/WebP (até 6 MB), defina opacidade e tamanho e clique em **Salvar aparência**. O Mestre pode ajustar ou remover o fundo sem alterar retrato, token, atributos ou habilidades. O tema fica em uma flag do Actor, compartilhada com quem tem acesso à ficha. O padrão é 10% de opacidade e 65% de tamanho. A imagem fica armazenada nos dados do Foundry; remover o tema não apaga o arquivo.
 
 Para importar um personagem V9.0/V9.1 com imagem local já disponível, use `actor.jarvis.sheetAppearance: { "image": "jarvis-actor-images/exemplo.webp", "opacity": 0.10, "size": 65 }`. Também é aceito o campo nativo `actor.flags["fora-do-abismo-foundry"].sheetAppearance`. Links externos não são aceitos. O Executor pode resolver referências de assets conforme seu fluxo existente; use caminhos locais no JSON individual.
 
