@@ -1,3 +1,4 @@
+import { auditActorDependencies } from "../diagnostics/dependency-audit.js";
 import { renderSynergyControls, executeSynergyConsoleAction } from "../synergy/synergy-ui.js";
 import { getJarvisAccess, visibleJarvisTabs, assertJarvisAccess } from "./jarvis-console-core.js";
 import { searchConsole, searchCompendiumPack } from "./console-search.js";
@@ -720,7 +721,7 @@ function renderContent() {
       <div class="jarvis-console-row">${button("actor-import-preview", "Revisar importação V9.1")}${button("actor-import", "Confirmar criação")}${button("actor-sync-preview", "Revisar atualização da ficha")}${button("actor-sync", "Atualizar ficha selecionada")}${button("actor-progression", "Aplicar progressão da ficha")}${button("actor-compare", "Comparar JSON com a ficha")}</div>
       <section class="jarvis-import-review" data-jarvis-actor-review aria-live="polite"><p class="jarvis-console-hint">Revise o JSON antes de confirmar.</p></section>
       <h3>Manutenção da ficha</h3><div class="jarvis-console-row"><label>Regras alvo<select name="actor-rules-target"><option value="2024">D&D 2024</option><option value="2014">D&D 2014</option></select></label>
-      ${button("actor-rules-set", "Salvar perfil de regras")}${button("actor-provenance-stamp", "Registrar origem dos Items")}${button("actor-jack-sync", "Sincronizar almas de Jack")}${button("actor-chat-repair", "Corrigir chat das habilidades")}${button("actor-duplicates-audit","Revisar possíveis duplicatas")}</div>` : ""}
+      ${button("actor-rules-set", "Salvar perfil de regras")}${button("actor-provenance-stamp", "Registrar origem dos Items")}${button("actor-jack-sync", "Sincronizar almas de Jack")}${button("actor-chat-repair", "Corrigir chat das habilidades")}${button("actor-duplicates-audit","Revisar possíveis duplicatas")}${button("actor-dependency-audit","Auditar dependências da ficha")}</div>` : ""}
   `);
 
   const content = gm ? section("content", `
@@ -1194,6 +1195,10 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
     const actor = selectedActor(root);
     const payload = JSON.parse(await fileOrText(root, "actor-json-file", "actor-json"));
     return setOutput(root, "Comparação com JSON", jarvis.diagnostics.compareActor(payload, actor));
+  }
+  if (action === "actor-dependency-audit") {
+    requireGM();
+    return setOutput(root, "Dependências da ficha (somente leitura)", auditActorDependencies(selectedActor(root)));
   }
   if (action === "actor-duplicates-audit") {
     requireGM();
