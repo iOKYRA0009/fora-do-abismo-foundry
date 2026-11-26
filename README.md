@@ -358,3 +358,7 @@ Pacotes .jarvis e Executor JSON com sinergias privadas e vínculos de efeitos de
 ### Correção 1.8.1
 
 Corrige conflito de projeção do Smart Compendium no Foundry V14: D&D5e indexa `system.source` por padrão, e o Jarvis não deve solicitar também `system.source.rules`. A edição continua sendo lida no objeto `system.source`. A correção não altera fichas, recursos ou formatos dos pacotes.
+
+### 1.8.2 — Atualização visual por JSON
+
+O Executor aceita `jarvis-executor-1` com `visualUpdate` (sem criação de documentos) e imagens `assets`. Permite tema, retrato, token e ícones de Items/Activities existentes, por nome e tipo, sem alteração mecânica. Tokens vinculados que usam a textura anterior do protótipo podem ser atualizados. Nomes ambíguos bloqueiam a importação; ausentes são relatados. Exige prévia e confirmação, tenta reverter falhas, não fornece desfazer posterior pelo histórico. Não realiza downloads automáticos.

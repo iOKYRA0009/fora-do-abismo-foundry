@@ -1,3 +1,4 @@
+import { planVisualUpdate, applyVisualUpdate } from "./visual-update.js";
 import { preparePackageIntegrations, resolveImportedCombos, verifyImportedBindings } from "../importer/package-integrations.js";
 import { registerImportedCombos, removeImportedCombos } from "../synergy/synergy-engine.js";
 import { rejectJsonAsScript } from "./source-format.js";
@@ -350,6 +351,23 @@ export function previewJarvisExecution(source, { mode = "auto", files = [] } = {
   if (pkg?.actor && pkg.schemaVersion !== EXECUTOR_VERSION) throw new Error("Ficha JSON V9: use Personagens → Importar ficha Jarvis V9, não uma macro.");
   if (!object(pkg) || pkg.schemaVersion !== EXECUTOR_VERSION) {
     throw new Error(`Jarvis Executor: schemaVersion deve ser '${EXECUTOR_VERSION}'.`);
+  }
+  if (Object.hasOwn(pkg,"visualUpdate")) {
+    if(Object.keys(pkg).some(key=>!["schemaVersion","name","visualUpdate","assets"].includes(key)))throw new Error("Atualização visual não pode ser combinada com criação de documentos ou outros campos.");
+    const visual=planVisualUpdate(pkg.visualUpdate,game.actors,game.scenes);
+    const assets=list(pkg.assets,"assets",40);
+    const images=availableAssets(assets,files);
+    const known=new Set(assets.map(a=>a.id));
+    if(assets.some(a=>["__proto__","constructor","prototype"].includes(a.id)))throw new Error("ID de imagem reservado.");
+    for(const id of findRefs(pkg.visualUpdate))if(!known.has(id))throw new Error("Imagem não declarada: "+id);
+    const plan={kind:"package",data:pkg,files:Array.from(files),review:{
+      kind:"package",name:String(pkg.name??"Atualização visual"),actors:[],scenes:[],itemAdditions:[],images,visualUpdate:visual.summary,
+      warnings:visual.summary.missing.length?["Itens/Activities ausentes serão preservados: "+visual.summary.missing.join(", ")]:[],
+      warning:"Atualiza apenas imagens e tema da ficha existente. Não cria personagem nem altera recursos. Tenta reverter alterações visuais se falhar. Não oferece reversão posterior pelo histórico.",
+      requiresConfirmation:true,rollbackAvailable:false,errors:[],counts:{images:images.length}
+    }};
+    planSnapshots.set(plan,{kind:"package",data:JSON.stringify(pkg),files:plan.files.slice(),visualSignature:visual.signature});
+    return plan;
   }
   for (const key of Object.keys(pkg)) {
     if (/(visage|metamorph|appearance|transformation)/i.test(key)
@@ -747,6 +765,24 @@ export async function runJarvisExecution(plan, api) {
         await modifyHistory(executionId, { status: "failed", finishedAt: Date.now(),
           message: `Macro JavaScript: ${String(cause.message ?? cause).slice(0, 250)}` });
         throw new Error(`Jarvis Executor: macro JavaScript falhou: ${cause.message ?? cause}`, { cause });
+      }
+    }
+    if(Object.hasOwn(plan.data,"visualUpdate")){
+      const payload=plan.data;
+      const checked=planVisualUpdate(payload.visualUpdate,game.actors,game.scenes);
+      if(checked.signature!==snapshot.visualSignature)throw new Error("Ficha visual mudou após a prévia; valide novamente.");
+      await writeHistory(entries=>[{id:executionId,at:Date.now(),kind:"visual-update",name:String(payload.name??"Atualização visual"),status:"running"},...entries]);
+      let images={};
+      try{
+        images=await uploadAssets(payload.assets??[],plan.files);
+        const current=planVisualUpdate(payload.visualUpdate,game.actors,game.scenes);
+        if(current.signature!==checked.signature)throw new Error("Ficha mudou durante o envio das imagens; valide novamente.");
+        const visualUpdate=await applyVisualUpdate(current,images);
+        await modifyHistory(executionId,{status:"success",images,finishedAt:Date.now(),message:"Atualização visual concluída."});
+        return {kind:"package",executionId,name:payload.name,visualUpdate,images,actors:[],scenes:[],itemAdditions:[],rollbackAvailable:false};
+      }catch(error){
+        await modifyHistory(executionId,{status:"failed",images:{...images,...(error.uploadedImages??{})},finishedAt:Date.now(),message:String(error.message).slice(0,500)});
+        throw error;
       }
     }
     if ((plan.data.actors?.length && typeof api?.importer?.importActor !== "function")
