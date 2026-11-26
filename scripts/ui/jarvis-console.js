@@ -1,3 +1,4 @@
+import { renderSynergyControls, executeSynergyConsoleAction } from "../synergy/synergy-ui.js";
 import { getJarvisAccess, visibleJarvisTabs, assertJarvisAccess } from "./jarvis-console-core.js";
 import { searchConsole, searchCompendiumPack } from "./console-search.js";
 import {
@@ -907,6 +908,7 @@ function renderContent() {
   const charactersPage = panel("characters", `
     <h2>Personagens</h2><p>Fichas, NPCs e habilidades.</p>
     <div class="jarvis-console-row">${button("actor-open", "Abrir ficha")}${button("actor-provenance", "Analisar origem")}${button("actor-rules", "Perfil de regras")}${button("actor-jack", "Estado de Jack")}</div>
+    ${renderSynergyControls(actors, gm)}
     ${advanced("Criar, importar e manter fichas", characters)}
     ${advanced("Área dos jogadores", players)}
   `);
@@ -1044,6 +1046,7 @@ function templateSpec(root) {
 
 export async function executeJarvisConsoleAction(action, root, state = {}) {
   const jarvis = api();
+  if (action.startsWith("synergy-")) return setOutput(root, "Sinergias Jarvis", await executeSynergyConsoleAction(action, root, () => selectedActor(root).id, confirmAction));
   if (action === "clear-output") return clearOutput(root);
   if (action === "pack-focus") return selectTab(root, "library");
   if (["v91-new-package", "v91-add-action", "v91-add-scenario"].includes(action)) {
