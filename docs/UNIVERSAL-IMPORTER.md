@@ -99,3 +99,37 @@ Campos de ficha: Nome/Personagem/Ficha, Tipo, PV (atual/máximo, ou valor único
 Cada Habilidade inicia um bloco; Tipo (Ataque, Salvaguarda, Teste, Dano, Cura, Teleporte, Utilidade) e Custo (ação, ação bônus, reação) são obrigatórios. Campos dependem do tipo: Dano (fórmula e tipo), Acerto (bônus fixo), Atributo, CD, Salvaguarda/Teste (atributo e CD), Sucesso (metade/nenhum/total, obrigatório quando salvaguarda causa dano), Cura (fórmula), Distância (inteiro com m ou ft), Alcance (corpo a corpo/a distância), Classificação (arma/magia/desarmado), Rolagem, Descrição. Usos (inteiro positivo) e Recuperação (descanso curto/longo ou amanhecer) são opcionais. Descrições e biografias de uma linha são escapadas como texto. Não há inferência de classe, equipamento, progressão, sinergias, condições ou efeitos. Campos desconhecidos, duplicados e incompatíveis são recusados; máximo 100 habilidades, 5000 linhas e limite geral de 2 MB. Personagens jogadores podem ter PV máximo e CA recalculados pelo D&D5e.
 
 ZIP/.jarvis e prosa livre continuam fora do escopo. YAML, XML, CSV, JSON e Executor mantêm os fluxos anteriores. Exemplos não são personagens canônicos. Teste real no Foundry ainda necessário.
+
+## Pacotes .jarvis / ZIP (1.7.3)
+
+Um pacote é um ZIP padrão com extensão .jarvis ou .zip, contendo manifest.json na raiz. Compactação armazenada ou DEFLATE. Não é um arquivo executável. Exemplo de estrutura:
+
+```text
+manifest.json
+personagem.json
+habilidades.json
+aparencia.json
+images/retrato.png
+images/token.webp
+images/marca.png
+```
+
+```json
+{
+  "schemaVersion": "jarvis-character-1",
+  "character": "personagem.json",
+  "items": "habilidades.json",
+  "appearance": "aparencia.json",
+  "assets": [
+    {"id":"portrait","path":"images/retrato.png"},
+    {"id":"token","path":"images/token.webp"},
+    {"id":"watermark","path":"images/marca.png"}
+  ]
+}
+```
+
+personagem.json contém um pacote V9.0 ou V9.1 de um novo personagem (NPC ou character). O Executor exige seis atributos, PV atual/máximo e CA válidos. Use actor.img = "asset://portrait" e actor.prototypeToken.texture.src = "asset://token"; use referências asset://ID também em ícones de Items e Activities. habilidades.json é opcional, contém lista de Items V9 anexada à lista existente. aparencia.json é opcional e contém o objeto sheetAppearance (não o duplique na ficha). Exemplo: {"image":"asset://watermark","opacity":0.10,"size":65,"palette":{"paper":"#f8f6ef","text":"#30323a","title":"#806126","divider":"#b0b4bd"}}. O fundo é aplicado apenas em fichas character suportadas; imagem PNG/JPG/WebP. Pode usar caminho local já existente, sem asset. Os arquivos de imagem são encaminhados em memória, sem base64 no editor.
+
+Central → Personagens → Importador Universal → selecione o arquivo → Detectar formato ou Preparar importação. O pacote é validado pelo Executor antes de encaminhar. No Executor, confira os anexos, clique Validar e visualizar, e confirme a execução. Não sobrescreve personagens existentes; a execução cria um novo Actor. Os arquivos enviados podem permanecer no armazenamento mesmo após reversão. Nenhum backup/download automático. Não há exportador .jarvis nesta fase.
+
+Limites: 56 MiB compactados, 50 MiB descomprimidos, até 80 entradas, JSON individual até 2 MiB, imagens até 8 MiB cada e 48 MiB no total (40 imagens), 100 Items. ZIP64, multidisco, criptografia, caminhos inseguros, links, arquivos não declarados, scripts, flags externas e chaves de automação executável são recusados. Descompressão depende de DecompressionStream deflate-raw; se indisponível use ZIP armazenado. CRC é integridade, não assinatura de confiança. O Executor verifica bytes e tenta decodificar imagens antes de upload. O pacote não é sandbox de módulos externos; use fontes confiáveis. Sinergias, automações, integração de perfis e exportação estão fora desta fase. Teste real do Foundry continua necessário.
