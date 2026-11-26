@@ -46,6 +46,7 @@ export function parseStructuredCharacterText(source){
   function finish(){
     if(!active)return;
     if(!active.kind||!active.activation)fail(activeLine,"Habilidade exige Tipo e Custo explícitos.");
+    if((local.has("rollKind:save")&&active.kind!=="save")||(local.has("rollKind:check")&&active.kind!=="check"))fail(activeLine,"Tipo de habilidade incompatível com a rolagem declarada.");
     const permitted={
       attack:["ability","toHit","range","classification","damage"],save:["ability","dc","damage","onSave"],
       check:["ability","dc"],damage:["damage"],heal:["healing"],teleport:["distance","units"],utility:["roll"]
