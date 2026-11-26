@@ -1,3 +1,5 @@
+import { registerSynergyTracking, synergyCommand } from "./synergy/synergy-engine.js";
+import { registerSynergySheetControls, openSynergyPicker } from "./synergy/synergy-ui.js";
 import { JarvisImporterV9 } from "./importer/v9/jarvis-importer-v9.js";
 import { registerTranslationSettings } from "./translation/compendium-language.js";
 import { registerSheetAppearance } from "./ui/sheet-appearance.js";
@@ -132,6 +134,8 @@ Hooks.once("init", runtimeCapture.guard("initialization", "init", () => {
   registerProgressionEngine();
   registerSceneAssetLedger();
   registerManagedMacros();
+  registerSynergyTracking();
+  registerSynergySheetControls();
 }));
 
 Hooks.once("ready", runtimeCapture.guard("initialization", "ready", () => {
@@ -158,6 +162,7 @@ Hooks.once("ready", runtimeCapture.guard("initialization", "ready", () => {
 
   const api = {
     ui: { open: openJarvisConsole },
+    synergy: { command: synergyCommand, open: openSynergyPicker },
     importer: new JarvisImporterV9(),
     executor: {
       version: EXECUTOR_VERSION,

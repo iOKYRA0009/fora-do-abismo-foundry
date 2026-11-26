@@ -1,3 +1,4 @@
+import { rejectJsonAsScript } from "./source-format.js";
 import { validateJarvisActorPayload } from "../importer/validators/payload-validator.js";
 import { validateSceneBlueprint } from "../scenes/scene-blueprint-validator.js";
 import { inspectExecutorSceneGeometry } from "../scenes/package/executor-scene-geometry.js";
@@ -254,7 +255,16 @@ function parseSource(text, mode) {
   const source = text.trim();
   const type = mode === "javascript" ? "javascript"
     : mode === "package" ? "package" : /^[{[]/.test(source) ? "package" : "javascript";
-  if (type === "javascript") return { kind: "javascript", source };
+  if (type === "javascript") {
+    rejectJsonAsScript(source);
+    try {
+      const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
+      new AsyncFunction("jarvis", "game", "canvas", "ui", source);
+    } catch (error) {
+      throw new Error("Jarvis Executor: JavaScript inválido na prévia. " + error.message);
+    }
+    return { kind: "javascript", source };
+  }
   let data;
   try { data = JSON.parse(source); }
   catch (error) { throw new Error(`Jarvis Executor: JSON inválido. ${error.message}`); }
@@ -323,6 +333,7 @@ export function previewJarvisExecution(source, { mode = "auto", files = [] } = {
     return plan;
   }
   const pkg = parsed.data;
+  if (pkg?.actor && pkg.schemaVersion !== EXECUTOR_VERSION) throw new Error("Ficha JSON V9: use Personagens → Importar ficha Jarvis V9, não uma macro.");
   if (!object(pkg) || pkg.schemaVersion !== EXECUTOR_VERSION) {
     throw new Error(`Jarvis Executor: schemaVersion deve ser '${EXECUTOR_VERSION}'.`);
   }

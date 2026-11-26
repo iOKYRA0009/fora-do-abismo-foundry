@@ -394,3 +394,13 @@ test("manual rollback preserves a created document changed after import", async 
   assert.match(rollback.skipped[0], /foi alterado/);
   assert.equal(registry.actors.length, 1);
 });
+
+
+test("JSON in JavaScript mode is rejected before execution and points to the proper importer", () => {
+  setup();
+  assert.throws(() => previewJarvisExecution(JSON.stringify({schemaVersion:"9.1",actor:{name:"Orgulho",type:"character"}}),{mode:"javascript"}), /Personagens.*Importar ficha/);
+  assert.throws(() => previewJarvisExecution(JSON.stringify(packageData()),{mode:"javascript"}), /Pacote Jarvis JSON/);
+  assert.throws(() => previewJarvisExecution(JSON.stringify({schemaVersion:"9.1",actor:{name:"Orgulho"}})), /Importar ficha/);
+  assert.throws(() => previewJarvisExecution("return (", {mode:"javascript"}), /JavaScript inválido na prévia/);
+  assert.equal(previewJarvisExecution("const obj = {a:1}; return obj.a;", {mode:"javascript"}).kind,"javascript");
+});
