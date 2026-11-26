@@ -159,3 +159,36 @@ test("missing native activity is distinguished from unavailable actions",async()
   s.pride.items.delete("spell");const audit=await s.command({action:"audit"});
   assert.equal(audit.broken,1);assert.equal(audit.combos[0].issues[0].code,"missing-activity");assert.equal(s.writes(),before);
 });
+
+test("imported combos are private, batch registered, and rollback preserves edited definitions",async()=>{
+  const {registerImportedCombos,removeImportedCombos}=await import("../scripts/synergy/synergy-engine.js");
+  const s=setup();await s.start();
+  const before=s.writes();
+  const ids=await registerImportedCombos("run1",[{...s.combo,name:"Importado"},{...s.combo,name:"Outro"}]);
+  assert.equal(ids.length,2);assert.equal(s.writes(),before+1);
+  const all=await s.command({action:"all"});assert.equal(all.length,3);
+  assert.equal(all.find(c=>c.id===ids[0]).visibility,"gm");
+  assert.equal((await s.command({action:"list",actorId:"pride"},s.p)).length,1);
+  await s.command({action:"save",combo:{...all.find(c=>c.id===ids[0]),name:"Editado"}});
+  const result=await removeImportedCombos("run1");
+  assert.deepEqual(result,{removed:[ids[1]],skipped:[ids[0]]});
+  assert.equal((await s.status("pride")).action,1);
+  assert.equal((await s.command({action:"all"})).length,2);
+});
+test("an invalid imported participant aborts the entire batch",async()=>{
+  const {registerImportedCombos}=await import("../scripts/synergy/synergy-engine.js");
+  const s=setup();await s.start();const before=s.writes();
+  await assert.rejects(registerImportedCombos("run2",[s.combo,{...s.combo,participants:[{actorId:"pride",cost:"action"},{actorId:"missing",cost:"reaction"}]}]),/não encontrado/);
+  assert.equal(s.writes(),before);assert.equal((await s.command({action:"all"})).length,1);
+});
+
+test("Executor imports new actor, registers private combo, and rolls back only new documents",async()=>{
+  const {previewJarvisExecution,runJarvisExecution,rollbackJarvisExecution}=await import("../scripts/macros/macro-executor.js");
+  const s=setup();await s.start();game.scenes=new Map();
+  const pkg={schemaVersion:"jarvis-executor-1",actors:[{schemaVersion:"9.0",actor:{name:"Novo",type:"npc",jarvis:{abilities:{str:10,dex:10,con:10,int:10,wis:10,cha:10},hp:{value:10,max:10},ac:10}}}],synergyCombos:[{name:"Nova aliança",initiator:"Novo",participants:[{actor:"Novo",cost:"action"},{actor:"Ira",cost:"reaction"}]}]};
+  const plan=previewJarvisExecution(JSON.stringify(pkg));assert.equal(plan.review.synergyCombos.length,1);
+  const result=await runJarvisExecution(plan,{importer:{async importActor(payload){const a={...payload.actor,id:"newactor",items:new Map(),async delete(){game.actors.delete(this.id);}};game.actors.set(a.id,a);return a;}}});
+  assert.equal(result.synergyCombos,1);assert.equal((await s.command({action:"all"})).length,2);
+  const rollback=await rollbackJarvisExecution(result.executionId);assert.equal(rollback.ok,true);assert.equal(rollback.removed.combos.length,1);assert.equal(game.actors.has("newactor"),false);assert.equal(game.actors.has("wrath"),true);
+  assert.equal((await s.command({action:"all"})).length,1);
+});

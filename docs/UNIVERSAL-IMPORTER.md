@@ -133,3 +133,53 @@ personagem.json contém um pacote V9.0 ou V9.1 de um novo personagem (NPC ou cha
 Central → Personagens → Importador Universal → selecione o arquivo → Detectar formato ou Preparar importação. O pacote é validado pelo Executor antes de encaminhar. No Executor, confira os anexos, clique Validar e visualizar, e confirme a execução. Não sobrescreve personagens existentes; a execução cria um novo Actor. Os arquivos enviados podem permanecer no armazenamento mesmo após reversão. Nenhum backup/download automático. Não há exportador .jarvis nesta fase.
 
 Limites: 56 MiB compactados, 50 MiB descomprimidos, até 80 entradas, JSON individual até 2 MiB, imagens até 8 MiB cada e 48 MiB no total (40 imagens), 100 Items. ZIP64, multidisco, criptografia, caminhos inseguros, links, arquivos não declarados, scripts, flags externas e chaves de automação executável são recusados. Descompressão depende de DecompressionStream deflate-raw; se indisponível use ZIP armazenado. CRC é integridade, não assinatura de confiança. O Executor verifica bytes e tenta decodificar imagens antes de upload. O pacote não é sandbox de módulos externos; use fontes confiáveis. Sinergias, automações, integração de perfis e exportação estão fora desta fase. Teste real do Foundry continua necessário.
+
+
+## Sinergias e efeitos declarativos (1.8.0)
+
+A versão 1.8.0 encerra o roteiro inicial do Universal Importer. Os pacotes .jarvis podem declarar dois novos arquivos opcionais em manifest.json:
+
+```json
+{
+  "schemaVersion": "jarvis-character-1",
+  "character": "personagem.json",
+  "synergies": "sinergias.json",
+  "effectBindings": "efeitos.json"
+}
+```
+
+### Sinergias
+
+sinergias.json contém uma lista de até 40 definições, por exemplo (nomes ilustrativos):
+
+```json
+[
+  {
+    "name": "Decreto da Ruína",
+    "initiator": "Orgulho",
+    "participants": [
+      {"actor": "Orgulho", "cost": "action"},
+      {"actor": "Ira", "cost": "reaction"}
+    ],
+    "maxDistance": 9
+  }
+]
+```
+
+O iniciador deve ser criado pelo pacote. Os demais participantes devem ser criados pelo pacote ou existir no mundo com nome único. Custos: action, bonus, reaction, free. Cada participante pode indicar offTurn (booleano) e requiredStatus (ID de condição). O alcance usa unidades da cena. É possível indicar activity: {"item":"Nome do Item","activity":"Nome da Activity"} do iniciador, ou omitir para resolução manual. Opcional description é texto privado do Mestre. Não importe o mesmo nome em dois participantes. IDs reais são resolvidos após criação e participantes existentes são conferidos novamente. Nenhuma ação é consumida e nenhum combo é disparado durante a importação. Todos são privados do Mestre; disponibilize aos jogadores pelo editor somente quando apropriado.
+
+### Efeitos declarativos
+
+efeitos.json contém uma lista de até 40 vínculos, por exemplo:
+
+```json
+[
+  {"actor":"Orgulho","item":"Proteção","activity":"Invocar","effectId":"effect0000000001"}
+]
+```
+
+O Item da ficha nova precisa conter o Active Effect com esse _id de 16 caracteres, transfer:false, e uma Activity semântica utility com _id de 16 caracteres e sem vínculos nativos de efeitos. O Jarvis configura o Effect Engine para aplicar/substituir esse efeito no próprio usuário ao utilizar a Activity. Vínculo duplicado, Activity de ataque, efeito ausente e automação pré-existente são recusados. A persistência do vínculo é verificada após a criação. Se o efeito for removido posteriormente, não há fallback silencioso para outro. Não há JavaScript, efeitos de alvo externo, condições arbitrárias, macros ou importação de automações executáveis.
+
+### Revisão e reversão
+
+A prévia do Executor mostra participantes/custos e vínculos de efeito. Após confirmação, importa ficha e recursos, verifica os vínculos e registra sinergias em armazenamento privado do Mestre. Reversão remove apenas combos registrados por aquela execução e ainda não editados. Se uma definição importada tiver sido editada ou não puder ser acessada, a reversão manual preserva as fichas para revisão. Arquivos de imagem enviados permanecem no armazenamento. Não são criados downloads automáticos. Os mesmos campos estruturados (synergyCombos e effectBindings) podem ser usados no JSON jarvis-executor-1. Limite global de 100 combos no mundo. O editor Conditional Engine genérico, exportação .jarvis e teste real multi-cliente continuam fora deste roteiro. As versões 1.7.x anteriores mantêm compatibilidade.

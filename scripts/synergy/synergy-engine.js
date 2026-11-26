@@ -373,3 +373,34 @@ export function registerSynergyTracking() {
     });
   });
 }
+
+/** Executor-only batch registration. No changes to combat ledgers or existing combos. */
+export function registerImportedCombos(executionId,combos) {
+  return serial(async()=>{
+    gm();
+    if(!safeId(executionId)||!Array.isArray(combos)||combos.length>40)throw new Error("Lote de combos inválido.");
+    if(!combos.length)return [];
+    const {doc,data}=load();
+    if(data.combos.length+combos.length>100)throw new Error("Limite de 100 combos.");
+    const added=combos.map((raw,i)=>{
+      const combo=normalizeCombo({...raw,id:"imp_"+executionId+"_"+i,visibility:"gm"});
+      if(data.combos.some(c=>c.id===combo.id))throw new Error("ID de combo já registrado.");
+      for(const p of combo.participants)if(!game.actors.get(p.actorId))throw new Error("Participante não encontrado.");
+      if(combo.activity)nativeActivity(game.actors.get(combo.initiatorId),combo.activity);
+      return {...combo,importExecutionId:executionId};
+    });
+    data.combos.push(...added);
+    await save(doc,data);
+    return added.map(c=>c.id);
+  });
+}
+export function removeImportedCombos(executionId) {
+  return serial(async()=>{
+    gm();if(!safeId(executionId))throw new Error("ID de execução inválido.");
+    const {doc,data}=load(),prefix="imp_"+executionId+"_";
+    const removed=data.combos.filter(c=>c.id.startsWith(prefix)&&c.importExecutionId===executionId).map(c=>c.id);
+    const skipped=data.combos.filter(c=>c.id.startsWith(prefix)&&c.importExecutionId!==executionId).map(c=>c.id);
+    if(removed.length){data.combos=data.combos.filter(c=>!removed.includes(c.id));await save(doc,data);}
+    return {removed,skipped};
+  });
+}

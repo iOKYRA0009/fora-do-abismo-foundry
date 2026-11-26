@@ -29,7 +29,7 @@ function refs(value,out=new Set()){
 export async function prepareJarvisArchive(file,{makeFile=(bytes,name,mime)=>new File([bytes],name,{type:mime,lastModified:0})}={}){
   const entries=await readJarvisZip(file),used=new Set();
   const manifest=readJson(entries,"manifest.json",used);
-  only(manifest,["schemaVersion","character","items","appearance","assets"],"manifest.json");
+  only(manifest,["schemaVersion","character","items","appearance","assets","synergies","effectBindings"],"manifest.json");
   if(manifest.schemaVersion!=="jarvis-character-1")fail("schemaVersion deve ser jarvis-character-1.");
   const input=readJson(entries,manifest.character,used);
   if(!object(input)||!["9.0","9.1"].includes(input.schemaVersion)||!object(input.actor)||!["character","npc"].includes(input.actor.type))fail("Use uma ficha Jarvis V9/V9.1 de NPC ou personagem.");
@@ -66,13 +66,16 @@ export async function prepareJarvisArchive(file,{makeFile=(bytes,name,mime)=>new
     assets.push({id:a.id,fileName,mimeType:mime});
     files.push(makeFile(bytes,fileName,mime));ids.add(a.id.toLowerCase());used.add(a.path);
   }
+  const synergyCombos=manifest.synergies===undefined?[]:readJson(entries,manifest.synergies,used);
+  const effectBindings=manifest.effectBindings===undefined?[]:readJson(entries,manifest.effectBindings,used);
+  if(!Array.isArray(synergyCombos)||!Array.isArray(effectBindings))fail("Sinergias e vínculos de efeitos devem ser listas.");
   for(const path of entries.keys())if(!used.has(path))fail("Arquivo não declarado: "+path+". Remova arquivos extras e scripts.");
   if(watermark&&!assets.some(a=>a.id===watermark.slice(8)&&a.mimeType!=="image/gif"))fail("Marca-d\u0027água requer imagem PNG/JPG/WebP declarada.");
   const known=new Set(assets.map(a=>a.id));
   for(const id of refs(actor))if(!known.has(id))fail("Referência sem imagem declarada: asset://"+id);
-  const data={schemaVersion:"jarvis-executor-1",name:actor.actor.name,actors:[actor],assets};
+  const data={schemaVersion:"jarvis-executor-1",name:actor.actor.name,actors:[actor],assets,...(synergyCombos.length?{synergyCombos}:{}),...(effectBindings.length?{effectBindings}:{})};
   const source=JSON.stringify(data,null,2);if(source.length>12*1024*1024)fail("Pacote JSON convertido acima de 12 MB.");
   return {format:"jarvis-archive",route:"executor-package",supported:true,source,data,files,
-    warnings:["Importação de personagem novo pelo Executor. Arquivos de imagem só serão enviados após confirmação; uploads não têm reversão automática.","Sem scripts, flags externas, sinergias ou automações nesta fase. Tema e marca-d'água seguem as regras de aparência da ficha de personagem."],
+    warnings:["Importação de personagem novo pelo Executor. Arquivos de imagem só serão enviados após confirmação; uploads não têm reversão automática.","Sem scripts ou flags externas. Sinergias são privadas do Mestre; vínculos de efeitos são declarativos. Tema e marca-d'água seguem as regras de aparência da ficha de personagem."],
     message:"Pacote lido em memória: "+actor.actor.name+", "+(actor.items??[]).length+" Items, "+files.length+" imagens."};
 }

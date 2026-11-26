@@ -62,3 +62,18 @@ test("reject unknown manifest keys and invalid watermark type",async()=>{
   const e=entries(m);e[e.length-1]=["images/marca.gif",png];
   await assert.rejects(prepareJarvisArchive(file(zip(e)),{makeFile}),/Marca-d/);
 });
+
+test("archive optional synergy and declarative effect files reach Executor review",async()=>{
+  const m={...manifest,synergies:"sinergias.json",effectBindings:"efeitos.json"};
+  const e=entries(m);
+  e.push(["sinergias.json",json([{name:"Aliança",initiator:"Orgulho",participants:[{actor:"Orgulho",cost:"action"},{actor:"Ira",cost:"reaction"}]}])]);
+  e.push(["efeitos.json",json([])]);
+  const result=await prepareJarvisArchive(file(zip(e)),{makeFile});
+  assert.equal(result.data.synergyCombos.length,1);
+  globalThis.game={user:{id:"gm",isGM:true},users:{activeGM:{id:"gm"}},actors:{contents:[{id:"ira",name:"Ira"}]},scenes:{contents:[]}};
+  globalThis.foundry={utils:{randomID:()=>"abcdefghijklmno1"}};
+  globalThis.canvas={scene:null};
+  const plan=previewJarvisExecution(result.source,{mode:"package",files:result.files});
+  assert.equal(plan.review.synergyCombos[0].participants[1].existingId,"ira");
+  assert.equal(plan.review.synergyCombos[0].visibility,"gm");
+});

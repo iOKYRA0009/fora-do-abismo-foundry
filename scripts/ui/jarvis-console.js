@@ -621,6 +621,8 @@ function renderExecutorPreview(root, state) {
     ${additions.length ? `<h4>Itens em fichas</h4><ul>${additions.map(row => `<li>${escapeHtml(row.actor)} · ${Number(row.items ?? 0)} item(ns)</li>`).join("")}</ul>` : ""}
     ${appearanceProfiles.length ? `<h4>Perfis Visage</h4><p class="jarvis-console-hint">Serão registrados nos personagens novos, sem aplicar a aparência aos Tokens.</p><ul>${appearanceRows}</ul>${appearanceProfiles.length > 8 ? `<p class="jarvis-console-hint">Mais ${appearanceProfiles.length - 8} perfil(is) Visage no pacote.</p>` : ""}` : ""}
     ${transformationProfiles.length ? `<h4>Perfis Metamorph</h4><p class="jarvis-console-hint">Serão registrados nos personagens novos, sem transformar Tokens.</p><ul>${transformationRows}</ul>${transformationProfiles.length > 8 ? `<p class="jarvis-console-hint">Mais ${transformationProfiles.length - 8} perfil(is) Metamorph no pacote.</p>` : ""}` : ""}
+    ${(review.synergyCombos??[]).length ? `<h4>Sinergias privadas</h4><ul>${review.synergyCombos.map(c=>`<li>${escapeHtml(c.name)} · ${escapeHtml(c.participants.map(p=>p.actor+": "+p.cost).join(" / "))}</li>`).join("")}</ul>` : ""}
+    ${(review.effectBindings??[]).length ? `<h4>Efeitos declarativos (próprio usuário)</h4><ul>${review.effectBindings.map(b=>`<li>${escapeHtml(b.actor+" / "+b.item+" / "+b.activity+" → "+b.effectId)}</li>`).join("")}</ul>` : ""}
     ${images.length ? `<h4>Imagens</h4><ul class="jarvis-executor-images">${imageRows}</ul>${images.length > 8 ? `<p class="jarvis-console-hint">Mais ${images.length - 8} imagem(ns) no pacote.</p>` : ""}` : ""}
     ${issues}`;
   for (const viewport of host.querySelectorAll?.("[data-jarvis-map-viewport]") ?? []) {
