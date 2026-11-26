@@ -28,3 +28,5 @@ test("description is escaped; free text and other languages do not become charac
 test("personagem player type warns about calculated HP and AC",()=>{
   const r=convert("Personagem: Exemplo\nTipo: Personagem\nPV: 20\nCA: 15\nFOR: 16","a.txt");assert.equal(r.data.actor.type,"character");assert.ok(r.warnings.some(w=>w.includes("recalculados")));
 });
+
+test("a check cannot silently turn an explicit saving throw into an ability check",()=>{assert.throws(()=>convert("Nome: Ira\nTipo: NPC\nHabilidade: Golpe\nTipo: Teste\nCusto: ação\nSalvaguarda: Sabedoria CD 19"),/incompatível/);});
