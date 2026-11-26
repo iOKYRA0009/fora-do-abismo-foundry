@@ -92,6 +92,7 @@ function validateRequest(data,combo,user) {
     const c=participant(combat,p.actorId);
     if(!user.isGM && hidden(c)) throw new Error("Um participante não está disponível.");
     if(incapacitated(c)) throw new Error("Um participante está incapacitado ou derrotado.");
+    if(p.requiredStatus && !c.actor.statuses?.has?.(p.requiredStatus)) throw new Error("Condição obrigatória de um participante não satisfeita.");
     if(!withinRange(combat,first,c,combo.maxDistance)) throw new Error("Um participante está fora do alcance.");
     return {...p,c};
   });
@@ -194,7 +195,10 @@ async function runCombo(user,args) {
   const previous=copy(ledgerOf(fresh.data,context.clock));
   replaceLedger(fresh.data,context.planned);
   await save(fresh.doc,fresh.data);
-  if(!combo.activity) return privateResult(user,combo,"committed");
+  if(!combo.activity) {
+    ui.notifications?.info("Synergy: custos de "+combo.name+" registrados. Resolva os efeitos manualmente.");
+    return privateResult(user,combo,"committed");
+  }
   // External activity effects cannot be rolled back safely on an exception.
   // Keep the ledger explicit rather than replaying an attack or damaging twice.
   try {
@@ -238,6 +242,7 @@ async function nativeRecord(user,args) {
   if(!ledger) return {skipped:true};
   if(clockKey(clock)!==args.clock) throw new Error("Turno mudou antes do registro da atividade; confira a economia.");
   if(!safeId(args.actorId)||!safeId(args.itemId)||!safeId(args.activityId)||!safeId(args.messageId)) throw new Error("Registro de atividade inválido.");
+  if(!values(combat.turns).some(c=>c.actorId===args.actorId||c.actor?.id===args.actorId)) return {skipped:true};
   const c=participant(combat,args.actorId);
   if(!owner(c.actor,user)) throw new Error("Usuário não controla a atividade.");
   const message=game.messages?.get?.(args.messageId);
@@ -304,7 +309,7 @@ export async function synergyCommand(args) {
 }
 export function registerSynergyTracking() {
   Hooks.on("dnd5e.postUseActivity",(activity,usage,results)=>{
-    if(!game.combat?.started || activityKey(activity)===suppressedActivity || !["action","bonus","reaction"].includes(activity?.activation?.type)) return;
+    if(!game.combat?.started || (!game.user?.isGM && !remoteSocket) || activityKey(activity)===suppressedActivity || !["action","bonus","reaction"].includes(activity?.activation?.type)) return;
     const actor=activity?.item?.actor??activity?.actor;
     if(!owner(actor,game.user) || !results?.message?.id) return;
     let clock;try {clock=clockKey(combatClock(game.combat));} catch {return;}
