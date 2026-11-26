@@ -49,3 +49,21 @@ test("audit reports potential duplicate pairs without changing existing items",(
  const before=structuredClone(actor);
  const r=auditActorDuplicates(actor);assert.equal(r.readOnly,true);assert.equal(r.pairs.length,1);assert.deepEqual(actor,before);
 });
+
+test("Foundry V14 projection must not request system.source and its child rules together",async()=>{
+ const defaults=["name","type","system.identifier","system.container","system.source"];
+ let calls=0;
+ const checked={...pack,getIndex:async({fields})=>{
+   calls++;
+   const all=[...new Set([...defaults,...fields])];
+   for(const parent of all)for(const child of all)if(child.startsWith(parent+"."))throw TypeError("Cannot use 'in' operator to search for 'rules' in 1");
+   assert.ok(all.includes("system.source"));
+   return [{_id:"abc",name:"Mage Armor",type:"spell",system:{identifier:"mage-armor",source:{rules:"2024"}}}];
+ }};
+ const source={name:"Mage Armor",type:"spell",jarvis:{provenance:{kind:"official-system",rules:"2024"}}};
+ const r=await resolveSmartCompendiums([source],{packs:[checked]});
+ assert.equal(calls,1);assert.deepEqual(r.indexErrors,[]);assert.equal(r.report[0].status,"rehydrated");
+ const legacy={...source,jarvis:{provenance:{kind:"official-system",rules:"2014"}}};
+ const l=await resolveSmartCompendiums([legacy],{packs:[checked]});
+ assert.equal(l.report[0].status,"unresolved");assert.deepEqual(l.items[0],legacy);
+});

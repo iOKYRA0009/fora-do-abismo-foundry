@@ -354,3 +354,7 @@ Importa ZIP/.jarvis com manifesto, ficha, Items, aparência e imagens anexadas p
 ### Universal Importer 1.8.0 — integração final
 
 Pacotes .jarvis e Executor JSON com sinergias privadas e vínculos de efeitos declarativos no próprio usuário. [Guia de integração e limites](docs/UNIVERSAL-IMPORTER.md#sinergias-e-efeitos-declarativos-180).
+
+### Correção 1.8.1
+
+Corrige conflito de projeção do Smart Compendium no Foundry V14: D&D5e indexa `system.source` por padrão, e o Jarvis não deve solicitar também `system.source.rules`. A edição continua sendo lida no objeto `system.source`. A correção não altera fichas, recursos ou formatos dos pacotes.
