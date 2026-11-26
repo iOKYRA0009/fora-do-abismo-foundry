@@ -1,3 +1,4 @@
+import { normalizeSheetAppearance } from "../../ui/sheet-appearance.js";
 import { applyActorResources } from "../resources/resource-engine.js";
 import { privateActivityDescription, sharedItemDescription } from "../v9/activity-chat-privacy.js";
 
@@ -568,6 +569,10 @@ export class Dnd5eV6Adapter {
     data.flags["fora-do-abismo-foundry"].adapter = this.id;
     data.flags["fora-do-abismo-foundry"].systemVersion = game.system?.version ?? null;
     data.flags["fora-do-abismo-foundry"].semanticSource = Boolean(actorData.jarvis);
+    const appearance = actorData.jarvis?.sheetAppearance ?? actorData.flags?.["fora-do-abismo-foundry"]?.sheetAppearance;
+    if (appearance !== undefined) {
+      data.flags["fora-do-abismo-foundry"].sheetAppearance = normalizeSheetAppearance(appearance);
+    }
     return data;
   }
 
