@@ -1,3 +1,4 @@
+import { prepareSelectiveSync, selectiveActorPatch, syncReviewRevision } from "./selective-sync.js";
 import { validateJarvisActorPayload } from "../validators/payload-validator.js";
 import { compileActorBlueprintV91 } from "./blueprint-v91.js";
 import { inspectActorMechanics, restoreMissingActivities, verifyPersistedActivities } from "./mechanics-review.js";
@@ -64,10 +65,11 @@ export class JarvisImporterV9 {
     return reviewItemImport(items, actor);
   }
 
-  previewActorSync(actor, source) {
+  previewActorSync(actor, source, { selection = null } = {}) {
     Dnd5eV6Adapter.assertRuntime();
     if (!actor || actor.documentName !== "Actor") throw new Error("Selecione uma ficha válida.");
-    const payload = compileActorBlueprintV91(source);
+    const scope = prepareSelectiveSync(source, selection);
+    const payload = scope.payload;
     const mechanics = inspectActorMechanics(payload);
     const errors = [...mechanics.errors];
     if (actor.type !== payload.actor.type) errors.push("O tipo da ficha selecionada não coincide com o pacote.");
@@ -78,26 +80,31 @@ export class JarvisImporterV9 {
     const existing = Array.from(actor.items ?? []);
     const additions = [];
     const updates = [];
-    for (const sourceItem of payload.items ?? []) {
+    const matchPlan = [];
+    for (const [index, sourceItem] of (payload.items ?? []).entries()) {
       const matches = existing.filter(item => findItemConflicts([sourceItem],[item]).length);
       if (matches.length > 1) errors.push(`${sourceItem.name}: mais de um Item correspondente na ficha.`);
-      else if (!matches.length) additions.push(sourceItem.name);
+      else if (!matches.length) { additions.push(sourceItem.name); matchPlan.push({index,id:null}); }
       else if (!matches[0].flags?.[MODULE_ID]?.adapter) errors.push(`${sourceItem.name}: Item existente não foi importado pelo Jarvis; revisão manual necessária.`);
-      else updates.push({ name: sourceItem.name, type: sourceItem.type, id: matches[0].id });
+      else { updates.push({ name: sourceItem.name, type: sourceItem.type, id: matches[0].id }); matchPlan.push({index,id:matches[0].id}); }
     }
-    return { actor: { id: actor.id, name: actor.name, type: actor.type }, additions, updates,
-      mechanics, errors, warnings: [], canImport: !errors.length,
-      items: (payload.items ?? []).map(item => ({ name: item.name, type: item.type, activities: item.jarvis?.activities ?? [] })),
-      protection: "Atualiza somente Activities de Items Jarvis correspondentes e adiciona Items novos. PV, recursos, condições e atributos atuais ficam preservados." };
+    const fields = selectiveActorPatch(actor, payload, scope.selection?.actorFields ?? []);
+    errors.push(...fields.errors);
+    return { actor: { id: actor.id, name: actor.name, type: actor.type }, additions, updates, matchPlan,
+      selection: scope.selection, skipped: scope.skipped, actorChanges: fields.changes,
+      mechanics, errors, warnings: fields.warnings, canImport: !errors.length,
+      items: (payload.items ?? []).map(item => ({ name: item.name, type: item.type, activities: item.jarvis?.activities ?? Object.values(item.system?.activities ?? {}) })),
+      protection: scope.selection ? "Atualiza somente os Items e campos selecionados. PV atual, recursos, condições, usos gastos e dados não selecionados permanecem protegidos." : "Atualiza somente Activities de Items Jarvis correspondentes e adiciona Items novos. PV, recursos, condições e atributos atuais ficam preservados." };
   }
 
-  async syncActor(actor,source) {
-    return withImportLock(actorLock(actor),()=>this.#syncActor(actor,source));
+  async syncActor(actor,source,options={}) {
+    return withImportLock(actorLock(actor),()=>this.#syncActor(actor,source,options));
   }
-  async #syncActor(actor, source) {
+  async #syncActor(actor, source, { selection = null, expectedRevision = null } = {}) {
     if (!game.user?.isGM) throw new Error("A sincronização V9.1 exige Mestre ativo.");
-    const payload = compileActorBlueprintV91(source);
-    const review = this.previewActorSync(actor, payload);
+    const payload = prepareSelectiveSync(source, selection).payload;
+    const review = this.previewActorSync(actor, source, { selection });
+    if (expectedRevision !== null && expectedRevision !== syncReviewRevision(review)) throw new Error("A ficha ou seleção mudou. Revise a atualização novamente.");
     if (!review.canImport) throw new Error(`Sincronização bloqueada: ${review.errors.join(" ")}`);
     await verifyGrantReferences(payload.items);
     const { items: resolved, report } = await rehydrateLegacyOfficialItems(payload.items ?? []);
@@ -106,15 +113,21 @@ export class JarvisImporterV9 {
     const adapted = Dnd5eV6Adapter.adaptItems(resolved);
     this.#applyItemSemanticMetadata(adapted, resolved);
     this.#applyItemImages(adapted);
+    const latest = this.previewActorSync(actor, source, { selection });
+    if (!latest.canImport || syncReviewRevision(latest) !== syncReviewRevision(review)) throw new Error("A ficha mudou durante a preparação. Revise novamente.");
+    const actorPatch = selectiveActorPatch(actor, payload, latest.selection?.actorFields ?? []);
     const existingIds = new Set(Array.from(actor.items ?? [], item => item.id));
     const snapshots = [];
     const additions = [];
+    let actorPatchAttempted = false;
     try {
       for (let index = 0; index < adapted.length; index += 1) {
         const itemData = adapted[index];
-        const match = review.updates.find(row => row.name === itemData.name && row.type === itemData.type);
-        if (!match) { additions.push(itemData); continue; }
+        const match = review.matchPlan.find(row => row.index === index);
+        if (!match) throw new Error("Item sem correspondência na revisão.");
+        if (!match.id) { additions.push(itemData); continue; }
         const item = actor.items.get?.(match.id) ?? Array.from(actor.items ?? []).find(row => row.id === match.id);
+        if (!item) throw new Error("Item selecionado removido durante a sincronização.");
         const previous = foundry.utils.deepClone(item.toObject?.().system?.activities ?? item.system?.activities ?? {});
         const merged = foundry.utils.deepClone(previous);
         for (const [id, incoming] of Object.entries(itemData.system?.activities ?? {})) {
@@ -123,7 +136,7 @@ export class JarvisImporterV9 {
           merged[targetId] = { ...foundry.utils.deepClone(incoming), _id: targetId,
             uses: oldId ? foundry.utils.deepClone(merged[oldId].uses ?? incoming.uses) : incoming.uses };
         }
-        snapshots.push({ item, activities: previous });
+        snapshots.push({ item, activities: previous, addedActivityIds: Object.keys(merged).filter(id => !Object.hasOwn(previous,id)) });
         await item.update({ "system.activities": merged });
         await restoreMissingActivities([{ name: itemData.name, system: { activities: merged } }], [item]);
         const failures = verifyPersistedActivities([{ name: itemData.name, system: { activities: merged } }], [item]);
@@ -136,18 +149,34 @@ export class JarvisImporterV9 {
         const failures=verifyPersistedActivities(additions,created);
         if(failures.length)throw new Error("Auditoria V9.1: "+failures.join(" "));
       }
-      await stampActorProvenance(actor);
+      if (snapshots.length || additions.length) {
+        await resolveCrossItemConsumption(actor, snapshots.map(s => s.item));
+        if (selection === null) await stampActorProvenance(actor);
+      }
+      if (Object.keys(actorPatch.patch).length) {
+        const freshPatch = selectiveActorPatch(actor, payload, latest.selection?.actorFields ?? []);
+        if (freshPatch.errors.length || JSON.stringify(freshPatch.changes) !== JSON.stringify(actorPatch.changes)) throw new Error("Campos da ficha mudaram durante a atualização; revise novamente.");
+        actorPatchAttempted = true;
+        await actor.update(actorPatch.patch);
+        const verified = selectiveActorPatch(actor, payload, latest.selection?.actorFields ?? []);
+        if (verified.errors.length || verified.changes.length) throw new Error("A ficha nativa não confirmou todos os campos selecionados.");
+      }
     } catch (error) {
       const rollbackErrors = [];
+      if (actorPatchAttempted) try { await actor.update(Object.fromEntries(actorPatch.changes.map(change => [change.path, change.before]))); } catch (cause) { rollbackErrors.push(cause); }
       const newIds = Array.from(actor.items ?? [], item => item.id).filter(id => id && !existingIds.has(id));
       if (newIds.length) try { await actor.deleteEmbeddedDocuments("Item", newIds); } catch (cause) { rollbackErrors.push(cause); }
       for (const snapshot of snapshots.reverse()) {
-        try { await snapshot.item.update({ "system.activities": snapshot.activities }); } catch (cause) { rollbackErrors.push(cause); }
+        try {
+          const remove = Object.fromEntries(snapshot.addedActivityIds.map(id => [`system.activities.-=${id}`, null]));
+          await snapshot.item.update({ "system.activities": snapshot.activities, ...remove });
+        } catch (cause) { rollbackErrors.push(cause); }
       }
       if (rollbackErrors.length) throw new AggregateError([error, ...rollbackErrors], `Sincronização falhou e o reparo automático foi incompleto em ${actor.name}.`);
       throw error;
     }
-    return { actor: actor.name, added: additions.length, updated: review.updates.length };
+    return { actor: actor.name, added: additions.length, updated: review.updates.length,
+      ...(selection !== null ? { skipped: review.skipped, fieldsUpdated: actorPatch.changes.length } : {}) };
   }
 
   async importActor(payload,options={}) {
