@@ -240,3 +240,51 @@ test("sync updates Jarvis activities, adds new abilities and preserves live HP a
   assert.equal(oldItem.system.activities.oldactivity00001.uses.spent, 2);
   assert.equal(actor.items.length, 3);
 });
+
+test("selective sync updates one ability and explicit attributes without touching current PV, uses or other items",async()=>{
+  const {selectiveSyncCatalog,syncReviewRevision}=await import("../scripts/importer/v9/selective-sync.js");
+  const source=structuredClone(blueprint);
+  const oldActivity={_id:"oldactivity00001",name:"Machado",type:"attack",uses:{spent:2,max:"3"}};
+  const oldItem={id:"old-item",name:"Machado",type:"weapon",flags:{"fora-do-abismo-foundry":{adapter:"dnd5e-6.0"}},
+    system:{activities:{oldactivity00001:oldActivity}},toObject(){return {system:structuredClone(this.system)};},
+    async update(changes){this.system.activities=structuredClone(changes["system.activities"]);}};
+  const untouched={id:"personal",name:"Item pessoal",type:"loot",system:{quantity:7},async update(){throw Error("unselected item updated");}};
+  const actor={id:"actor1",name:"Guardião",type:"npc",documentName:"Actor",system:{abilities:{str:{value:10},dex:{value:10},con:{value:10},wis:{value:9}},
+    attributes:{hp:{value:17,max:40,temp:4}},resources:{primary:{value:2,max:3}}},items:[oldItem,untouched],
+    async createEmbeddedDocuments(){throw Error("unselected item created");},async deleteEmbeddedDocuments(){throw Error("unexpected delete");},
+    async update(changes){for(const [path,value] of Object.entries(changes)){const keys=path.split(".");const end=keys.pop();keys.reduce((o,k)=>o[k],this)[end]=value;}}};
+  assert.deepEqual(selectiveSyncCatalog(source).map(x=>x.name),["Machado","Sopro","Escapar"]);
+  const importer=new JarvisImporterV9(), selection={itemIndexes:[0],actorFields:["abilities","hpMax"]};
+  const review=importer.previewActorSync(actor,source,{selection});
+  assert.equal(review.canImport,true);assert.equal(review.skipped,2);assert.equal(review.mechanics.checks.length,1);
+  assert.equal(review.actorChanges.length,4);
+  const result=await importer.syncActor(actor,source,{selection,expectedRevision:syncReviewRevision(review)});
+  assert.deepEqual(result,{actor:"Guardião",added:0,updated:1,skipped:2,fieldsUpdated:4});
+  assert.equal(actor.system.abilities.str.value,16);assert.equal(actor.system.abilities.wis.value,9);
+  assert.deepEqual(actor.system.attributes.hp,{value:17,max:50,temp:4});assert.equal(actor.system.resources.primary.value,2);
+  assert.equal(oldItem.system.activities.oldactivity00001.uses.spent,2);assert.equal(actor.items[1],untouched);
+});
+test("selective sync rejects stale, duplicate, empty or forbidden scope and unsafe HP changes",async()=>{
+  const {prepareSelectiveSync,syncReviewRevision}=await import("../scripts/importer/v9/selective-sync.js");
+  const importer=new JarvisImporterV9();
+  const actor={id:"actor1",name:"Guardião",type:"npc",documentName:"Actor",items:[],system:{attributes:{hp:{value:55,max:60}}},async update(){throw Error("must not write");}};
+  assert.throws(()=>prepareSelectiveSync(blueprint,{itemIndexes:[],actorFields:[]}),/Selecione/);
+  assert.throws(()=>prepareSelectiveSync(blueprint,{itemIndexes:[1,1],actorFields:[]}),/inválida/);
+  assert.throws(()=>prepareSelectiveSync(blueprint,{itemIndexes:[],actorFields:["hpCurrent"]}),/não permitido/);
+  const review=importer.previewActorSync(actor,blueprint,{selection:{itemIndexes:[],actorFields:["hpMax"]}});
+  assert.equal(review.canImport,false);
+  const selection={itemIndexes:[1],actorFields:[]};
+  const old=importer.previewActorSync(actor,blueprint,{selection});
+  actor.items.push({id:"existing",name:"Sopro",type:"feat",flags:{"fora-do-abismo-foundry":{adapter:"dnd5e-6.0"}}});
+  await assert.rejects(importer.syncActor(actor,blueprint,{selection,expectedRevision:syncReviewRevision(old)}),/mudou/);
+});
+test("actor-only selection changes no items and failed native field write attempts rollback",async()=>{
+  const importer=new JarvisImporterV9(), selection={itemIndexes:[],actorFields:["hpMax"]};
+  let calls=0;
+  const actor={id:"actor1",name:"Guardião",type:"npc",documentName:"Actor",items:[],system:{attributes:{hp:{value:17,max:40}}},
+    async update(changes){calls++;this.system.attributes.hp.max=changes["system.attributes.hp.max"];if(calls===1)throw Error("native failure");},
+    async createEmbeddedDocuments(){throw Error("unexpected Items");}};
+  await assert.rejects(importer.syncActor(actor,blueprint,{selection}),/native failure/);
+  assert.equal(calls,2);assert.equal(actor.system.attributes.hp.max,40);assert.equal(actor.system.attributes.hp.value,17);
+  const result=await importer.syncActor(actor,blueprint,{selection});assert.equal(result.fieldsUpdated,1);assert.equal(result.added,0);assert.equal(actor.system.attributes.hp.max,50);
+});

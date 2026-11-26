@@ -133,3 +133,29 @@ test("editor renders seven rows only to the GM; player sees picker/status only",
   assert.equal((gm.match(/name="synergy-actor-\d"/g)||[]).length,7);
   assert.match(gm,/synergy-save/);assert.match(player,/synergy-open/);assert.doesNotMatch(player,/synergy-save|synergy-library|synergy-description/);
 });
+
+test("draft simulation and library audit never save, request consent or spend",async()=>{
+  const s=setup();await s.start();
+  const before=s.writes();
+  const result=await s.command({action:"preview",combo:s.combo});
+  assert.equal(result.definition.valid,true);assert.equal(result.combat.ready,true);
+  assert.deepEqual(result.combat.participants.map(p=>[p.actor,p.before,p.after]),[["Orgulho",1,0],["Ira",1,0]]);
+  assert.equal(s.writes(),before);assert.equal(s.prompts.length,0);
+  assert.equal((await s.status("pride")).action,1);
+  await assert.rejects(s.command({action:"preview",combo:s.combo},s.p),/Mestre/);
+  await assert.rejects(s.command({action:"audit"},s.p),/Mestre/);
+  game.actors.delete("wrath");
+  const audit=await s.command({action:"audit"});
+  assert.equal(audit.broken,1);assert.equal(audit.combos[0].issues[0].code,"missing-actor");assert.equal(s.writes(),before);
+});
+test("missing native activity is distinguished from unavailable actions",async()=>{
+  const s=setup();
+  s.pride.items.set("spell",{id:"spell",system:{activities:new Map([["cast",{id:"cast",async use(){throw Error("must not run");}}]])}});
+  const combo={...s.combo,activity:{itemId:"spell",activityId:"cast"}};
+  await s.start(combo);
+  await s.command({action:"adjust",actorId:"wrath",cost:"reaction",value:0});
+  const before=s.writes();const blocked=await s.command({action:"preview",combo});
+  assert.equal(blocked.definition.valid,true);assert.equal(blocked.combat.ready,false);assert.match(blocked.combat.reason,/indisponível/);
+  s.pride.items.delete("spell");const audit=await s.command({action:"audit"});
+  assert.equal(audit.broken,1);assert.equal(audit.combos[0].issues[0].code,"missing-activity");assert.equal(s.writes(),before);
+});

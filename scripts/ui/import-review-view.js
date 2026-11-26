@@ -25,6 +25,8 @@ export function importReviewMarkup(review) {
       ${actor.portraitPreview ? `<figure><img src="${escapeHtml(actor.portraitPreview)}" alt="Prévia do retrato" width="96" height="96"><figcaption>Retrato</figcaption></figure>` : ""}
       ${actor.tokenPreview ? `<figure><img src="${escapeHtml(actor.tokenPreview)}" alt="Prévia do token" width="96" height="96"><figcaption>Token</figcaption></figure>` : ""}</div>` : ""}
     <details open><summary>Items (${review.items?.length ?? 0})</summary><ul>${itemRows(review.items ?? []) || "<li>Nenhum Item.</li>"}</ul></details>
+    ${review.selection ? `<p><strong>Atualização seletiva:</strong> ${escapeHtml(review.skipped)} Item(s) ignorado(s); ${escapeHtml(review.actorChanges?.length??0)} campo(s) alterado(s).</p>
+      ${review.actorChanges?.length ? `<details open><summary>Campos: antes → depois</summary><ul>${review.actorChanges.map(c=>`<li><strong>${escapeHtml(c.field)}</strong>: ${escapeHtml(c.before)} → ${escapeHtml(c.after)}</li>`).join("")}</ul></details>`:""}`:""}
     ${review.effects?.length ? `<details><summary>Efeitos (${review.effects.length})</summary><ul>${review.effects.map(effect => `<li>${escapeHtml(effect.name ?? "Efeito sem nome")}</li>`).join("")}</ul></details>` : ""}
     ${review.mechanics ? `<details open><summary>Ensaio mecânico · ${review.mechanics.actions} ação(ões), ${review.mechanics.checks.length} cenário(s)</summary><ul>
       ${review.mechanics.checks.map(check => `<li>${escapeHtml(check.action)}: d20 ${escapeHtml(check.d20)} + modificador = ${escapeHtml(check.total)} contra ${escapeHtml(check.target)} → ${escapeHtml(check.outcome)}</li>`).join("") || "<li>Sem cenários informados.</li>"}</ul></details>` : ""}
