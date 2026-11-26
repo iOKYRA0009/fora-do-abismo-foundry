@@ -1,3 +1,4 @@
+import { parseStructuredCharacterText } from "./structured-text.js";
 import {compileActorBlueprintV91} from "../v9/blueprint-v91.js";
 import {parseRestrictedYaml} from "./restricted-yaml.js";
 import {detectUniversalSource} from "./source-detector.js";
@@ -132,7 +133,8 @@ function convertNative(data){
 export function convertUniversalSource(detected){
   const {format,source}=detected;
   let payload,warnings=[],route="actor";
-  if(format==="foundry-actor"){assertData(detected.data);({payload,warnings}=convertNative(detected.data));}
+  if(format==="structured-character-text")({payload,warnings}=parseStructuredCharacterText(source));
+  else if(format==="foundry-actor"){assertData(detected.data);({payload,warnings}=convertNative(detected.data));}
   else if(format==="yaml"){
     const data=parseRestrictedYaml(source);assertData(data);
     const parsed=detectUniversalSource(JSON.stringify(data));
