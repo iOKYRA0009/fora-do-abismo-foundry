@@ -309,7 +309,19 @@ function actorCompleteness(payload, warnings) {
   }
 }
 
-function validateActorPayload(payload) {
+function validateActorPayload(payload, assets = []) {
+  // Only during package review: validate an asset-backed sheet watermark with a
+  // local placeholder. The importer receives the real uploaded local path.
+  const image = payload?.actor?.jarvis?.sheetAppearance?.image;
+  if (typeof image === "string" && image.startsWith("asset://")) {
+    const asset = assets.find(a => a?.id === image.slice(8));
+    const mime = asset?.mimeType ?? EXT_MIMES[String(asset?.fileName??"").split(".").pop().toLowerCase()];
+    if (!asset || !["image/png","image/jpeg","image/webp"].includes(mime)) {
+      throw new Error("Jarvis Executor: marca-d'água exige asset PNG/JPG/WebP declarado.");
+    }
+    payload = structuredClone(payload);
+    payload.actor.jarvis.sheetAppearance.image = "jarvis-preview/watermark.png";
+  }
   try { validateJarvisActorPayload(payload); }
   catch (error) {
     if (Array.isArray(error.details) && error.details.length) {
@@ -357,7 +369,7 @@ export function previewJarvisExecution(source, { mode = "auto", files = [] } = {
   const warnings = [];
   const actorNames = new Set();
   for (const actor of actors) {
-    validateActorPayload(actor);
+    validateActorPayload(actor, assets);
     actorCompleteness(actor, warnings);
     const name = normalize(actor.actor.name);
     if (actorNames.has(name)) throw new Error(`Jarvis Executor: NPC duplicado no pacote: '${actor.actor.name}'.`);

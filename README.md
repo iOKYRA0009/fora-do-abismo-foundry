@@ -346,3 +346,7 @@ JSON nativo D&D5e, YAML declarativo, XML de ficha e CSV de até 20 personagens a
 ### Universal Importer 1.7.2 — fichas em português
 
 Importa TXT/Markdown estruturado para V9.1 com atributos, PV, CA, Activities e usos; sem interpretar prosa livre ou executar scripts. [Guia e exemplo](docs/UNIVERSAL-IMPORTER.md#fichas-txt-e-markdown-172).
+
+### Universal Importer 1.7.3 — pacote de personagem
+
+Importa ZIP/.jarvis com manifesto, ficha, Items, aparência e imagens anexadas para a revisão do Executor. [Esquema e limites](docs/UNIVERSAL-IMPORTER.md#pacotes-jarvis--zip-173).
