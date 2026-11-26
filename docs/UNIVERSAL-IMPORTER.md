@@ -62,3 +62,40 @@ Ira,npc,200,18,22
 
 ## Fora do escopo
 TXT livre, Markdown descritivo e ZIP/.jarvis são fases posteriores. Não há execução de linguagens externas. Testes automatizados não substituem teste real no Foundry.
+
+
+## Fichas TXT e Markdown (1.7.2)
+
+Cole o texto em Importador Universal ou use arquivo .txt/.md. Comece com Nome: (ou Personagem: ou título Markdown # Nome), seguido de Tipo: NPC ou Personagem. Use campos "Campo: valor", com marcadores Markdown opcionais. Cabeçalhos Habilidades, Ações e Atributos são aceitos. O parser é determinístico, não usa IA nem interpreta prosa livre. O resultado é uma ficha V9.1 para revisão e confirmação.
+
+Exemplo fictício:
+
+```text
+Nome: Orgulho
+Tipo: NPC
+PV: 200/250
+CA: 22
+Atributos: FOR 20, DES 16, CON 22, INT 14, SAB 18, CAR 20
+
+Habilidade: Decreto Celestial
+Tipo: Salvaguarda
+Custo: ação
+Dano: 6d10 radiante
+Salvaguarda: Sabedoria CD 19
+Sucesso: metade
+Usos: 2
+Recuperação: descanso longo
+Descrição: Um decreto divino.
+
+Habilidade: Golpe
+Tipo: Ataque
+Custo: reação
+Acerto: +8
+Dano: 2d8+4 cortante
+```
+
+Campos de ficha: Nome/Personagem/Ficha, Tipo, PV (atual/máximo, ou valor único com máximo igual), PV máximo, CA, Atributos (lista ou cada atributo separado), Biografia, Retrato e Token (caminhos explícitos).
+
+Cada Habilidade inicia um bloco; Tipo (Ataque, Salvaguarda, Teste, Dano, Cura, Teleporte, Utilidade) e Custo (ação, ação bônus, reação) são obrigatórios. Campos dependem do tipo: Dano (fórmula e tipo), Acerto (bônus fixo), Atributo, CD, Salvaguarda/Teste (atributo e CD), Sucesso (metade/nenhum/total, obrigatório quando salvaguarda causa dano), Cura (fórmula), Distância (inteiro com m ou ft), Alcance (corpo a corpo/a distância), Classificação (arma/magia/desarmado), Rolagem, Descrição. Usos (inteiro positivo) e Recuperação (descanso curto/longo ou amanhecer) são opcionais. Descrições e biografias de uma linha são escapadas como texto. Não há inferência de classe, equipamento, progressão, sinergias, condições ou efeitos. Campos desconhecidos, duplicados e incompatíveis são recusados; máximo 100 habilidades, 5000 linhas e limite geral de 2 MB. Personagens jogadores podem ter PV máximo e CA recalculados pelo D&D5e.
+
+ZIP/.jarvis e prosa livre continuam fora do escopo. YAML, XML, CSV, JSON e Executor mantêm os fluxos anteriores. Exemplos não são personagens canônicos. Teste real no Foundry ainda necessário.

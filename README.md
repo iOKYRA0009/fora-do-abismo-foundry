@@ -342,3 +342,7 @@ Nesta fase, Actor JSON nativo, YAML, XML, CSV, Markdown descritivo e TXT livre s
 ### Universal Importer 1.7.1 — conversores
 
 JSON nativo D&D5e, YAML declarativo, XML de ficha e CSV de até 20 personagens agora são convertidos para revisão. Consulte [formatos, exemplos e limitações](docs/UNIVERSAL-IMPORTER.md). A fase 1.7.0 acima descreve o comportamento histórico; a conversão não executa código nem grava documentos.
+
+### Universal Importer 1.7.2 — fichas em português
+
+Importa TXT/Markdown estruturado para V9.1 com atributos, PV, CA, Activities e usos; sem interpretar prosa livre ou executar scripts. [Guia e exemplo](docs/UNIVERSAL-IMPORTER.md#fichas-txt-e-markdown-172).
