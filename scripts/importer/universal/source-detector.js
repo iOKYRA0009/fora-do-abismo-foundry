@@ -9,14 +9,18 @@ export function detectUniversalSource(input,{filename=""}={}) {
   let source=String(input??"").replace(/^\uFEFF/,"").trim();
   if(!source)throw new Error("Cole um conteúdo ou escolha um arquivo.");
   if(source.length>2*1024*1024)throw new Error("Conteúdo acima de 2 MB.");
-  const extension=filename.toLowerCase().split(".").pop();
+  const extension=String(filename).toLowerCase().split(".").pop();
   const hint=extensions[extension]??null;
+  const otherLanguage=/^(?:py|python|lua|rb|ruby|java|c|cpp|cs|go|rs|rust|ts|typescript|php|sh|bash|powershell|ps1)$/i;
+  let explicitOther=otherLanguage.test(extension);
   let fenceHint=null;
   // Accept one complete fenced code block, never arbitrary surrounding prose.
   if(source.startsWith("```")){
     const match=source.match(/^```([\w-]*)[ \t]*\r?\n([\s\S]*?)\r?\n```[ \t]*$/);
     if(!match||match[2].includes("```"))return result("markdown",null,"Envie somente um bloco de código completo, sem texto adicional.",source);
-    fenceHint=extensions[match[1].toLowerCase()]??(match[1]==="javascript"?"javascript":null);
+    const tag=match[1].toLowerCase();
+    fenceHint=extensions[tag]??(tag==="javascript"?"javascript":null);
+    if(tag)explicitOther=!fenceHint;
     source=match[2].trim();
   }
   const preferred=fenceHint??hint;
@@ -38,6 +42,7 @@ export function detectUniversalSource(input,{filename=""}={}) {
       return result("jarvis-items","items","Items detectados: selecione a ficha de destino e revise antes de importar.",source,items);
     return result("json-unknown",null,"JSON válido, mas não corresponde a um formato suportado de ficha, Items ou pacote.",source,data);
   }
+  if(explicitOther)return result("unsupported-language",null,"Linguagem não suportada pelo Foundry. Converta os dados para JSON Jarvis; não execute como macro.",source);
   if(preferred==="yaml"||/^---\s*\n/.test(source)||/^(?:schemaVersion|actor|name|personagem):\s*[^\n]*\n/m.test(source))return result("yaml",null,"YAML reconhecido; conversão ainda não disponível.",source);
   if(preferred==="xml"||/^\s*<(?:\?xml\b|[A-Za-z_][\w.-]*(?:\s|>|\/))/.test(source))return result("xml",null,"XML reconhecido; conversão ainda não disponível.",source);
   if(preferred==="csv"||/^(?:name|nome|actor|personagem)[,;][^\n]+\r?\n/i.test(source))return result("csv",null,"CSV reconhecido; conversão ainda não disponível.",source);
