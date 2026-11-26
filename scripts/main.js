@@ -1,3 +1,4 @@
+import { convertUniversalSource } from "./importer/universal/converters.js";
 import { detectUniversalSource, universalReport } from "./importer/universal/source-detector.js";
 import { auditActorDependencies } from "./diagnostics/dependency-audit.js";
 import { registerSynergyTracking, synergyCommand } from "./synergy/synergy-engine.js";
@@ -165,7 +166,7 @@ Hooks.once("ready", runtimeCapture.guard("initialization", "ready", () => {
   const api = {
     ui: { open: openJarvisConsole },
     synergy: { command: synergyCommand, open: openSynergyPicker },
-    universal: { detect: (source, options) => universalReport(detectUniversalSource(source,options)) },
+    universal: { detect: (source, options) => universalReport(convertUniversalSource(detectUniversalSource(source,options))) },
     importer: new JarvisImporterV9(),
     executor: {
       version: EXECUTOR_VERSION,

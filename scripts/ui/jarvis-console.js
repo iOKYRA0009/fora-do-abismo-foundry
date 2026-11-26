@@ -1,3 +1,4 @@
+import { convertUniversalSource } from "../importer/universal/converters.js";
 import { detectUniversalSource, universalReport } from "../importer/universal/source-detector.js";
 import { SYNC_FIELDS, selectiveSyncCatalog, prepareSelectiveSync, syncReviewRevision } from "../importer/v9/selective-sync.js";
 import { auditActorDependencies } from "../diagnostics/dependency-audit.js";
@@ -916,7 +917,7 @@ function renderContent() {
       <label>Arquivo<input type="file" name="universal-file" accept=".json,.js,.mjs,.txt,.yaml,.yml,.xml,.csv,.md,.markdown,.zip,.jarvis,.py,.lua"></label>
       <label>Conteúdo<textarea name="universal-source" rows="6" spellcheck="false" placeholder="Cole o conteúdo de uma ficha, Items ou macro"></textarea></label>
       <div class="jarvis-console-row">${button("universal-detect","Detectar formato")}${button("universal-route","Preparar importação")}</div>
-      <p class="jarvis-console-hint">Suporte inicial: JSON Jarvis V9/V9.1, Items JSON, pacote Executor e JavaScript. Outros formatos são reconhecidos, mas não convertidos. Preparar substitui o conteúdo do editor de destino e limpa seus arquivos anteriores; anexe retrato/token/imagens novamente quando necessário.</p></section>` : ""}
+      <p class="jarvis-console-hint">Suporte: JSON Jarvis, Items, Executor, JavaScript, JSON nativo de NPC/personagem, YAML, XML e CSV (esquemas documentados). ZIP e texto livre ainda não convertidos. Preparar substitui o conteúdo do editor de destino e limpa seus arquivos anteriores; anexe retrato/token/imagens novamente quando necessário.</p></section>` : ""}
     ${renderSynergyControls(actors, gm)}
     ${advanced("Criar, importar e manter fichas", characters)}
     ${advanced("Área dos jogadores", players)}
@@ -1060,7 +1061,7 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
     const file = field(root,"universal-file")?.files?.[0];
     if (file && /\\.(zip|jarvis)$/i.test(file.name)) return setOutput(root,"Importador Universal",{formato:"archive",suportado:false,mensagem:"Pacotes ZIP/.jarvis reconhecidos. A leitura de arquivos internos ainda não está disponível."});
     const source = await fileOrText(root,"universal-file","universal-source");
-    const detected = detectUniversalSource(source,{filename:file?.name??""});
+    const detected = convertUniversalSource(detectUniversalSource(source,{filename:file?.name??""}));
     if (action === "universal-detect" || !detected.supported) return setOutput(root,"Formato detectado",universalReport(detected));
     const clear = name => { const node=field(root,name); if(node)node.value=""; };
     const put = (name,value) => { const node=field(root,name); if(!node)throw new JarvisInputError("Editor de destino indisponível."); node.value=value; };
