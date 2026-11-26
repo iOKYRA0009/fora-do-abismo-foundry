@@ -1,3 +1,4 @@
+import { SYNC_FIELDS, selectiveSyncCatalog, prepareSelectiveSync, syncReviewRevision } from "../importer/v9/selective-sync.js";
 import { auditActorDependencies } from "../diagnostics/dependency-audit.js";
 import { renderSynergyControls, executeSynergyConsoleAction } from "../synergy/synergy-ui.js";
 import { getJarvisAccess, visibleJarvisTabs, assertJarvisAccess } from "./jarvis-console-core.js";
@@ -718,7 +719,8 @@ function renderContent() {
     <label>Retrato da ficha (PNG/JPG/WebP até 6 MB): <input name="actor-image-file" type="file" accept="image/png,image/jpeg,image/webp"></label>
     <label>Token (opcional, PNG transparente recomendado): <input name="actor-token-file" type="file" accept="image/png,image/jpeg,image/webp"></label>
     <p class="jarvis-console-hint">Envie ficha, retrato e token juntos. Se enviar só o retrato, ele também será usado como token.</p>
-      <div class="jarvis-console-row">${button("actor-import-preview", "Revisar importação V9.1")}${button("actor-import", "Confirmar criação")}${button("actor-sync-preview", "Revisar atualização da ficha")}${button("actor-sync", "Atualizar ficha selecionada")}${button("actor-progression", "Aplicar progressão da ficha")}${button("actor-compare", "Comparar JSON com a ficha")}</div>
+      <div class="jarvis-console-row">${button("actor-import-preview", "Revisar importação V9.1")}${button("actor-import", "Confirmar criação")}${button("actor-sync-select", "Escolher alterações")}${button("actor-sync-preview", "Revisar atualização da ficha")}${button("actor-sync", "Atualizar ficha selecionada")}${button("actor-progression", "Aplicar progressão da ficha")}${button("actor-compare", "Comparar JSON com a ficha")}</div>
+      <section class="jarvis-import-review" data-jarvis-sync-scope hidden></section>
       <section class="jarvis-import-review" data-jarvis-actor-review aria-live="polite"><p class="jarvis-console-hint">Revise o JSON antes de confirmar.</p></section>
       <h3>Manutenção da ficha</h3><div class="jarvis-console-row"><label>Regras alvo<select name="actor-rules-target"><option value="2024">D&D 2024</option><option value="2014">D&D 2014</option></select></label>
       ${button("actor-rules-set", "Salvar perfil de regras")}${button("actor-provenance-stamp", "Registrar origem dos Items")}${button("actor-jack-sync", "Sincronizar almas de Jack")}${button("actor-chat-repair", "Corrigir chat das habilidades")}${button("actor-duplicates-audit","Revisar possíveis duplicatas")}${button("actor-dependency-audit","Auditar dependências da ficha")}</div>` : ""}
@@ -1164,29 +1166,66 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
     refreshActorOptions(root, actor.id);
     return setOutput(root, "Importação concluída", `${actor.name} foi criado.`);
   }
+  if (action === "actor-sync-select" || action === "actor-sync-reset") {
+    requireGM();
+    const host = root.querySelector("[data-jarvis-sync-scope]");
+    if (!host) throw new JarvisInputError("Editor de seleção indisponível.");
+    if (action === "actor-sync-reset") {
+      state.actorSyncScope = null;
+      state.actorSyncPreview = null;
+      host.hidden = true; host.innerHTML = "";
+      renderImportReview(root, "actor", null);
+      return setOutput(root, "Sincronização padrão", "Revise novamente para atualizar todos os Items do pacote.");
+    }
+    const actor = selectedActor(root, { manage: true });
+    const json = await fileOrText(root, "actor-json-file", "actor-json");
+    const items = selectiveSyncCatalog(JSON.parse(json));
+    state.actorSyncScope = { fingerprint: JSON.stringify([actor.id,json]) };
+    state.actorSyncPreview = null;
+    host.innerHTML = '<h4>Atualização seletiva</h4><p>Marque somente o que deseja alterar. Nenhum campo está marcado por padrão.</p>'
+      + '<div class="jarvis-console-row">'+button("actor-sync-reset","Voltar ao modo padrão")+'</div>'
+      + '<details open><summary>Items e habilidades ('+items.length+')</summary>'
+      + items.map(item=>'<label><input type="checkbox" data-jarvis-sync-item="'+item.index+'"> '+escapeHtml(item.name)+' · '+escapeHtml(item.type)+'</label>').join("")
+      + '</details><details open><summary>Campos da ficha (opcionais)</summary>'
+      + SYNC_FIELDS.map(field=>'<label><input type="checkbox" data-jarvis-sync-field="'+escapeHtml(field.id)+'"> '+escapeHtml(field.label)+'</label>').join("")
+      + '</details><p>PV atual, efeitos ativos, cargas gastas, inventário existente e tema da ficha não são sobrescritos. Items existentes: somente Activities. Depois clique em Revisar atualização da ficha.</p>';
+    host.hidden = false;
+    renderImportReview(root, "actor", null);
+    return setOutput(root, "Seleção disponível", "Marque os Items e campos no painel.");
+  }
   if (action === "actor-sync-preview" || action === "actor-sync") {
     requireGM();
     const actor = selectedActor(root, { manage: true });
     const json = await fileOrText(root, "actor-json-file", "actor-json");
     const payload = JSON.parse(json);
-    const fingerprint = JSON.stringify([actor.id, json]);
-    const review = jarvis.importer.previewActorSync(actor, payload);
-    if (jarvis.importer.analyzeCompendiums) review.compendiums=await jarvis.importer.analyzeCompendiums(compileActorBlueprintV91(payload).items ?? []);
+    const sourceFingerprint = JSON.stringify([actor.id,json]);
+    let selection = null;
+    if (state.actorSyncScope) {
+      if (state.actorSyncScope.fingerprint !== sourceFingerprint) throw new JarvisInputError("A ficha ou JSON mudou. Clique em Escolher alterações novamente.");
+      selection = { itemIndexes: Array.from(root.querySelectorAll("[data-jarvis-sync-item]:checked"), node=>Number(node.dataset.jarvisSyncItem)),
+        actorFields: Array.from(root.querySelectorAll("[data-jarvis-sync-field]:checked"), node=>node.dataset.jarvisSyncField) };
+      if (!selection.itemIndexes.length && !selection.actorFields.length) throw new JarvisInputError("Marque ao menos um Item ou campo.");
+    }
+    const fingerprint = JSON.stringify([actor.id,json,selection]);
+    const scope = prepareSelectiveSync(payload,selection);
+    const review = jarvis.importer.previewActorSync(actor,payload,{selection});
+    const revision = syncReviewRevision(review);
+    if (jarvis.importer.analyzeCompendiums) review.compendiums=await jarvis.importer.analyzeCompendiums(scope.payload.items ?? []);
     if (review.compendiums?.report.some(row=>row.requiresReview)) {
       review.canImport=false;
       const message="Fonte oficial obrigatória ausente ou ambígua: "+review.compendiums.report.filter(row=>row.requiresReview).map(row=>row.name).join(", ");
       review.errors=[...(review.errors??[]),message];review.warnings=[...(review.warnings??[]),message];
     }
     if (action === "actor-sync-preview") {
-      state.actorSyncPreview = { fingerprint, compendiums: JSON.stringify(review.compendiums ?? null) };
+      state.actorSyncPreview = { fingerprint, revision, compendiums: JSON.stringify(review.compendiums ?? null) };
       renderImportReview(root, "actor", review);
       return setOutput(root, "Revisão da atualização V9.1", review);
     }
-    if (state.actorSyncPreview?.fingerprint !== fingerprint || state.actorSyncPreview?.compendiums !== JSON.stringify(review.compendiums ?? null)) throw new JarvisInputError("Revise esta atualização antes de aplicá-la.");
+    if (state.actorSyncPreview?.fingerprint !== fingerprint || state.actorSyncPreview?.revision !== revision || state.actorSyncPreview?.compendiums !== JSON.stringify(review.compendiums ?? null)) throw new JarvisInputError("Revise esta atualização antes de aplicá-la.");
     if (!review.canImport) throw new JarvisInputError(review.errors.join(" "));
-    if (!await confirmAction("Atualizar ficha V9.1", `Atualizar ${review.updates.length} Item(s) e adicionar ${review.additions.length} em ${actor.name}?`)) return;
+    if (!await confirmAction("Atualizar ficha V9.1", `Atualizar ${review.updates.length} Item(s), adicionar ${review.additions.length} e alterar ${review.actorChanges?.length ?? 0} campo(s) em ${actor.name}?`)) return;
     state.actorSyncPreview = null;
-    const result = await jarvis.importer.syncActor(actor, payload);
+    const result = await jarvis.importer.syncActor(actor, payload, { selection, expectedRevision: revision });
     renderImportReview(root, "actor", null);
     return setOutput(root, "Ficha atualizada", result);
   }
