@@ -1,3 +1,4 @@
+import { setSynergySocket, dispatchSynergy, receiveSynergyConsent } from "../synergy/synergy-engine.js";
 import { applyEmbeddedEffectToActor } from "../automation/embedded-effect-engine.js";
 import { runThirdThroneOnGm } from "../automation/third-throne-engine.js";
 
@@ -58,6 +59,13 @@ export function registerSocketBridge() {
     socket = globalThis.socketlib.registerModule(MODULE_ID);
     socket.register("applyConfiguredEffect", applyOnGm);
     socket.register("thirdThroneV3", thirdThroneOnGm);
+    socket.register("synergyCommand", async function(args) {
+      return dispatchSynergy(args, game.users?.get?.(this?.socketdata?.userId));
+    });
+    socket.register("synergyConsent", async function(args) {
+      return receiveSynergyConsent(args, game.users?.get?.(this?.socketdata?.userId));
+    });
+    setSynergySocket(socket);
   });
 }
 
