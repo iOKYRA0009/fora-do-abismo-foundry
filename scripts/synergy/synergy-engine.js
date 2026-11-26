@@ -7,7 +7,7 @@ const esc=x=>String(x??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&
 const copy=x=>JSON.parse(JSON.stringify(x));
 const safeId=x=>typeof x==="string" && /^[A-Za-z0-9_-]{1,80}$/.test(x);
 const blank=()=>({version:1,combos:[],ledgers:[]});
-let queue=Promise.resolve(), remoteSocket=null, suppressedActivity=null;
+let queue=Promise.resolve(), remoteSocket=null, suppressedActivity=null, comboPending=false;
 function serial(task) {
   const next=queue.catch(()=>{}).then(task);
   queue=next.catch(()=>{});
@@ -136,14 +136,15 @@ function chooseController(actor,users) {
   return users.filter(u=>u.active).sort((a,b)=>(Number(b.character?.id===actor.id)-Number(a.character?.id===actor.id)) || a.id.localeCompare(b.id))[0];
 }
 async function getConsent(combo,context,user) {
-  const groups=new Map(), gmEntries=[];
+  const groups=new Map(), controllerIds=new Map();
   for(const p of context.entries) {
     // The initiating player explicitly confirmed their own cost in the UI.
-    if(!user.isGM && p.actorId===combo.initiatorId) continue;
+    if(!user.isGM && p.actorId===combo.initiatorId) {controllerIds.set(p.actorId,user.id);continue;}
     const users=controllers(p.c.actor);
     const selected=chooseController(p.c.actor,users);
     if(users.length && !selected) return false;
-    if(!selected) {gmEntries.push(p);continue;}
+    controllerIds.set(p.actorId,selected?.id??null);
+    if(!selected) continue;
     const rows=groups.get(selected.id)??[];
     rows.push({actorId:p.actorId,cost:p.cost});
     groups.set(selected.id,rows);
@@ -159,15 +160,24 @@ async function getConsent(combo,context,user) {
   const requests=Array.from(groups,([userId,participants])=>withDeadline(remoteSocket.executeAsUser("synergyConsent",userId,
     {name:combo.name,participants,clock:clockKey(context.clock),expiresAt})).catch(()=>false));
   const answers=await Promise.all(requests);
-  return answers.every(v=>v===true)&&Date.now()<=expiresAt;
+  return answers.every(v=>v===true)&&Date.now()<=expiresAt ? controllerIds : false;
 }
 async function runCombo(user,args) {
-  const first=load();
-  const combo=first.data.combos.find(c=>c.id===args.comboId && c.initiatorId===args.actorId);
-  if(!combo || (!user.isGM && combo.visibility!=="owners")) throw new Error("Combo indisponível.");
-  const before=validateRequest(first.data,combo,user);
-  if(!await getConsent(combo,before,user)) return privateResult(user,combo,"cancelled");
-  // Consent is not authorization to spend after the turn, token, actor, or definition changes.
+  senderCheck(user);
+  if(comboPending) throw new Error("Já existe uma solicitação de combo em andamento.");
+  comboPending=true;
+  try {
+  const {combo,before}=await serial(()=>{
+    const {data}=load();
+    const combo=data.combos.find(c=>c.id===args.comboId && c.initiatorId===args.actorId);
+    if(!combo || (!user.isGM && combo.visibility!=="owners")) throw new Error("Combo indisponível.");
+    return {combo,before:validateRequest(data,combo,user)};
+  });
+  const approvals=await getConsent(combo,before,user);
+  if(!approvals) return privateResult(user,combo,"cancelled");
+  // Do not hold the economy queue during consent: native uses and GM corrections
+  // must be visible to the final check.
+  return await serial(async()=>{
   const fresh=load();
   const latest=fresh.data.combos.find(c=>c.id===combo.id);
   if(JSON.stringify(latest)!==JSON.stringify(combo)) throw new Error("O combo mudou; solicite novamente.");
@@ -176,8 +186,11 @@ async function runCombo(user,args) {
   if(clockKey(before.clock)!==clockKey(context.clock) || before.entries.some((p,i)=>p.c.id!==context.entries[i].c.id))
     throw new Error("O turno ou participante mudou; solicite novamente.");
   // Recheck controller connectivity and permissions after the dialogues.
-  if(context.entries.some(p=>{const users=controllers(p.c.actor);return users.length&&!chooseController(p.c.actor,users);}))
-    throw new Error("Um participante perdeu seu controlador ativo.");
+  if(context.entries.some(p=>{
+    if(!user.isGM && p.actorId===combo.initiatorId) return !owner(p.c.actor,user)||!game.users.get(user.id)?.active;
+    const users=controllers(p.c.actor), selected=chooseController(p.c.actor,users);
+    return (users.length&&!selected)||(selected?.id??null)!==approvals.get(p.actorId);
+  })) throw new Error("O controlador de um participante mudou; solicite novamente.");
   const previous=copy(ledgerOf(fresh.data,context.clock));
   replaceLedger(fresh.data,context.planned);
   await save(fresh.doc,fresh.data);
@@ -206,6 +219,8 @@ async function runCombo(user,args) {
     ui.notifications?.error("Synergy: a atividade não foi concluída com segurança. Revise seus efeitos e custos; não repita automaticamente.");
     return privateResult(user,combo,"review");
   } finally {suppressedActivity=null;}
+  });
+  } finally {comboPending=false;}
 }
 function actorAccess(user,actorId) {
   if(!safeId(actorId)||!owner(game.actors.get(actorId),user)) throw new Error("Ficha não controlada.");
@@ -239,10 +254,10 @@ async function nativeRecord(user,args) {
 }
 export function setSynergySocket(socket) {remoteSocket=socket;}
 export function dispatchSynergy(args,user) {
+  if(args?.action==="request") return runCombo(user,args);
   return serial(async()=>{
     senderCheck(user);
     const action=args?.action;
-    if(action==="request") return runCombo(user,args);
     if(action==="record") return nativeRecord(user,args);
     const {doc,data}=load();
     if(action==="list") return listFor(data,user,args.actorId);
@@ -297,7 +312,7 @@ export function registerSynergyTracking() {
     void synergyCommand(args).catch(e=>{
       console.warn(MODULE_ID+" | Synergy: registro nativo não concluído",e);
       // Avoid interrupting ordinary activities when the optional engine is unused.
-      if(game.user?.isGM) ui.notifications?.warn("Synergy: confira o saldo de ações ("+e.message+").");
+      if(game.user?.isGM || remoteSocket) ui.notifications?.warn("Synergy: confira o saldo de ações ("+e.message+").");
     });
   });
 }
