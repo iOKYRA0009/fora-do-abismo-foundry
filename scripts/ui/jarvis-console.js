@@ -1,3 +1,4 @@
+import { prepareJarvisArchive } from "../importer/universal/archive-package.js";
 import { convertUniversalSource } from "../importer/universal/converters.js";
 import { detectUniversalSource, universalReport } from "../importer/universal/source-detector.js";
 import { SYNC_FIELDS, selectiveSyncCatalog, prepareSelectiveSync, syncReviewRevision } from "../importer/v9/selective-sync.js";
@@ -917,7 +918,7 @@ function renderContent() {
       <label>Arquivo<input type="file" name="universal-file" accept=".json,.js,.mjs,.txt,.yaml,.yml,.xml,.csv,.md,.markdown,.zip,.jarvis,.py,.lua"></label>
       <label>Conteúdo<textarea name="universal-source" rows="6" spellcheck="false" placeholder="Nome: Orgulho&#10;Tipo: NPC&#10;PV: 250&#10;CA: 22"></textarea></label>
       <div class="jarvis-console-row">${button("universal-detect","Detectar formato")}${button("universal-route","Preparar importação")}</div>
-      <p class="jarvis-console-hint">Suporte: JSON Jarvis, Items, Executor, JavaScript, JSON nativo de NPC/personagem, YAML, XML e CSV (esquemas documentados). TXT/Markdown de ficha estruturada em português também aceitos. ZIP e texto livre ainda não convertidos. Preparar substitui o conteúdo do editor de destino e limpa seus arquivos anteriores; anexe retrato/token/imagens novamente quando necessário.</p></section>` : ""}
+      <p class="jarvis-console-hint">Suporte: JSON Jarvis, Items, Executor, JavaScript, JSON nativo de NPC/personagem, YAML, XML e CSV (esquemas documentados). TXT/Markdown de ficha estruturada em português também aceitos. ZIP/.jarvis com manifesto de personagem aceitos; texto livre ainda não convertido. Preparar substitui o conteúdo do editor de destino e limpa seus arquivos anteriores; anexe retrato/token/imagens novamente quando necessário (pacotes ZIP/.jarvis já incluem seus arquivos).</p></section>` : ""}
     ${renderSynergyControls(actors, gm)}
     ${advanced("Criar, importar e manter fichas", characters)}
     ${advanced("Área dos jogadores", players)}
@@ -1059,9 +1060,10 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
   if (action === "universal-detect" || action === "universal-route") {
     requireGM();
     const file = field(root,"universal-file")?.files?.[0];
-    if (file && /\.(zip|jarvis)$/i.test(file.name)) return setOutput(root,"Importador Universal",{formato:"archive",suportado:false,mensagem:"Pacotes ZIP/.jarvis reconhecidos. A leitura de arquivos internos ainda não está disponível."});
-    const source = await fileOrText(root,"universal-file","universal-source");
-    const detected = convertUniversalSource(detectUniversalSource(source,{filename:file?.name??""}));
+    const detected = file && /\.(zip|jarvis)$/i.test(file.name)
+      ? await prepareJarvisArchive(file)
+      : convertUniversalSource(detectUniversalSource(await fileOrText(root,"universal-file","universal-source"),{filename:file?.name??""}));
+    if (detected.format === "jarvis-archive") jarvis.executor.preview(detected.source,{mode:"package",files:detected.files});
     if (action === "universal-detect" || !detected.supported) return setOutput(root,"Formato detectado",universalReport(detected));
     const clear = name => { const node=field(root,name); if(node)node.value=""; };
     const put = (name,value) => { const node=field(root,name); if(!node)throw new JarvisInputError("Editor de destino indisponível."); node.value=value; };
@@ -1086,9 +1088,9 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
     put("executor-source",detected.source);
     put("executor-mode",detected.route==="executor-js"?"javascript":"package");
     clear("executor-files");
-    state.executorFiles=[];state.executorPreview=null;state.executorMapUndo=[];
+    state.executorFiles=detected.files??[];state.executorPreview=null;state.executorMapUndo=[];
     const consent=field(root,"executor-js-consent");if(consent)consent.checked=false;
-    const display=root.querySelector("[data-jarvis-executor-files]");if(display)display.textContent="Sem arquivos selecionados.";
+    const display=root.querySelector("[data-jarvis-executor-files]");if(display)display.textContent=state.executorFiles.length?state.executorFiles.map(f=>f.name).join(" · "):"Sem arquivos selecionados.";
     renderExecutorPreview(root,state);
     selectTab(root,"executor");
     return setOutput(root,"Executor preparado",{...universalReport(detected),proximo:"Validar e visualizar; depois confirmar a execução explicitamente."});
