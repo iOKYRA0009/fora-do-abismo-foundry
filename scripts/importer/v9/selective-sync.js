@@ -11,7 +11,6 @@ export const SYNC_FIELDS=Object.freeze([
 const copy=x=>JSON.parse(JSON.stringify(x));
 const get=(o,path)=>path.split(".").reduce((v,k)=>v?.[k],o);
 const abilities=["str","dex","con","int","wis","cha"];
-const own=(o,k)=>Object.prototype.hasOwnProperty.call(o??{},k);
 
 export function selectiveSyncCatalog(source) {
   const payload=compileActorBlueprintV91(source);
@@ -69,6 +68,6 @@ export function selectiveActorPatch(actor,payload,fields=[]) {
   return {patch,changes,warnings,errors};
 }
 export function syncReviewRevision(review) {
-  return JSON.stringify({actor:review.actor?.id,selection:review.selection??null,updates:review.updates,additions:review.additions,
+  return JSON.stringify({actor:review.actor?.id,selection:review.selection??null,matchPlan:review.matchPlan,updates:review.updates,additions:review.additions,
     actorChanges:review.actorChanges??[],errors:review.errors,canImport:review.canImport});
 }
