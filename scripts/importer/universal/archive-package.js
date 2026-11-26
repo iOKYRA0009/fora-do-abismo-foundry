@@ -56,7 +56,7 @@ export async function prepareJarvisArchive(file,{makeFile=(bytes,name,mime)=>new
   let total=0;
   for(const a of manifest.assets??[]){
     only(a,["id","path"],"Imagem");
-    if(typeof a.id!=="string"||!/^[A-Za-z0-9_-]{1,64}$/.test(a.id)||ids.has(a.id.toLowerCase()))fail("ID de imagem inválido ou duplicado.");
+    if(typeof a.id!=="string"||!/^[A-Za-z0-9_-]{1,64}$/.test(a.id)||["__proto__","constructor","prototype"].includes(a.id.toLowerCase())||ids.has(a.id.toLowerCase()))fail("ID de imagem inválido ou duplicado.");
     if(typeof a.path!=="string"||used.has(a.path)||!entries.has(a.path))fail("Imagem ausente ou reutilizada: "+a.path);
     const ext=a.path.split(".").pop().toLowerCase(),mime=own(imageTypes,ext)?imageTypes[ext]:null;
     const bytes=entries.get(a.path);
