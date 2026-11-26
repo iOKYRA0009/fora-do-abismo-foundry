@@ -27,7 +27,7 @@ export function renderSynergyControls(actors,gm) {
     <label>Saldo disponível<input type="number" min="0" max="20" value="1" name="synergy-adjust-value"></label>
     ${btn("synergy-adjust","Ajustar saldo")}
     <hr><h4>Biblioteca privada</h4><select name="synergy-library"><option value="">Atualize a biblioteca</option></select>
-    <div class="jarvis-console-row">${btn("synergy-refresh","Listar combos")}${btn("synergy-load","Editar selecionado")}${btn("synergy-new","Novo combo")}${btn("synergy-delete","Excluir selecionado")}</div>
+    <div class="jarvis-console-row">${btn("synergy-refresh","Listar combos")}${btn("synergy-audit","Auditar biblioteca")}${btn("synergy-load","Editar selecionado")}${btn("synergy-new","Novo combo")}${btn("synergy-delete","Excluir selecionado")}</div>
     <input name="synergy-id" type="hidden"><label>Nome<input name="synergy-name" maxlength="120"></label>
     <label>Notas e efeitos (somente Mestre)<textarea name="synergy-description" maxlength="2000" rows="3"></textarea></label>
     <label>Disponibilidade<select name="synergy-visibility"><option value="gm">Somente Mestre</option><option value="owners">Controladores do iniciador podem solicitar</option></select></label>
@@ -40,7 +40,7 @@ export function renderSynergyControls(actors,gm) {
       <label>Condição necessária<select name="synergy-condition-${i}">${statusOptions}</select></label>
     </fieldset>`).join("")}
     <label>Atividade nativa do iniciador (opcional)<select name="synergy-activity"><option value="">Resolver efeitos manualmente</option></select></label>
-    <div class="jarvis-console-row">${btn("synergy-activities","Carregar Activities do iniciador")}${btn("synergy-save","Salvar combo")}</div>
+    <div class="jarvis-console-row">${btn("synergy-activities","Carregar Activities do iniciador")}${btn("synergy-preview","Simular sem gastar ações")}${btn("synergy-save","Salvar combo")}</div>
     <p class="jarvis-console-hint">O Mestre confirma e seleciona os alvos da Activity. A Activity usa os recursos e efeitos nativos do D&D; o custo de ação do combo é registrado separadamente. Sem Activity, o Mestre resolve a narrativa/mecânica.</p></details>`:""}
   </section>`;
 }
@@ -117,6 +117,8 @@ export async function executeSynergyConsoleAction(action,root,actorId,confirmAct
     if(value(root,"synergy-adjust-value")==="")throw new Error("Informe o saldo disponível.");
     return synergyCommand({action:"adjust",actorId:actorId(),cost:value(root,"synergy-adjust-cost"),value:Number(value(root,"synergy-adjust-value"))});
   }
+  if(action==="synergy-audit")return synergyCommand({action:"audit"});
+  if(action==="synergy-preview")return synergyCommand({action:"preview",combo:readCombo(root)});
   if(action==="synergy-refresh"){const rows=await refreshLibrary(root);return rows.map(c=>({id:c.id,name:c.name,visibility:c.visibility}));}
   if(action==="synergy-new"){resetForm(root);return "Novo combo.";}
   if(action==="synergy-activities"){refreshActivities(root);return "Activities do iniciador carregadas.";}
