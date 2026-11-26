@@ -305,7 +305,9 @@ export function dispatchSynergy(args,user) {
 export async function synergyCommand(args) {
   if(game.user?.isGM) return dispatchSynergy(args,game.user);
   if(!remoteSocket) throw new Error("Synergy requer socketlib ativo e um Mestre conectado.");
-  return remoteSocket.executeAsGM("synergyCommand",args);
+  const activeGM=game.users?.activeGM;
+  if(!activeGM?.active) throw new Error("Synergy: nenhum Mestre ativo.");
+  return remoteSocket.executeAsUser("synergyCommand",activeGM.id,args);
 }
 export function registerSynergyTracking() {
   Hooks.on("dnd5e.postUseActivity",(activity,usage,results)=>{
