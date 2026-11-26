@@ -1,4 +1,4 @@
-import { preparePackageIntegrations, resolveImportedCombos } from "../importer/package-integrations.js";
+import { preparePackageIntegrations, resolveImportedCombos, verifyImportedBindings } from "../importer/package-integrations.js";
 import { registerImportedCombos, removeImportedCombos } from "../synergy/synergy-engine.js";
 import { rejectJsonAsScript } from "./source-format.js";
 import { validateJarvisActorPayload } from "../importer/validators/payload-validator.js";
@@ -649,6 +649,10 @@ export async function rollbackJarvisExecution(executionId) {
         for (const combo of combos.skipped) skipped.push("Sinergia editada: "+combo);
       } catch(e) { errors.push("Sinergias: "+e.message); }
     }
+    if (entry.hasImportedCombos && (skipped.length || errors.length)) {
+      await modifyHistory(id,{status:"partial_rollback",rollback:{removed,skipped,errors},message:"Sinergias editadas ou inacessíveis; fichas preservadas para revisão."});
+      return {executionId:id,ok:false,removed,skipped,errors,imagesRemaining:{...(entry.images??{})}};
+    }
     const changed = (document, saved) => saved.modifiedTime !== null
       && modificationTime(document) !== null && modificationTime(document) !== saved.modifiedTime;
     // A browser interruption can occur between document creation and the next
@@ -759,6 +763,7 @@ export async function runJarvisExecution(plan, api) {
     const verified = previewJarvisExecution(JSON.stringify(plan.data), { mode: "package", files: plan.files });
     const payload = verified.data;
     const mechanics = preparePackageIntegrations(payload, collectionValues(game.actors));
+    if (JSON.stringify(verified.review.synergyCombos) !== JSON.stringify(plan.review.synergyCombos)) throw new Error("Participantes de sinergia mudaram; refaça a prévia.");
     const beforeActors = new Set(collectionValues(game.actors).map(actor => actor.id));
     const beforeScenes = new Set(collectionValues(game.scenes).map(scene => scene.id));
     const beforeItems = new Map(collectionValues(game.actors).map(actor =>
@@ -842,6 +847,7 @@ export async function runJarvisExecution(plan, api) {
         else throw new Error("Jarvis Executor: Scene Builder não retornou uma cena rastreável.");
         await modifyHistory(executionId, ledgerSnapshot(createdActors, createdScenes, addedItems, images));
       }
+      verifyImportedBindings(mechanics.bindings, createdActors);
       let comboIds = [];
       if (mechanics.combos.length) {
         operation = "registro privado das sinergias";
