@@ -1,3 +1,4 @@
+import { isStructuredCharacterText } from "./structured-text.js";
 /** Format recognition only. No eval, execution, file uploads or document writes. */
 const object=v=>v!==null&&typeof v==="object"&&!Array.isArray(v);
 const actorTypes=new Set(["character","npc","vehicle","group"]);
@@ -43,6 +44,7 @@ export function detectUniversalSource(input,{filename=""}={}) {
     return result("json-unknown",null,"JSON válido, mas não corresponde a um formato suportado de ficha, Items ou pacote.",source,data);
   }
   if(explicitOther)return result("unsupported-language",null,"Linguagem não suportada pelo Foundry. Converta os dados para JSON Jarvis; não execute como macro.",source);
+  if(!["yaml","xml","csv","javascript"].includes(preferred)&&isStructuredCharacterText(source))return result("structured-character-text",null,"Ficha de texto estruturado reconhecida; converter antes de importar.",source);
   if(preferred==="yaml"||/^---\s*\n/.test(source)||/^(?:schemaVersion|actor|name|personagem):\s*[^\n]*\n/m.test(source))return result("yaml",null,"YAML reconhecido; conversor aceita um subconjunto de dados documentado.",source);
   if(preferred==="xml"||/^\s*<(?:\?xml\b|[A-Za-z_][\w.-]*(?:\s|>|\/))/.test(source))return result("xml",null,"XML reconhecido; use o esquema de ficha documentado.",source);
   if(preferred==="csv"||/^(?:name|nome|actor|personagem)[,;][^\n]+\r?\n/i.test(source))return result("csv",null,"CSV reconhecido; use o cabeçalho de ficha documentado.",source);
