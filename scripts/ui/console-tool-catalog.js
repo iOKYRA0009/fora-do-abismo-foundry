@@ -1,4 +1,6 @@
 export const TOOL_CATALOG = Object.freeze([
+  { id: "actor-sync-select", label: "Escolher alterações da ficha", tab: "characters", gmOnly: true },
+  { id: "actor-sync-reset", label: "Voltar à sincronização padrão", tab: "characters", gmOnly: true },
   { id: "actor-dependency-audit", label: "Auditar dependências da ficha", tab: "characters", gmOnly: true },
   { id: "synergy-audit", label: "Auditar biblioteca de combos", tab: "characters", gmOnly: true },
   { id: "synergy-preview", label: "Simular combo sem gastar ações", tab: "characters", gmOnly: true },
