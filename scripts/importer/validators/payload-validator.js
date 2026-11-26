@@ -1,3 +1,4 @@
+import { normalizeSheetAppearance } from "../../ui/sheet-appearance.js";
 export class PayloadValidationError extends Error {
   constructor(message, details = []) {
     super(message);
@@ -263,6 +264,9 @@ export function validateJarvisActorPayload(payload) {
 
     validateImgStrategy(payload.actor.imgStrategy, "actor.imgStrategy", errors);
     validateActorSemantic(payload.actor.jarvis, "actor.jarvis", errors);
+    try {
+      normalizeSheetAppearance(payload.actor.jarvis?.sheetAppearance ?? payload.actor.flags?.["fora-do-abismo-foundry"]?.sheetAppearance);
+    } catch (error) { errors.push("actor.sheetAppearance: " + error.message); }
   }
 
   if (payload.items !== undefined && !Array.isArray(payload.items)) {
