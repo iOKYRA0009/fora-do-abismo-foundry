@@ -36,21 +36,21 @@ export function detectUniversalSource(input,{filename=""}={}) {
     if(object(data)&&("schemaVersion" in data||"actor" in data))
       return result("json-unknown",null,"Versão ou estrutura de pacote não reconhecida. Nenhum código será executado.",source,data);
     if(object(data)&&actorTypes.has(data.type)&&typeof data.name==="string"&&object(data.system))
-      return result("foundry-actor",null,"Actor nativo do Foundry detectado. Nesta versão, utilize a importação JSON nativa do Foundry; o conversor será implementado separadamente.",source,data);
+      return result("foundry-actor",null,"Actor nativo do Foundry detectado. Converta para a revisão Jarvis.",source,data);
     const items=Array.isArray(data)?data:object(data)&&Array.isArray(data.items)?data.items:item(data)?[data]:null;
     if(items&&items.length>0&&items.length<=100&&items.every(item))
       return result("jarvis-items","items","Items detectados: selecione a ficha de destino e revise antes de importar.",source,items);
     return result("json-unknown",null,"JSON válido, mas não corresponde a um formato suportado de ficha, Items ou pacote.",source,data);
   }
   if(explicitOther)return result("unsupported-language",null,"Linguagem não suportada pelo Foundry. Converta os dados para JSON Jarvis; não execute como macro.",source);
-  if(preferred==="yaml"||/^---\s*\n/.test(source)||/^(?:schemaVersion|actor|name|personagem):\s*[^\n]*\n/m.test(source))return result("yaml",null,"YAML reconhecido; conversão ainda não disponível.",source);
-  if(preferred==="xml"||/^\s*<(?:\?xml\b|[A-Za-z_][\w.-]*(?:\s|>|\/))/.test(source))return result("xml",null,"XML reconhecido; conversão ainda não disponível.",source);
-  if(preferred==="csv"||/^(?:name|nome|actor|personagem)[,;][^\n]+\r?\n/i.test(source))return result("csv",null,"CSV reconhecido; conversão ainda não disponível.",source);
+  if(preferred==="yaml"||/^---\s*\n/.test(source)||/^(?:schemaVersion|actor|name|personagem):\s*[^\n]*\n/m.test(source))return result("yaml",null,"YAML reconhecido; conversor aceita um subconjunto de dados documentado.",source);
+  if(preferred==="xml"||/^\s*<(?:\?xml\b|[A-Za-z_][\w.-]*(?:\s|>|\/))/.test(source))return result("xml",null,"XML reconhecido; use o esquema de ficha documentado.",source);
+  if(preferred==="csv"||/^(?:name|nome|actor|personagem)[,;][^\n]+\r?\n/i.test(source))return result("csv",null,"CSV reconhecido; use o cabeçalho de ficha documentado.",source);
   if(preferred==="javascript"||/^(?:\s*\/\/[^\n]*\n)*\s*(?:const\s+\w+\s*=|let\s+\w+\s*=|(?:await\s+)?(?:game|canvas|ui|Actor|Item|ChatMessage|foundry)\.|(?:async\s+)?function\s+\w+\s*\(|return\s+)/.test(source))
     return result("javascript","executor-js","Possível JavaScript. Exige validação de sintaxe e autorização no Executor; não será executado pelo detector.",source);
   if(preferred==="markdown"||/^#{1,6}\s/m.test(source))return result("markdown",null,"Markdown detectado; conversão de fichas estruturadas ainda não disponível.",source);
   return result("text",null,"Texto ou linguagem não reconhecida. Nenhuma execução automática.",source);
 }
 export function universalReport(detected){
-  return {formato:detected.format,suportado:detected.supported,destino:detected.route,mensagem:detected.message,somenteLeitura:true};
+  return {formato:detected.format,suportado:detected.supported,destino:detected.route,mensagem:detected.message,avisos:detected.warnings??[],somenteLeitura:true};
 }
