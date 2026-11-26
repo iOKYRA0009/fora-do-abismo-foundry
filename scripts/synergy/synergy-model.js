@@ -15,7 +15,9 @@ export function normalizeCombo(raw) {
   const participants = raw.participants.map(p => {
     if (!id(p?.actorId) || seen.has(p.actorId) || !COSTS.includes(p.cost)) throw new Error("Participante duplicado, inválido ou sem custo definido.");
     seen.add(p.actorId);
-    return {actorId:p.actorId,cost:p.cost,offTurn:p.offTurn===true};
+    const requiredStatus=p.requiredStatus||null;
+    if(requiredStatus!==null && !id(requiredStatus)) throw new Error("Condição obrigatória inválida.");
+    return {actorId:p.actorId,cost:p.cost,offTurn:p.offTurn===true,requiredStatus};
   });
   if (!id(raw.initiatorId) || !seen.has(raw.initiatorId)) throw new Error("O iniciador deve participar do combo.");
   const maxDistance = raw.maxDistance == null || raw.maxDistance === "" ? null : Number(raw.maxDistance);
