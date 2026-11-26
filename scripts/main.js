@@ -1,3 +1,4 @@
+import { auditActorDependencies } from "./diagnostics/dependency-audit.js";
 import { registerSynergyTracking, synergyCommand } from "./synergy/synergy-engine.js";
 import { registerSynergySheetControls, openSynergyPicker } from "./synergy/synergy-ui.js";
 import { JarvisImporterV9 } from "./importer/v9/jarvis-importer-v9.js";
@@ -367,6 +368,10 @@ Hooks.once("ready", runtimeCapture.guard("initialization", "ready", () => {
     format: formatJarvisDiagnostics,
     download: downloadJarvisDiagnostics,
     compareActor: compareActorToPayload,
+    auditDependencies: actor => {
+      if (!game.user?.isGM) throw new Error("Auditoria de dependências exige Mestre.");
+      return auditActorDependencies(actor);
+    },
     capture: {
       start: () => runtimeCapture.start(),
       stop: () => runtimeCapture.stop(),
