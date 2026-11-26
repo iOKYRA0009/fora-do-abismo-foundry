@@ -9,7 +9,7 @@ import {
 import { TOOL_CATALOG } from "./console-tool-catalog.js";
 import { JarvisInputError } from "./console-input-error.js";
 import { importJarvisActorWithImage, uploadJarvisActorImage } from "./actor-import-with-image.js";
-import { getSheetAppearance, setSheetAppearance, normalizeSheetAppearance } from "./sheet-appearance.js";
+import { getSheetAppearance, setSheetAppearance, normalizeSheetAppearance, DEFAULT_SHEET_PALETTE } from "./sheet-appearance.js";
 import { previewActivityChatRepair, repairActivityChatDescriptions } from "../importer/v9/activity-chat-privacy.js";
 import { getV91ActionPreset, listV91ActionPresets, saveV91ActionPreset } from "../importer/v9/action-presets.js";
 import { compileActorBlueprintV91 } from "../importer/v9/blueprint-v91.js";
@@ -134,9 +134,25 @@ function refreshActorOptions(root, actorId = null) {
   refreshActorRelatedOptions(root);
 }
 
+function populateSheetAppearanceForm(root, actor) {
+  if (!field(root, "sheet-bg-file")) return;
+  const current = getSheetAppearance(actor);
+  field(root, "sheet-bg-file").value = "";
+  field(root, "sheet-bg-opacity").value = String(Math.round((current?.opacity ?? .10) * 100));
+  field(root, "sheet-bg-size").value = String(current?.size ?? 65);
+  field(root, "sheet-bg-clear-image").checked = false;
+  field(root, "sheet-palette-enabled").checked = Boolean(current?.palette);
+  for (const [key, fallback] of Object.entries(DEFAULT_SHEET_PALETTE)) {
+    field(root, "sheet-palette-" + key).value = current?.palette?.[key] ?? fallback;
+  }
+  const status = root.querySelector("[data-jarvis-sheet-image]");
+  if (status) status.textContent = current?.image ? current.image.split("/").pop() : "Nenhuma imagem salva";
+}
+
 function refreshActorRelatedOptions(root) {
   const actor = game.actors?.get?.(fieldValue(root, "jarvis-actor"));
   const visible = actor && getJarvisAccess(game.user, actor).canViewActor ? actor : null;
+  populateSheetAppearanceForm(root, visible);
   const playerItems = field(root, "player-item");
   if (playerItems) {
     const previous = playerItems.value;
@@ -899,10 +915,19 @@ function renderContent() {
     ${advanced("Scene Builder e ferramentas de mapas", maps)}`) : "";
   const appearancesPage = panel("appearances", `<h2>Aparências</h2><p>Skins e transformações.</p>
     <div class="jarvis-console-row">${button("appearance-list", "Ver perfis")}${button("appearance-available", "Ver skins do Token")}</div>
-    ${gm ? `<h3>Fundo personalizado da ficha</h3><p class="jarvis-console-hint">Selecione o personagem acima. A imagem fica salva na ficha e aparece para quem a abrir.</p>
+    ${gm ? `<h3>Aparência personalizada da ficha</h3><p class="jarvis-console-hint">Selecione o personagem acima. A imagem fica salva na ficha e aparece para quem a abrir.</p>
     <label>Imagem (PNG, JPG ou WebP até 6 MB)<input name="sheet-bg-file" type="file" accept="image/png,image/jpeg,image/webp"></label>
     <div class="jarvis-console-grid"><label>Opacidade (%)<input name="sheet-bg-opacity" type="number" min="2" max="25" value="10"></label><label>Tamanho (%)<input name="sheet-bg-size" type="number" min="20" max="100" value="65"></label></div>
-    <div class="jarvis-console-row">${button("sheet-bg-load", "Carregar fundo salvo")}${button("sheet-bg-save", "Salvar fundo na ficha")}${button("sheet-bg-remove", "Remover fundo")}</div>` : ""}
+    <p class="jarvis-console-hint" data-jarvis-sheet-image>Nenhuma imagem salva</p>
+    <label><input name="sheet-bg-clear-image" type="checkbox"> Retirar imagem ao salvar (manter cores)</label>
+    <label><input name="sheet-palette-enabled" type="checkbox"> Usar cores personalizadas nesta ficha</label>
+    <div class="jarvis-console-grid">
+      <label>Papel<input name="sheet-palette-paper" type="color" value="#f8f6ef"></label>
+      <label>Texto<input name="sheet-palette-text" type="color" value="#30323a"></label>
+      <label>Títulos<input name="sheet-palette-title" type="color" value="#806126"></label>
+      <label>Divisórias<input name="sheet-palette-divider" type="color" value="#b0b4bd"></label>
+    </div><p class="jarvis-console-hint">As cores são opcionais. O contraste do texto e dos títulos é verificado antes de salvar.</p>
+    <div class="jarvis-console-row">${button("sheet-bg-load", "Carregar tema salvo")}${button("sheet-bg-save", "Salvar aparência")}${button("sheet-bg-remove", "Restaurar padrão")}</div>` : ""}
     ${advanced("Visage e Metamorph", appearances)}`);
   const systemPage = gm ? panel("system", `<h2>Sistema</h2><p>Diagnósticos, compatibilidade e ferramentas avançadas.</p>
     <div class="jarvis-console-row">${button("diagnostics-run", "Executar diagnóstico")}${button("modules-list", "Listar módulos ativos")}</div>
@@ -1489,28 +1514,31 @@ export async function executeJarvisConsoleAction(action, root, state = {}) {
     if (actor.type !== "character") throw new JarvisInputError("Selecione uma ficha de personagem.");
     const current = getSheetAppearance(actor);
     if (action === "sheet-bg-load") {
-      field(root, "sheet-bg-opacity").value = String(Math.round((current?.opacity ?? 0.10) * 100));
-      field(root, "sheet-bg-size").value = String(current?.size ?? 65);
-      field(root, "sheet-bg-file").value = "";
+      populateSheetAppearanceForm(root, actor);
       return setOutput(root, "Fundo da ficha", current ?? "Nenhum fundo salvo.");
     }
     if (action === "sheet-bg-remove") {
-      if (!await confirmAction("Remover fundo", `Remover o fundo personalizado de ${actor.name}?`)) return;
+      if (!await confirmAction("Restaurar padrão", `Remover a imagem e as cores personalizadas de ${actor.name}?`)) return;
       await setSheetAppearance(actor, null);
       if (actor.sheet?.rendered) actor.sheet.render(false);
-      field(root, "sheet-bg-file").value = "";
-      return setOutput(root, "Fundo removido", actor.name);
+      populateSheetAppearanceForm(root, actor);
+      return setOutput(root, "Aparência padrão restaurada", actor.name);
     }
     const file = field(root, "sheet-bg-file")?.files?.[0];
-    if (!file && !current) throw new JarvisInputError("Selecione uma imagem para o fundo.");
-    const config = normalizeSheetAppearance({ image: current?.image ?? "placeholder.png",
-      opacity: Number(fieldValue(root, "sheet-bg-opacity")) / 100, size: Number(fieldValue(root, "sheet-bg-size")) });
-    if (!await confirmAction("Salvar fundo", `Salvar o fundo personalizado de ${actor.name}?`)) return;
+    const clearImage = field(root, "sheet-bg-clear-image").checked;
+    if (file && clearImage) throw new JarvisInputError("Escolha enviar ou retirar a imagem, não ambos.");
+    const palette = field(root, "sheet-palette-enabled").checked
+      ? Object.fromEntries(Object.keys(DEFAULT_SHEET_PALETTE).map(key => [key, fieldValue(root, "sheet-palette-" + key)]))
+      : null;
+    const image = file ? "placeholder.png" : clearImage ? null : current?.image ?? null;
+    const config = image || palette ? normalizeSheetAppearance({ image, palette,
+      opacity: Number(fieldValue(root, "sheet-bg-opacity")) / 100, size: Number(fieldValue(root, "sheet-bg-size")) }) : null;
+    if (!await confirmAction("Salvar aparência", `Salvar a aparência personalizada de ${actor.name}?`)) return;
     if (file) config.image = await uploadJarvisActorImage(file);
     const saved = await setSheetAppearance(actor, config);
-    field(root, "sheet-bg-file").value = "";
     if (actor.sheet?.rendered) actor.sheet.render(false);
-    return setOutput(root, "Fundo salvo na ficha", saved);
+    if (fieldValue(root, "jarvis-actor") === actor.id) populateSheetAppearanceForm(root, actor);
+    return setOutput(root, "Aparência salva na ficha", saved ?? "Aparência padrão.");
   }
 
   if (["appearance-list", "appearance-available", "appearance-save", "appearance-apply", "appearance-revert",
