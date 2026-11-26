@@ -257,6 +257,51 @@ async function nativeRecord(user,args) {
   await save(doc,data);
   return {recorded:true};
 }
+function auditCombo(raw) {
+  const issues=[];
+  const add=(severity,code,message,fix)=>issues.push({severity,code,message,fix});
+  let combo;
+  try {combo=normalizeCombo(raw);} catch(e) {
+    add("error","invalid-definition",e.message,"Edite a definição do combo.");
+    return {id:raw?.id,name:raw?.name,valid:false,issues};
+  }
+  const statusCatalog=globalThis.CONFIG?.statusEffects;
+  const statusIds=statusCatalog?new Set(values(statusCatalog).map(s=>s.id)):null;
+  for(const p of combo.participants){
+    const actor=game.actors.get(p.actorId);
+    if(!actor){add("error","missing-actor","Ficha removida: "+p.actorId,"Escolha novamente o participante no editor.");continue;}
+    if(p.requiredStatus && statusIds && !statusIds.has(p.requiredStatus))
+      add("warning","unknown-status",actor.name+": condição fora do catálogo: "+p.requiredStatus,"Confira o módulo de origem ou selecione outra condição.");
+    if(p.offTurn && ["action","bonus"].includes(p.cost))
+      add("warning","off-turn",actor.name+": custo fora do próprio turno permitido.","Confirme se é uma exceção homebrew intencional.");
+  }
+  if(combo.activity){
+    const actor=game.actors.get(combo.initiatorId);
+    if(actor)try {nativeActivity(actor,combo.activity);} catch(e) {
+      add("error","missing-activity",e.message,"Vincule uma Activity existente do iniciador.");
+    }
+  } else add("info","manual-resolution","Sem Activity vinculada: somente custos serão registrados.","Vincule uma Activity se desejar automação.");
+  return {id:combo.id,name:combo.name,valid:!issues.some(i=>i.severity==="error"),issues};
+}
+function previewCombo(data,raw,user) {
+  const audit=auditCombo(raw);
+  if(!audit.valid)return {definition:audit,combat:{ready:false,reason:"Corrija as dependências da definição."},readOnly:true};
+  const combo=normalizeCombo(raw);
+  let combat;
+  try {
+    const context=validateRequest(data,combo,user);
+    const ledger=currentLedger(ledgerOf(data,context.clock),context.clock);
+    const participants=context.entries.map(p=>{
+      const before=remaining(ledger,context.clock,p.c.id),after=remaining(context.planned,context.clock,p.c.id);
+      return {actor:p.c.actor.name,cost:p.cost,before:p.cost==="free"?null:before[p.cost],after:p.cost==="free"?null:after[p.cost],
+        controller:chooseController(p.c.actor,controllers(p.c.actor))?.name??null,
+        offline:controllers(p.c.actor).length>0&&!chooseController(p.c.actor,controllers(p.c.actor))};
+    });
+    const blocked=participants.some(p=>p.offline)||(!remoteSocket&&participants.some(p=>p.controller));
+    combat={ready:!blocked,participants,reason:blocked?"Controlador desconectado ou Socketlib indisponível.":null,consent:"Não solicitado nesta prévia."};
+  } catch(e) {combat={ready:false,reason:e.message};}
+  return {definition:audit,combat,readOnly:true};
+}
 export function setSynergySocket(socket) {remoteSocket=socket;}
 export function dispatchSynergy(args,user) {
   if(args?.action==="request") return runCombo(user,args);
@@ -276,6 +321,11 @@ export function dispatchSynergy(args,user) {
     }
     requireGMUser(user);
     if(action==="all") return data.combos;
+    if(action==="audit") {
+      const combos=data.combos.map(auditCombo);
+      return {count:combos.length,valid:combos.filter(c=>c.valid).length,broken:combos.filter(c=>!c.valid).length,combos,readOnly:true};
+    }
+    if(action==="preview") return previewCombo(data,args.combo,user);
     if(action==="save") {
       const combo=normalizeCombo(args.combo);
       for(const p of combo.participants) if(!game.actors.get(p.actorId)) throw new Error("Participante não encontrado no mundo.");
