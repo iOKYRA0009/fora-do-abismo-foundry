@@ -109,6 +109,9 @@ export function parseActorXml(input){
 }
 function convertNative(data){
   if(!allowedTypes.has(data.type))throw Error("Somente Actors character e npc do D&D5e são suportados.");
+  const systemId=data._stats?.systemId??data.flags?.exportSource?.system;
+  if(typeof systemId==="string"&&systemId&&systemId!=="dnd5e")throw Error("Actor exportado de outro sistema: "+systemId);
+  if(data.prototypeToken!=null&&!object(data.prototypeToken))throw Error("Token protótipo inválido.");
   const warnings=["Cópia para revisão V9.0, não restauração integral do mundo. IDs do Actor, permissões, pasta, flags externas e metadados de mundo não são copiados.",
     "Itens, Activities, efeitos e IDs internos são preservados quando fornecidos. Referências UUID ao Actor original, módulos externos, fórmulas e migrações exigem revisão; imagens devem existir no mundo de destino."];
   if(!object(data.system)||!Array.isArray(data.items??[])||!Array.isArray(data.effects??[]))throw Error("Actor nativo: system, items ou effects inválidos.");
@@ -144,6 +147,8 @@ export function convertUniversalSource(detected){
     else{route="executor-package";payload={schemaVersion:"jarvis-executor-1",name:"Importação CSV",actors:actors.map(compileActorBlueprintV91)};warnings.push("Lote de "+actors.length+" novos personagens: revise duplicatas no Executor.");}
   }else return detected;
   assertData(payload);
-  return {...detected,route,supported:true,data:payload,source:JSON.stringify(payload,null,2),warnings,
+  const convertedSource=JSON.stringify(payload,null,2);
+  if(convertedSource.length>2*1024*1024)throw Error("Conversão acima de 2 MB. Divida o conteúdo em arquivos menores.");
+  return {...detected,route,supported:true,data:payload,source:convertedSource,warnings,
     message:"Conversão concluída em memória. Revise antes de criar ou atualizar documentos."};
 }
