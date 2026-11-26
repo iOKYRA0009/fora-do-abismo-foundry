@@ -9,7 +9,7 @@ const own=(o,k)=>Object.hasOwn(o,k);
 function assertData(v,depth=0,count={n:0}){
   if(++count.n>100000||depth>64)throw Error("Documento excede limites de estrutura.");
   if(v&&typeof v==="object")for(const [k,x] of Object.entries(v)){
-    if(["__proto__","prototype","constructor"].includes(k))throw Error("Chave reservada não permitida: "+k);
+    if(k.split(".").some(part=>["__proto__","prototype","constructor"].includes(part)))throw Error("Chave reservada não permitida: "+k);
     assertData(x,depth+1,count);
   }
   else if(typeof v==="number"&&!Number.isFinite(v))throw Error("Número inválido.");
@@ -50,7 +50,7 @@ export function parseCsv(source){
   const first=String(source).split(/\r?\n/,1)[0],delimiter=first.includes(";")?";":",";
   const rows=[];let row=[],cell="",quoted=false,closed=false;
   function field(){row.push(cell);cell="";closed=false;}
-  function line(){field();if(row.some(v=>v.trim()))rows.push(row);row=[];if(rows.length>51)throw Error("CSV aceita até 50 personagens.");}
+  function line(){field();if(row.some(v=>v.trim()))rows.push(row);row=[];if(rows.length>21)throw Error("CSV aceita até 20 personagens.");}
   for(let i=0;i<source.length;i++){
     const ch=source[i];
     if(quoted){if(ch==='"'){if(source[i+1]==='"'){cell+='"';i++;}else{quoted=false;closed=true;}}else cell+=ch;continue;}
