@@ -128,6 +128,7 @@ export class JarvisImporterV9 {
         if (!match.id) { additions.push(itemData); continue; }
         const item = actor.items.get?.(match.id) ?? Array.from(actor.items ?? []).find(row => row.id === match.id);
         if (!item) throw new Error("Item selecionado removido durante a sincronização.");
+        if (!findItemConflicts([resolved[index]],[item]).length) throw new Error("A fonte resolvida mudou a identidade do Item selecionado. Revise a correspondência.");
         const previous = foundry.utils.deepClone(item.toObject?.().system?.activities ?? item.system?.activities ?? {});
         const merged = foundry.utils.deepClone(previous);
         for (const [id, incoming] of Object.entries(itemData.system?.activities ?? {})) {
@@ -150,7 +151,8 @@ export class JarvisImporterV9 {
         if(failures.length)throw new Error("Auditoria V9.1: "+failures.join(" "));
       }
       if (snapshots.length || additions.length) {
-        await resolveCrossItemConsumption(actor, snapshots.map(s => s.item));
+        const linkedUpdates = snapshots.map(s => s.item).filter(item => Object.values(item.toObject?.().system?.activities ?? {}).some(a => a.consumption?.targets?.some(t => typeof t.target === "string" && t.target.startsWith("@jarvis:"))));
+        if (linkedUpdates.length) await resolveCrossItemConsumption(actor, linkedUpdates);
         if (selection === null) await stampActorProvenance(actor);
       }
       if (Object.keys(actorPatch.patch).length) {
