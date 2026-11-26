@@ -8,6 +8,14 @@ Este repositório concentra o código da campanha: Jarvis Importer, macros, auto
 
 A lore completa não deve ser duplicada aqui. O Google Drive continua sendo a fonte documental da campanha; este repositório é a oficina técnica.
 
+## Personalização de ficha — 1.5.12
+
+Na Central Jarvis, selecione um personagem, abra **Aparências → Fundo personalizado da ficha**, envie uma imagem PNG/JPG/WebP (até 6 MB), defina opacidade e tamanho e clique em **Salvar fundo na ficha**. O Mestre pode ajustar ou remover o fundo sem alterar retrato, token, atributos ou habilidades. O tema fica em uma flag do Actor, compartilhada com quem tem acesso à ficha. O padrão é 10% de opacidade e 65% de tamanho. A imagem fica armazenada nos dados do Foundry; remover o tema não apaga o arquivo.
+
+Para importar um personagem V9.0/V9.1 com imagem local já disponível, use `actor.jarvis.sheetAppearance: { "image": "jarvis-actor-images/exemplo.webp", "opacity": 0.10, "size": 65 }`. Também é aceito o campo nativo `actor.flags["fora-do-abismo-foundry"].sheetAppearance`. Links externos não são aceitos. O Executor pode resolver referências de assets conforme seu fluxo existente; use caminhos locais no JSON individual.
+
+A ficha padrão D&D5e V14 é o alvo. A Tidy deve ser conferida no ambiente real, pois sua estrutura visual pode variar. Nenhuma alteração é aplicada a fichas sem tema.
+
 ## Instalação no Foundry
 
 Instale o módulo por **Manifest URL**:

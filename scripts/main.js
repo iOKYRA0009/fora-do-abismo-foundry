@@ -1,5 +1,6 @@
 import { JarvisImporterV9 } from "./importer/v9/jarvis-importer-v9.js";
 import { registerTranslationSettings } from "./translation/compendium-language.js";
+import { registerSheetAppearance } from "./ui/sheet-appearance.js";
 import { registerHybridFeatureLayout } from "./ui/hybrid-features.js";
 import { registerMacroFileDrop } from "./ui/macro-file-drop.js";
 import {
@@ -119,6 +120,7 @@ Hooks.once("init", runtimeCapture.guard("initialization", "init", () => {
   console.log(`${MODULE_ID} | Inicializando Jarvis Tools`);
   registerTranslationSettings();
   registerHybridFeatureLayout();
+  registerSheetAppearance();
   registerMacroFileDrop();
   registerJarvisConsoleControl();
   registerUniversalVttControl();
