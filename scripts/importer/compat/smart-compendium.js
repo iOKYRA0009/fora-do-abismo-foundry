@@ -64,7 +64,9 @@ export async function resolveSmartCompendiums(items=[],{packs=globalThis.game?.p
   const indexes=()=>pending??=(async()=>{
     const result=[];
     for(const pack of packList)try{
-      const index=await pack.getIndex({fields:["name","type","system.identifier","system.source.rules","flags.babele.originalName","flags.core.originalName"]});
+      // D&D5e already indexes system.source. Requesting its child .rules as well
+      // causes a parent/child projection collision in the Foundry V14 backend.
+      const index=await pack.getIndex({fields:["name","type","system.identifier","system.source","flags.babele.originalName","flags.core.originalName"]});
       for(const entry of values(index))result.push({pack,entry});
     }catch(e){indexErrors.push({pack:pack.collection??pack.metadata?.id,message:String(e?.message??e)});}
     return result;
