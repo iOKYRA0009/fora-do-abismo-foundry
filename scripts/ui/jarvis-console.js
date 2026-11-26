@@ -1,3 +1,4 @@
+import { detectUniversalSource, universalReport } from "../importer/universal/source-detector.js";
 import { SYNC_FIELDS, selectiveSyncCatalog, prepareSelectiveSync, syncReviewRevision } from "../importer/v9/selective-sync.js";
 import { auditActorDependencies } from "../diagnostics/dependency-audit.js";
 import { renderSynergyControls, executeSynergyConsoleAction } from "../synergy/synergy-ui.js";
@@ -911,6 +912,11 @@ function renderContent() {
   const charactersPage = panel("characters", `
     <h2>Personagens</h2><p>Fichas, NPCs e habilidades.</p>
     <div class="jarvis-console-row">${button("actor-open", "Abrir ficha")}${button("actor-provenance", "Analisar origem")}${button("actor-rules", "Perfil de regras")}${button("actor-jack", "Estado de Jack")}</div>
+    ${gm ? `<section class="jarvis-console-card"><h3>Importador Universal</h3><p>Cole código ou selecione um arquivo. Detecta o formato e prepara a revisão existente, sem criar documentos nem executar macros.</p>
+      <label>Arquivo<input type="file" name="universal-file" accept=".json,.js,.mjs,.txt,.yaml,.yml,.xml,.csv,.md,.markdown,.zip,.jarvis,.py,.lua"></label>
+      <label>Conteúdo<textarea name="universal-source" rows="6" spellcheck="false" placeholder="Cole o conteúdo de uma ficha, Items ou macro"></textarea></label>
+      <div class="jarvis-console-row">${button("universal-detect","Detectar formato")}${button("universal-route","Preparar importação")}</div>
+      <p class="jarvis-console-hint">Suporte inicial: JSON Jarvis V9/V9.1, Items JSON, pacote Executor e JavaScript. Outros formatos são reconhecidos, mas não convertidos. Preparar substitui o conteúdo do editor de destino e limpa seus arquivos anteriores; anexe retrato/token/imagens novamente quando necessário.</p></section>` : ""}
     ${renderSynergyControls(actors, gm)}
     ${advanced("Criar, importar e manter fichas", characters)}
     ${advanced("Área dos jogadores", players)}
@@ -1049,6 +1055,43 @@ function templateSpec(root) {
 
 export async function executeJarvisConsoleAction(action, root, state = {}) {
   const jarvis = api();
+  if (action === "universal-detect" || action === "universal-route") {
+    requireGM();
+    const file = field(root,"universal-file")?.files?.[0];
+    if (file && /\\.(zip|jarvis)$/i.test(file.name)) return setOutput(root,"Importador Universal",{formato:"archive",suportado:false,mensagem:"Pacotes ZIP/.jarvis reconhecidos. A leitura de arquivos internos ainda não está disponível."});
+    const source = await fileOrText(root,"universal-file","universal-source");
+    const detected = detectUniversalSource(source,{filename:file?.name??""});
+    if (action === "universal-detect" || !detected.supported) return setOutput(root,"Formato detectado",universalReport(detected));
+    const clear = name => { const node=field(root,name); if(node)node.value=""; };
+    const put = (name,value) => { const node=field(root,name); if(!node)throw new JarvisInputError("Editor de destino indisponível."); node.value=value; };
+    if (detected.route === "actor") {
+      put("actor-json",JSON.stringify(detected.data,null,2));
+      for(const name of ["actor-json-file","actor-image-file","actor-token-file"])clear(name);
+      state.actorImportPreview=null;state.actorSyncPreview=null;state.actorSyncScope=null;
+      for(const url of state.actorImagePreviewUrls??[])URL.revokeObjectURL(url);
+      state.actorImagePreviewUrls=[];
+      const scope=root.querySelector("[data-jarvis-sync-scope]");
+      if(scope){scope.hidden=true;scope.innerHTML="";}
+      renderImportReview(root,"actor",null);
+      selectTab(root,"characters");
+      return setOutput(root,"Ficha preparada",{...universalReport(detected),proximo:"Use Revisar importação V9.1 para criar ou Escolher alterações para atualizar uma ficha existente."});
+    }
+    if (detected.route === "items") {
+      put("items-json",JSON.stringify(detected.data,null,2));clear("items-json-file");
+      state.itemsImportPreview=null;renderImportReview(root,"items",null);
+      selectTab(root,"library");
+      return setOutput(root,"Items preparados",{...universalReport(detected),proximo:"Selecione a ficha de destino e clique Revisar Items V9."});
+    }
+    put("executor-source",detected.source);
+    put("executor-mode",detected.route==="executor-js"?"javascript":"package");
+    clear("executor-files");
+    state.executorFiles=[];state.executorPreview=null;state.executorMapUndo=[];
+    const consent=field(root,"executor-js-consent");if(consent)consent.checked=false;
+    const display=root.querySelector("[data-jarvis-executor-files]");if(display)display.textContent="Sem arquivos selecionados.";
+    renderExecutorPreview(root,state);
+    selectTab(root,"executor");
+    return setOutput(root,"Executor preparado",{...universalReport(detected),proximo:"Validar e visualizar; depois confirmar a execução explicitamente."});
+  }
   if (action.startsWith("synergy-")) return setOutput(root, "Sinergias Jarvis", await executeSynergyConsoleAction(action, root, () => selectedActor(root).id, confirmAction));
   if (action === "clear-output") return clearOutput(root);
   if (action === "pack-focus") return selectTab(root, "library");
