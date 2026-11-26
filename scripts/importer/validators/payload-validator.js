@@ -95,7 +95,11 @@ function validateAutomation(automation, path, errors) {
   }
 
   if (!automation.pre && !automation.post) {
-    errors.push(`${path} precisa definir pelo menos 'pre' ou 'post'.`);
+    const effects = automation.effects;
+    const declarative = Object.keys(automation).length === 1 && Array.isArray(effects) && effects.length > 0 && effects.length <= 40
+      && effects.every(e => isObject(e) && Object.keys(e).every(k => ["effectId","target","replace","strict"].includes(k))
+        && typeof e.effectId === "string" && /^[A-Za-z0-9]{16}$/.test(e.effectId) && e.target === "self" && e.replace === true && e.strict === true);
+    if (!declarative) errors.push(`${path} precisa definir pelo menos 'pre' ou 'post', ou efeitos declarativos válidos.`);
   }
 }
 
