@@ -1,3 +1,4 @@
+import { rejectJsonAsScript } from "../macros/source-format.js";
 const ACCEPTED_EXTENSIONS = new Set(["txt", "js"]);
 
 function isMacroConfig(application) {
@@ -75,6 +76,8 @@ function installMacroDrop(application, element) {
         return;
       }
 
+      try { rejectJsonAsScript(text); }
+      catch (error) { ui.notifications?.warn(error.message); return; }
       setFieldValue(commandField, text);
 
       const typeField = element.querySelector('[name="type"]');
