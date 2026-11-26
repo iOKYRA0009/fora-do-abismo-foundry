@@ -1,4 +1,6 @@
 export const TOOL_CATALOG = Object.freeze([
+  { id: "universal-detect", label: "Detectar formato de importação", tab: "characters", gmOnly: true },
+  { id: "universal-route", label: "Preparar importação universal", tab: "characters", gmOnly: true },
   { id: "actor-sync-select", label: "Escolher alterações da ficha", tab: "characters", gmOnly: true },
   { id: "actor-sync-reset", label: "Voltar à sincronização padrão", tab: "characters", gmOnly: true },
   { id: "actor-dependency-audit", label: "Auditar dependências da ficha", tab: "characters", gmOnly: true },
